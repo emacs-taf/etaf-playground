@@ -3,6 +3,12 @@
 (require 'ert)
 (require 'etaf-playground)
 
+(defun etaf-playground-test--layout-property (node key)
+  "Return layout KEY from ordinary or Flex NODE."
+  (if (plist-member node key)
+      (plist-get node key)
+    (plist-get (plist-get node :box) key)))
+
 (ert-deftest etaf-playground-mounts-and-dispatches-core-example ()
   "Mount the public playground and update its retained counter."
   (let ((buffer-name " *etaf-playground-test*"))
@@ -83,15 +89,66 @@
                  (root (etaf-runtime-root-node runtime))
                  (layout (plist-get root :ebox-content-node))
                  (children (plist-get layout :children)))
-            (should (equal (plist-get root :bgcolor) "#F4F6FB"))
+            (should (equal (plist-get root :bgcolor) "#F8F5EE"))
             (should-not (plist-member root :surface-properties))
-            (should (equal (mapcar (lambda (node) (plist-get node :bgcolor))
+            (should (equal (mapcar (lambda (node)
+                                     (etaf-playground-test--layout-property
+                                      node :bgcolor))
                                    children)
-                           '("#FFFFFF" nil "#FFFFFF")))))
+                           '("#FFFDF8" nil "#FFFDF8")))))
       (when-let ((runtime (etaf-runtime-for-buffer buffer-name)))
         (etaf-unmount runtime))
       (when-let ((buffer (get-buffer buffer-name)))
         (kill-buffer buffer)))))
+
+(ert-deftest etaf-playground-showcase-delegates-viewport-width-to-host ()
+  "Let the host own viewport width and stretch each shell section inside it."
+  (let ((buffer-name " *etaf-playground-width-owner-test*")
+        (ebox-viewport-width 900)
+        (ebox-viewport-height 40))
+    (unwind-protect
+        (progn
+          (etaf-mount buffer-name (etaf-playground-showcase-view))
+          (let* ((runtime (etaf-runtime-for-buffer buffer-name))
+                 (root (etaf-runtime-root-node runtime))
+                 (layout (plist-get root :ebox-content-node))
+                 (children (plist-get layout :children))
+                 (main (nth 1 children)))
+            (should (eq (plist-get root :width) 'stretch))
+            (should (eq (plist-get main :ebox-type) 'box))
+            (should (eq (plist-get (plist-get main :ebox-content-node)
+                                   :ebox-type)
+                        'stack))
+            (should (cl-every
+                     (lambda (node)
+                       (eq (etaf-playground-test--layout-property node :width)
+                           'stretch))
+                     children))))
+      (when-let ((runtime (etaf-runtime-for-buffer buffer-name)))
+        (etaf-unmount runtime))
+      (when-let ((buffer (get-buffer buffer-name)))
+        (kill-buffer buffer)))))
+
+(ert-deftest etaf-playground-showcase-syncs-to-window-body-width ()
+  "Exclude fringes and other window chrome from the Ebox viewport width."
+  (let (rerender-arguments)
+    (cl-letf (((symbol-function 'get-buffer-window)
+               (lambda (_buffer _all-frames) 'showcase-window))
+              ((symbol-function 'window-pixel-width)
+               (lambda (_window) 900))
+              ((symbol-function 'window-body-width)
+               (lambda (_window &optional pixelwise) (and pixelwise 880)))
+              ((symbol-function 'window-body-height)
+               (lambda (_window) 40))
+              ((symbol-function 'window-frame)
+               (lambda (_window) 'showcase-frame))
+              ((symbol-function 'frame-char-width)
+               (lambda (_frame) 8))
+              ((symbol-function 'ebox-rerender-buffer-with-context)
+               (lambda (&rest arguments)
+                 (setq rerender-arguments arguments))))
+      (etaf-playground--showcase-sync-viewport "*Showcase*")
+      (should (equal rerender-arguments '("*Showcase*" 872 40))))))
 
 (provide 'etaf-playground-tests)
 

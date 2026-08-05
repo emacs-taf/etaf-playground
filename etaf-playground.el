@@ -32,31 +32,51 @@
       (etaf-view
        (column
         :class "etaf-playground-counter"
-        (text :face 'bold (expr :value title))
-        (text (expr :value (format "Count: %d" (etaf-value count))))
-        (row
+        :width 'stretch
+        :max-width '(560)
+        :padding '(1 (14))
+        :bgcolor "#FFFDF8"
+        :border '((1) solid "#A8A297")
+        (text :face 'bold :color "#7B301F" (expr :value title))
+        (text :face 'bold :color "#252A2E"
+              (expr :value (format "Count: %d" (etaf-value count))))
+        (flex
+         :flex-flow '(row wrap)
+         :gap '(1 (10))
          (text :ref 'decrement :role 'button :tab-index 0
                :on-press (lambda () (cl-decf (etaf-value count)))
-               " - ")
+               :color "#FFFDF8" :bgcolor "#7B301F"
+               :border '((1) solid "#7B301F") :padding '(0 (12))
+               "−")
          (text :ref 'increment :role 'button :tab-index 0
                :on-press (lambda () (cl-incf (etaf-value count)))
-               " + ")))))))
+               :color "#FFFDF8" :bgcolor "#3F684B"
+               :border '((1) solid "#3F684B") :padding '(0 (12))
+               "+")))))))
 
 (defun etaf-playground--showcase-palette (dark-p)
   "Return the Showcase palette for DARK-P."
   (if dark-p
-      '(:color "#E8EEF7" :bgcolor "#151A23" :surface "#202938"
-        :surface-alt "#29364A" :muted "#AAB7CC" :accent "#79B8FF"
-        :accent-strong "#A7D0FF" :success "#70D6A0" :warning "#F5CA78"
-        :danger "#FF8A8A" :border "#52637E")
-    '(:color "#263244" :bgcolor "#F4F6FB" :surface "#FFFFFF"
-      :surface-alt "#E8EDF5" :muted "#687386" :accent "#245EA8"
-      :accent-strong "#173D70" :success "#247A50" :warning "#986B13"
-      :danger "#B83C45" :border "#8A93A6")))
+      '(:color "#F2EEE4" :bgcolor "#1B1F20" :surface "#252B2C"
+        :surface-alt "#333B3B" :muted "#B2BBB4" :accent "#E58A6A"
+        :accent-strong "#F3B49D" :success "#8BC79A" :warning "#F2C56B"
+        :danger "#F29A93" :border "#596362" :terracotta "#5A342B"
+        :sage "#30483A" :blue "#294352" :violet "#403A55")
+    '(:color "#252A2E" :bgcolor "#F8F5EE" :surface "#FFFDF8"
+      :surface-alt "#EEEAE2" :muted "#66706A" :accent "#B84F35"
+      :accent-strong "#7B301F" :success "#3F684B" :warning "#8A5B10"
+      :danger "#9E3F3F" :border "#A8A297" :terracotta "#F1D4C9"
+      :sage "#DCEBDD" :blue "#D9EAF2" :violet "#E7E2F1")))
 
 (defun etaf-playground--showcase-palette-value (palette key)
   "Return KEY from reactive Showcase PALETTE."
   (plist-get (etaf-value palette) key))
+
+(defun etaf-playground--showcase-window-width (window)
+  "Return the display-safe Ebox viewport width for WINDOW."
+  (let ((body-width (window-body-width window t))
+        (reserve (max 1 (frame-char-width (window-frame window)))))
+    (max 1 (- body-width reserve))))
 
 (defun etaf-playground--showcase-sync-viewport (buffer)
   "Rerender Showcase BUFFER against its visible window dimensions.
@@ -64,7 +84,7 @@
 This keeps viewport-height shells and full-surface theme changes correct after
 the buffer is displayed.  Return nil when BUFFER is not visible yet."
   (when-let ((window (get-buffer-window buffer t)))
-    (let ((width (window-pixel-width window))
+    (let ((width (etaf-playground--showcase-window-width window))
           (height (window-body-height window)))
       (when (and (> width 0) (> height 0))
         (ebox-rerender-buffer-with-context buffer width height)))))
@@ -105,31 +125,38 @@ any frame lifecycle state."
     :padding '(0 (10))
     (expr :value label))))
 
-(defun etaf-playground--showcase-metric (label value palette)
-  "Return a metric card for LABEL, VALUE, and PALETTE."
+(defun etaf-playground--showcase-metric (label value tone palette)
+  "Return a metric card for LABEL, VALUE, TONE, and PALETTE."
   (etaf-view
    (column
     :class "etaf-showcase-metric"
-    :width '(280)
-    :bgcolor (etaf-playground--showcase-palette-value palette :surface)
+    :flex-grow 1
+    :flex-shrink 1
+    :flex-basis '(220)
+    :min-width '(200)
+    :padding '(1 (12))
+    :bgcolor (etaf-playground--showcase-palette-value palette tone)
     :border (etaf-playground--showcase-border palette)
     (text
-     :color (etaf-playground--showcase-palette-value palette :muted)
+     :color (etaf-playground--showcase-palette-value palette :color)
      (expr :value label))
     (text
      :face 'bold
-     :color (etaf-playground--showcase-palette-value palette :accent)
+     :color (etaf-playground--showcase-palette-value palette :accent-strong)
      (expr :value value)))))
 
 (defun etaf-playground--showcase-nav (page palette on-page)
   "Return the Showcase navigation for PAGE, PALETTE, and ON-PAGE."
   (etaf-view
-   (column
-    :class "etaf-showcase-sidebar"
-    :width '(220)
+   (flex
+    :class "etaf-showcase-navigation"
+    :width 'stretch
+    :flex-flow '(row wrap)
+    :gap '(1 (10))
+    :padding '(1 (16))
     :bgcolor (etaf-playground--showcase-palette-value palette :surface)
     :border (etaf-playground--showcase-border palette)
-    (text :face 'bold "NAVIGATION")
+    (text :face 'bold :flex-shrink 0 "NAVIGATION")
     (expr :value
           (etaf-playground--showcase-button
            "Overview" 'showcase-nav-overview
@@ -146,8 +173,10 @@ any frame lifecycle state."
            (lambda () (funcall on-page 'theme)) palette
            (eq page 'theme)))
     (text
+     :flex-grow 1
+     :flex-basis '(180)
      :color (etaf-playground--showcase-palette-value palette :muted)
-     "\nKeyboard: Tab, RET"))))
+     "Keyboard: Tab, RET"))))
 
 (defun etaf-playground--showcase-page-title (page)
   "Return the display title for Showcase PAGE."
@@ -173,10 +202,10 @@ any frame lifecycle state."
       :bgcolor (etaf-playground--showcase-palette-value
                 palette (if selected-p :surface-alt :surface))
       :border (etaf-playground--showcase-border palette)
-      (text :width '(110) (expr :value id))
-      (text :width '(330) (expr :value (plist-get task :title)))
-      (text :width '(170) (expr :value (plist-get task :owner)))
-      (text :width '(150)
+      (text :width '(80) (expr :value id))
+      (text :width '(300) (expr :value (plist-get task :title)))
+      (text :width '(140) (expr :value (plist-get task :owner)))
+      (text :width '(120)
             :color (etaf-playground--showcase-palette-value
                     palette
                     (if (equal (plist-get task :status) "done")
@@ -192,10 +221,10 @@ any frame lifecycle state."
     (row
      :bgcolor (etaf-playground--showcase-palette-value palette :surface-alt)
      :border (etaf-playground--showcase-border palette)
-     (text :face 'bold :width '(110) "ID")
-     (text :face 'bold :width '(330) "TASK")
-     (text :face 'bold :width '(170) "OWNER")
-     (text :face 'bold :width '(150) "STATUS"))
+     (text :face 'bold :width '(80) "ID")
+     (text :face 'bold :width '(300) "TASK")
+     (text :face 'bold :width '(140) "OWNER")
+     (text :face 'bold :width '(120) "STATUS"))
     (expr :value
           (mapcar
            (lambda (task)
@@ -217,27 +246,32 @@ PALETTE, CONTROLLER, NOTICE, and ACTIONS provide its live data and behavior."
       (text :face 'bold "A complete text application in one View tree")
       (text
        :color (etaf-playground--showcase-palette-value palette :muted)
-       "The shell, Grid cards, retained state, Data Controller, and events all share one model.")
-      (grid
-       :width '(880)
-       :grid-template-columns '((280) (280) (280))
+       "The shell, Flex cards, retained state, Data Controller, and events all share one model.")
+      (flex
+       :flex-flow '(row wrap)
        :gap '(1 (12))
        (expr :value
              (etaf-playground--showcase-metric
-              "VISIBLE WORK ITEMS" (format "%d" (length items)) palette))
+              "VISIBLE WORK ITEMS" (format "%d" (length items))
+              :terracotta palette))
        (expr :value
              (etaf-playground--showcase-metric
-              "SELECTED" (format "%d" selected-count) palette))
+              "SELECTED" (format "%d" selected-count) :sage palette))
        (expr :value
              (etaf-playground--showcase-metric
               "RUNTIME STATUS"
               (capitalize (symbol-name (etaf-value
                                         (etaf-data-status controller))))
-              palette)))
-      (row
-       :gap '(0 (12))
+              :blue palette)))
+      (flex
+       :flex-flow '(row wrap)
+       :gap '(1 (12))
        (column
-        :width '(430)
+        :flex-grow 1
+        :flex-shrink 1
+        :flex-basis '(320)
+        :min-width '(280)
+        :padding '(1 (12))
         :bgcolor (etaf-playground--showcase-palette-value palette :surface)
         :border (etaf-playground--showcase-border palette)
         (text :face 'bold "Try the interaction path")
@@ -248,8 +282,12 @@ PALETTE, CONTROLLER, NOTICE, and ACTIONS provide its live data and behavior."
                "Open Work items" 'showcase-open-work-items
                (plist-get actions :open-work-items) palette)))
        (column
-        :width '(430)
-        :bgcolor (etaf-playground--showcase-palette-value palette :surface)
+        :flex-grow 1
+        :flex-shrink 1
+        :flex-basis '(320)
+        :min-width '(280)
+        :padding '(1 (12))
+        :bgcolor (etaf-playground--showcase-palette-value palette :violet)
         :border (etaf-playground--showcase-border palette)
         (text :face 'bold "Latest application feedback")
         (text
@@ -270,9 +308,13 @@ live state."
     (etaf-view
      (column
       :class "etaf-showcase-section"
-      (row
+      (flex
+       :flex-flow '(row wrap)
+       :gap '(1 (10))
        (column
-        :width '(520)
+        :flex-grow 1
+        :flex-shrink 1
+        :flex-basis '(360)
         (text :face 'bold "Work items")
         (text :color (etaf-playground--showcase-palette-value palette :muted)
               (expr :value (format "%d matching records · page %d/%d"
@@ -291,7 +333,8 @@ live state."
       (expr :value
             (etaf-playground--showcase-task-table
              items selected-id palette (plist-get actions :select-task)))
-      (row
+      (flex
+       :flex-flow '(row wrap)
        :gap '(0 (12))
        (expr :value
              (etaf-playground--showcase-button
@@ -306,6 +349,7 @@ live state."
               "Clear selection" 'showcase-clear-selection
               (plist-get actions :clear-selection) palette)))
       (column
+       :padding '(1 (12))
        :bgcolor (etaf-playground--showcase-palette-value palette :surface)
        :border (etaf-playground--showcase-border palette)
        (text :face 'bold "Selected record")
@@ -330,8 +374,12 @@ live state."
   "Return a color swatch for LABEL, COLOR, FOREGROUND, and PALETTE."
   (etaf-view
    (column
-    :width '(280)
+    :flex-grow 1
+    :flex-shrink 1
+    :flex-basis '(220)
+    :min-width '(200)
     :height 3
+    :padding '(1 (12))
     :bgcolor color
     :color foreground
     :border (etaf-playground--showcase-border palette)
@@ -347,16 +395,17 @@ live state."
       (text :face 'bold "Theme and semantics")
       (text :color (etaf-playground--showcase-palette-value palette :muted)
             "Theme is an inherited Context value; explicit Host properties remain local overrides.")
-      (row
+      (flex
+       :flex-flow '(row wrap)
+       :gap '(1 (10))
        (text :face 'bold (expr :value (if dark-p "Dark theme" "Light theme")))
        (expr :value
              (etaf-playground--showcase-button
               (if dark-p "Switch to light" "Switch to dark")
               'showcase-theme-toggle
               (plist-get actions :toggle-theme) palette)))
-      (grid
-       :width '(880)
-       :grid-template-columns '((280) (280) (280))
+      (flex
+       :flex-flow '(row wrap)
        :gap '(1 (12))
        (expr :value
              (mapcar
@@ -373,6 +422,11 @@ live state."
                     (cons "Danger" (plist-get colors :danger))
                     (cons "Muted" (plist-get colors :muted)))))
        (column
+        :flex-grow 1
+        :flex-shrink 1
+        :flex-basis '(320)
+        :min-width '(280)
+        :padding '(1 (12))
         :bgcolor (etaf-playground--showcase-palette-value palette :surface)
         :border (etaf-playground--showcase-border palette)
         (text :face 'bold "Why this is useful")
@@ -389,23 +443,26 @@ and TITLE provide its live state and presentation."
   (etaf-view
    (column
     :class "etaf-showcase-root"
-    :width '(viewport)
+    :width 'stretch
     :height '(viewport-height)
     :color (etaf-playground--showcase-palette-value palette :color)
     :bgcolor (etaf-playground--showcase-palette-value palette :bgcolor)
     :border (etaf-playground--showcase-border palette)
-    (row
+    (flex
      :class "etaf-showcase-header"
-     :width '(viewport)
+     :width 'stretch
+     :flex-flow '(row wrap)
+     :gap '(1 (16))
+     :padding '(1 (16))
      :bgcolor (etaf-playground--showcase-palette-value palette :surface)
      :border (etaf-playground--showcase-border palette)
-     (column :width '(220)
+     (column :flex-shrink 0 :flex-basis '(210)
              :bgcolor (etaf-playground--showcase-palette-value palette :surface)
              (text :face 'bold (expr :value title))
              (text :color (etaf-playground--showcase-palette-value
                            palette :muted)
                    "A runnable composition"))
-     (column :width '(650)
+     (column :flex-grow 1 :flex-shrink 1 :flex-basis '(420)
              :bgcolor (etaf-playground--showcase-palette-value palette :surface)
              (text :face 'bold
                    (expr :value (etaf-playground--showcase-page-title page)))
@@ -417,27 +474,28 @@ and TITLE provide its live state and presentation."
             (etaf-playground--showcase-button
             (if dark-p "Light" "Dark") 'showcase-header-theme-toggle
             (plist-get actions :toggle-theme) palette)))
-    (row
-     :width '(viewport)
+    (column
+     :width 'stretch
      :color (etaf-playground--showcase-palette-value palette :color)
      (expr :value
            (etaf-playground--showcase-nav
             page palette (plist-get actions :set-page)))
-    (column
-     :width '(880)
-      (expr :value
-            (cond
-             ((eq page 'work-items)
-              (etaf-playground--showcase-work-items
-               palette controller filter selected-id notice actions))
-             ((eq page 'theme)
-              (etaf-playground--showcase-theme dark-p palette actions))
-             (t
-              (etaf-playground--showcase-overview
-               palette controller notice actions))))))
-    (row
+     (expr :value
+           (cond
+            ((eq page 'work-items)
+             (etaf-playground--showcase-work-items
+              palette controller filter selected-id notice actions))
+            ((eq page 'theme)
+             (etaf-playground--showcase-theme dark-p palette actions))
+            (t
+             (etaf-playground--showcase-overview
+              palette controller notice actions)))))
+    (flex
      :class "etaf-showcase-status"
-     :width '(viewport)
+     :width 'stretch
+     :flex-flow '(row wrap)
+     :gap '(0 (12))
+     :padding '(0 (16))
      :color (etaf-playground--showcase-palette-value palette :muted)
      :bgcolor (etaf-playground--showcase-palette-value palette :surface)
      (text (expr :value (format "STATUS  %s" notice)))
@@ -567,11 +625,15 @@ and TITLE provide its live state and presentation."
   (etaf-view
    (column
     :class "etaf-playground-root"
-    (text :face 'bold "ETAF Playground")
-    (text :color "#687386"
+    :width 'stretch
+    :padding '(1 (16))
+    :color "#252A2E"
+    :bgcolor "#F8F5EE"
+    (text :face 'bold :color "#7B301F" "ETAF Playground")
+    (text :color "#66706A"
           "One grammar: Hosts, Components, props, children, and expr.")
     (etaf-playground-counter :title "Reactive counter")
-    (text :color "#687386"
+    (text :color "#66706A"
           "Press + or - through the public event dispatch path."))))
 
 ;;;###autoload
@@ -580,6 +642,10 @@ and TITLE provide its live state and presentation."
   (require 'etaf-ui)
   (etaf-view
    (column
+    :width 'stretch
+    :padding '(1 (16))
+    :color "#252A2E"
+    :bgcolor "#F8F5EE"
     (etaf-panel :title "Official Components"
      (etaf-button :label "A public Component"
                   :on-press (lambda () (message "ETAF UI button pressed")))
@@ -612,8 +678,9 @@ and TITLE provide its live state and presentation."
   "Mount the interactive Showcase in BUFFER-NAME and return its buffer.
 
 Use the visible navigation and buttons with the mouse or keyboard.  The
-Showcase demonstrates Grid layout, Context theme defaults, reactive state,
-Data Controller updates, stable row keys, and public event dispatch."
+Showcase demonstrates responsive Flex layout, Context theme defaults,
+reactive state, Data Controller updates, stable row keys, and public event
+dispatch."
   (interactive)
   (let* ((buffer
           (etaf-mount (or buffer-name etaf-playground-showcase-buffer-name)
