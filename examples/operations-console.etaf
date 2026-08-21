@@ -1,0 +1,29 @@
+;; Static composition only.  The companion owns all state, components, and
+;; event handlers; this file is the safe layout contract it consumes.
+(operations-console-shell
+ :title "Operations Console"
+ :kicker "ETAF / reference workspace"
+ (header
+  (brand :mark "OC" :name "Operations Console")
+  (summary :status "All systems nominal")
+  (theme-control :label "Theme"))
+ (navigation
+  (tab :key "overview" :label "Overview" :index "01")
+  (tab :key "data" :label "Data desk" :index "02")
+  (tab :key "resource" :label "Resource lab" :index "03"))
+ (main
+  (overview
+   (hero :eyebrow "Tuesday / 09:42 / live review"
+          :title "Make complex state feel calm.")
+   (metric-strip
+    (metric :key "throughput" :label "Throughput")
+    (metric :key "flows" :label "Active flows")
+    (metric :key "response" :label "Response")
+    (metric :key "reliability" :label "Reliability"))
+   (workspace
+    (activity-panel :title "Activity stream")
+    (capability-panel :title "Capability map"))
+   (timeline :title "Event trail"))
+  (data :title "Data desk")
+  (resource :title "Resource lab"))
+ (status :label "Ready for review"))

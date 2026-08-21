@@ -1,82 +1,95 @@
-# 设计规范
+# 设计
 
-## 事实来源
-- 状态：生效中
-- 最近更新：2026-08-05
-- 主要产品界面：`etaf-playground-open`、`etaf-playground-open-ui` 与交互式应用 `etaf-playground-open-showcase`。
-- 已审阅证据：`etaf-playground.el`、`tests/etaf-playground-tests.el`、中英文 README、当前 Showcase 的真实 GUI 渲染，以及 `../emacs-box/examples/playground/flex-reference.ebox` 的全屏 GUI 渲染。
+## 来源与状态
+
+- 状态：唯一 reviewed pair 的 active draft
+- 更新日期：2026-08-20
+- 主产品面：`examples/operations-console.etaf` + `examples/operations-console.el`
+- 视觉参考：`design/operations-console.html`
+- 已审查证据：pair loader/manifest、`etaf-ui.el`、Ebox viewport 合同及当前 GUI/性能证据。
 
 ## 品牌
-- 气质：精确、克制、现代、技术感强，并且明显经过设计，而不是通用框架默认外观。
-- 可信信号：精确对齐、清晰对比度、更新时稳定的几何结构、一致的语义颜色，以及能够真实演示 ETAF 公共模型的例子。
-- 避免：未加样式的默认 Emacs 文本、过度饱和的仪表盘颜色、浅色背景上的低对比文字、装饰噪音、无意义的大面积留白，以及与普通正文无法区分的控件。
+
+- 气质：安静的操作控制台；准确、温暖、克制地体现技术感。
+- 信任信号：状态 chip、更新时间、明确计数、清晰的成功/错误反馈。
+- 避免：普通玩具 dashboard、彩虹渐变、无语义状态的装饰控件和杂乱控制区。
 
 ## 产品目标
-- 目标：通过精致、可运行的应用体现 ETAF 的能力；用可见结构讲清 View、Component、Context、Data、Grid、保留状态与事件；所有例子只使用公共 API。
-- 非目标：模仿浏览器、使用位图装饰、另建样式框架、加入仅供示例使用的隐藏渲染路径，或假装当前较小的 `etaf-ui` 目录已经功能完整。
-- 成功信号：首屏具有明确的应用结构；导航、数据和主题更新保持层级与几何稳定；截图中没有裁切、续行标记、意外换行或低对比文字。
 
-## 用户与任务
-- 主要用户：ETAF 应用作者、Ebox/ETAF 维护者，以及评估新架构是否可用的人。
-- 用户任务：快速理解框架、复制公共 API 模式、检查真实交互流程，并确认更新后视觉结构稳定。
-- 主要环境：GUI Emacs 单应用缓冲区、全屏演示，以及批处理/ERT 验证。
+- 用一个好看的 app 同时展示 Component、组合、响应式、Context/Theme、Behavior、事件/Action、Data、Resource、错误边界、焦点和生命周期。
+- 不扩展第二个 Playground 场景，不伪装成完整生产分析产品，不用假动画掩盖框架问题。
+- HTML 原型和 ETAF 实现保持同一层级、状态文字、交互结果和 compact/fullscreen 几何。
 
 ## 信息架构
-- 主导航：固定的横向命令条，包含 Overview、Work items 与 Theme。
-- 核心界面：Overview 仪表盘、交互式 Work items 表格、Theme and semantics 色彩页、紧凑的核心计数器例子，以及可选的 `etaf-ui` 组件目录例子。
-- 内容层级：品牌应用标题、固定导航、页面标题与说明、主要卡片或表格、上下文操作区，以及安静的状态栏。
+
+- Shell：品牌/header → 导航 tabs → page surface → 持久 status footer。
+- Overview：hero/status、KPI 卡片、活动/控制 workspace、能力卡片和事件时间线。
+- Data：选择摘要、可交互 DataGrid、selection detail。
+- Resource：资源状态、reload/fail-next、boundary 结果和 cleanup 计数。
+- 层级：先显示页面标题和状态，再显示主操作，最后显示诊断/细节。
 
 ## 设计原则
-- 原则一：通过可见分组教学；每项能力都放在有标题、有边界的区域中，而不是混成一串文本。
-- 原则二：沿用 Flex 参考示例的暖色、克制配色与一像素边框，不依赖阴影或浏览器专有视觉效果。
-- 原则三：几何正确性就是功能正确性；viewport owner 必须包含自身边框，子区域必须适配 owner 的内容盒，更新不得引入换行或截断标记。
-- 取舍：优先采用适合桌面 Emacs 的紧凑构图，而不是过量留白；内部响应式容器省略宽度，让 Ebox Flex 分配和换行，避免脆弱的多层 viewport 算术。
+
+1. 一个视觉层级：每个控件属于有名字的 surface，每个 surface 都有可见状态。
+2. 状态优先于装饰：theme、loading、error、selected、disabled、success 都有文字表达。
+3. 几何稳定：compact 下控件保持单行，页面只替换 page surface。
+4. API 真实：HTML 可以用普通 HTML/JS，但 ETAF 只用公开 ETAF/ETAF-UI API。
 
 ## 视觉语言
-- 颜色：暖白画布 `#F8F5EE`；纸张 `#FFFDF8`；正文 `#252A2E`；弱化文字 `#66706A`；激活陶土色 `#B84F35`；淡陶土色 `#F1D4C9`；鼠尾草绿 `#DCEBDD`；蓝色 `#D9EAF2`；紫色 `#E7E2F1`；暗色模式使用深中性色表面和同一组语义色的亮色版本。
-- 字体：沿用 Emacs 配置的等宽字体；粗体只用于标题、标签、关键数值和激活控件。
-- 间距：纵向以一行作为节奏；横向间距 12–16px；区块内边距 16–24px；卡片与表格边缘对齐。
-- 形状与层级：方正的文本原生表面、一像素边框，不模拟圆角或阴影。
-- 动效：状态直接发布，并在 redisplay 后保持稳定；不使用装饰动画。
-- 图像与图标：只使用文字与克制的语义符号，不使用 logo、emoji 装饰或位图外框。
+
+- 色彩：墨蓝 `#142235`、纸张 `#F6F1E8`、灰蓝 `#526174`、青绿 `#2E8B83`、珊瑚 `#E26D5A`、琥珀 `#D99A3D`、成功绿 `#3E9B72`。
+- 字体：易读 sans body，紧凑 monospace 指标/标签，粗体页面标题。
+- 节奏：一行外部节奏、双列 workspace、固定 gap、shell 全宽，卡片有明确内边距。
+- 形状：细深色边框、克制 elevation；ETAF 不依赖浮层。
+- 动效：不以动画为正确性前提，状态变化即时且支持 reduced motion。
+- 图形：只用文字标记和 Unicode 状态符号，不依赖外部资源。
 
 ## 组件
-- 复用能力：ETAF 核心 Hosts、保留式 Components、Grid、Context 主题值、Data Controller 与公共事件分发。
-- 新增或调整：Showcase 区块标题、指标卡、导航项、任务行、操作按钮、色板、紧凑状态栏，以及核心/UI 例子的精致外壳。
-- 状态：激活导航、选中任务、启用/禁用操作、亮色/暗色主题、success/review/open、loading、empty 与 error。
-- 所有权：色彩 token 位于 `etaf-playground--showcase-palette`；各 helper 拥有自己的展示表面；ETAF/Ebox 继续拥有布局与渲染。
 
-## 可访问性
-- 目标：高对比、可用键盘操作的 Emacs UI，并保留明确的语义 role 与 ref。
-- 键盘与焦点：所有可操作表面保留 `:role 'button`、`:tab-index 0`、稳定 ref，以及可见的激活/选中样式。
-- 对比度：所有着色表面都有明确前景色；弱化文字在画布与纸张上都可读；激活控件同时使用颜色、边框或背景变化。
-- 语义：框架支持时保留 label、role、ref 与 `aria-label`。
-- 动效：不依赖动画，普通 redisplay 即可使用。
+- 复用公开 `button`、`checkbox`、`label`、`panel`、`data-grid`。
+- companion 组件：`operations-console-shell`、`hero-status`、`metric-strip`、`activity-card`、`capability-card`、`timeline`、`data-page`、`resource-page`。
+- 状态：active/inactive nav、light/dark theme、selected/unselected row、Behavior on/off、resource ready/loading/error、boundary handled、compact/fullscreen。
+- 所有权：`.etaf` 只放静态 composition 和 section 名称；`.el` 持有 token、props、refs、资源、handlers 和 state。
 
-## 响应式行为
-- 支持范围：约 900px 宽的 GUI Emacs 窗口到全屏桌面宽度；验证时还使用 777px 可用宽度作为更严格下限。
-- 布局适配：宿主测量窗口正文，并在右侧预留一个字符单元；最外层 shell 拥有 viewport 宽度；直接的 header/main/status 区域在其中 stretch；嵌套响应式容器省略宽度，由 Ebox Flex 分配或换行。
-- 触摸/悬停：不适用；键盘与鼠标 press 共用公共事件模型。
+## 无障碍
+
+- 目标：键盘完整、高对比文字，使用公开组件提供语义 role。
+- Tab/Shift-Tab 遍历 nav/action/data rows；RET 派发 focused ref；移除目标时清焦点。
+- 每个状态都有文字反馈，颜色不是唯一信号；不依赖 hover-only 行为。
+- Ebox Theme 承载继承的 Ebox 默认属性；应用 palette 仍由 companion 查询，
+  Renderer 会在进入 Ebox 几何层前过滤未知 token 名。
+
+## 响应式
+
+- 支持 compact 900–940px body 和 fullscreen desktop GUI。
+- metric 尽量一行展示，workspace 从双列退化为上下堆叠，控件保持 intrinsic 单行宽度。
+- 需要分配剩余宽度的行使用 `flex`，固定 intrinsic 控件组才使用 `row`；导航
+  控件组使用 max-content，确保每个 hover/active 区域都是独立控件。
+- mouse-1 和键盘激活使用同一组公开 refs。
 
 ## 交互状态
-- Loading：有标签、有边界，并显示明确状态。
-- Empty：安静的解释区域；可用时给出下一步操作。
-- Error：高对比 danger 区域；错误保持可见，不静默回退。
-- Success：鼠尾草绿强调色与明确反馈文本。
-- Disabled：弱化前景色，并移除回调与 tab stop。
-- 离线/慢网络：当前不适用，因为示例使用同步内存数据源。
+
+- Loading：Resource 显示 `Loading…`，shell 几何不移动。
+- Empty：DataGrid 明确显示 empty，选择控件仍可用。
+- Error：reload 可故意失败一次，Boundary 显示 handled error 且仍可恢复。
+- Success：action/status 和 timestamp 可见更新。
+- Disabled：不可用操作暴露 disabled 语义，不静默吞输入。
 
 ## 内容语气
-- 风格：直接、技术化、简洁、自解释。
-- 术语：统一使用 ETAF 词汇：View、Component、Host、Context、Data Controller、Runtime、event 与 public API。
-- 文案规则：说清正在演示的能力和操作后的可见结果，避免宣传式填充文字。
+
+- 简洁、操作化、解释性；标签明确指出正在展示的框架能力。
+- 统一使用 `Component`、`Context`、`Theme`、`Behavior`、`Action`、`Data`、`Resource`、`Boundary`。
+- 优先“动词 + 结果”（如 `Reload resource`、`Handled: …`、`Selected Beacon`）。
 
 ## 实现约束
-- 技术边界：Emacs 29.1+、ETAF 公共 View/Component API，以及 Ebox 公共布局/样式属性。
-- Token：复用 palette helper 与语义 token key；不新建平行主题或 CSS 层。
-- 性能：交互保持同步且有界；视觉改进不得增加隐藏的全树工作或除现有 viewport sync 外的新 timer。
-- 兼容性：`etaf-playground` 必须独立于 `ebox-playground`，不得调用 `ebox--*` 私有 API。
-- 验证：`make check` 通过；GUI 截图只显示一个目标缓冲区窗口；动态检查覆盖导航、选择、新增、主题切换与返回 Overview；不接受可见截断/续行标记或意外换行。
 
-## 待解决问题
-- [ ] 扩展官方 `etaf-ui` 目录后，才能把目录示例表述为完成迁移的组件画廊；维护者；阻止错误的功能对等声明。
+- 使用 `.etaf`/`.el` 的公开 ETAF View DSL，由 Ebox 渲染，不引入 HTML/CSS runtime dependency。
+- palette/spacing token 在 companion 单处定义并复用，禁止散落临时色值。
+- 性能：普通 warm p50 <=100ms，counter/resource p50 <=150ms，每个 warm max <=250ms；每个逻辑动作一次 publication。
+- 保留唯一同名 `operations-console` pair、静态安全读取、公开 API boundary、双 mount/unmount cleanup 和 manifest 语义。
+- 导航：稳定的 page ref 由 retained router Component 读取；页面 Host 是唯一 semantic Range 锚点，页面切换只替换一个 Range payload，不重建 shell root。
+- HTML 是视觉参考；ETAF 需要 compact/fullscreen 截图和动态键鼠 checkpoint 证明布局、宽度、焦点和状态。
+
+## 待 review
+
+- [ ] 用户可在第一版 HTML/ETAF 对照后调整 palette 或页面命名；行为和公开 ref 覆盖保持不变。
