@@ -237,7 +237,7 @@
                     (intern (format "operations-console-row-%s"
                                     (plist-get row :id)))))
          (row-press (lambda (row)
-                      (etaf-data-select controller (plist-get row :id))))
+                      (etaf-data-select-one controller (plist-get row :id))))
          (clear-selection
           (lambda () (etaf-data-clear-selection controller))))
     (lambda ()

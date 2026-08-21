@@ -113,6 +113,26 @@
               (etaf-playground-close buffer))))
       (etaf-playground-test--close buffer))))
 
+(ert-deftest etaf-playground-data-grid-row-selection-is-repeatable ()
+  "Repeated row presses replace the single selected row without a bar."
+  (let ((buffer " *etaf-operations-console-row-selection-test*"))
+    (unwind-protect
+        (progn
+          (etaf-playground-open buffer)
+          (let ((runtime (etaf-runtime-for-buffer buffer)))
+            (etaf-dispatch-event runtime 'operations-console-nav-data 'press)
+            (dolist (entry '((operations-console-row-1 . "Selected Ada")
+                             (operations-console-row-2 . "Selected Grace")
+                             (operations-console-row-3 . "Selected Lin")
+                             (operations-console-row-1 . "Selected Ada")
+                             (operations-console-row-2 . "Selected Grace")))
+              (etaf-focus runtime (car entry))
+              (etaf-dispatch-event runtime (car entry) 'press)
+              (let ((text (etaf-playground-test--text buffer)))
+                (should (string-match-p (regexp-quote (cdr entry)) text))
+                (should-not (string-match-p "#DCEBDD" text))))))
+      (etaf-playground-test--close buffer))))
+
 (ert-deftest etaf-playground-behavior-toggle-uses-one-retained-publication ()
   "Behavior content and paint changes stay in two fixed owners per turn."
   (let ((buffer " *etaf-operations-console-behavior-retained-test*"))
