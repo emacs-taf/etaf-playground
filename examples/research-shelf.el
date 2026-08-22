@@ -11,6 +11,7 @@
 (require 'etaf-ui)
 (require 'etaf-sqlite)
 (require 'etaf-playground)
+(require 'face-remap)
 
 (defcustom etaf-research-shelf-database-file
   (expand-file-name "research-shelf.sqlite" user-emacs-directory)
@@ -179,6 +180,19 @@ Show MESSAGE on success, or preserve the resulting error state."
   "Return palette KEY for MODEL."
   (plist-get (etaf-research-shelf--theme model) key))
 
+(defun etaf-research-shelf--apply-buffer-palette (palette)
+  "Paint the GUI buffer's unused viewport columns with PALETTE.
+
+Ebox intentionally reserves a couple of rightmost display columns so a safe
+layout never becomes a continuation line.  Those columns contain no text
+properties, so the buffer's default face must carry the same product surface
+color or the frame edge exposes Emacs's unrelated default background."
+  (when (and (display-graphic-p) (fboundp 'face-remap-set-base))
+    (face-remap-set-base
+     'default
+     (list :foreground (plist-get palette :ink)
+           :background (plist-get palette :paper)))))
+
 (defun etaf-research-shelf--status-label (status)
   "Return a readable status label for STATUS."
   (pcase status
@@ -303,6 +317,26 @@ buttons do not fall back to a light-theme paper surface in dark mode."
   (etaf-data-select-one (etaf-research-shelf--controller model)
                         (plist-get row :id)))
 
+(defun etaf-research-shelf--grid-columns ()
+  "Return readable wide or compact columns for the active GUI window."
+  (let* ((window (get-buffer-window (current-buffer) t))
+         (pixel-width
+          (and (window-live-p window)
+               (condition-case nil
+                   (window-body-width window t)
+                 (error nil)))))
+    (if (and pixel-width (> pixel-width 1200))
+        '((:key :title :label "Title" :width 30)
+          (:key :author :label "Author" :width 16)
+          (:key :status :label "Status" :width 14)
+          (:key :progress :label "Progress" :width 10)
+          (:key :kind :label "Kind" :width 10))
+      '((:key :title :label "Title" :width 21)
+        (:key :author :label "Author" :width 12)
+        (:key :status :label "Status" :width 10)
+        (:key :progress :label "Progress" :width 8)
+        (:key :kind :label "Kind" :width 7)))))
+
 (defun etaf-research-shelf--reading-list-view (model form)
   "Return the main reading list for MODEL and static MAIN FORM."
   (let ((controller (etaf-research-shelf--controller model)))
@@ -341,11 +375,7 @@ buttons do not fall back to a light-theme paper surface in dark mode."
             (setf (etaf-value (plist-get model :next-id)) (1+ id))))))
       (data-grid
        :controller controller
-       :columns '((:key :title :label "Title" :width 22)
-                  (:key :author :label "Author" :width 12)
-                  (:key :status :label "Status" :width 11)
-                  (:key :progress :label "Progress" :width 9)
-                  (:key :kind :label "Kind" :width 8))
+       :columns (etaf-research-shelf--grid-columns)
        :row-key (lambda (row) (plist-get row :id))
        :row-ref (lambda (row)
                   (intern (format "research-shelf-row-%s"
@@ -511,7 +541,11 @@ structural children instead of leaking through a direct material `expr'."
   (let ((model (etaf-current-prop :model))
         (static-form (etaf-current-prop :static-form)))
     (etaf-on-unmounted
-     (lambda () (etaf-data-stop (etaf-research-shelf--controller model))))
+     (lambda ()
+       (etaf-data-stop (etaf-research-shelf--controller model))
+       (when (and (display-graphic-p)
+                  (fboundp 'face-remap-set-base))
+         (face-remap-set-base 'default 'default))))
     (lambda ()
       (let* ((header (etaf-research-shelf--static-child static-form 'header))
              (filters (etaf-research-shelf--static-child static-form 'filters))
@@ -520,6 +554,7 @@ structural children instead of leaking through a direct material `expr'."
              (detail (etaf-research-shelf--static-child main 'detail))
              (dark (etaf-value (plist-get model :dark)))
              (palette (etaf-research-shelf--theme model)))
+        (etaf-research-shelf--apply-buffer-palette palette)
         (etaf-view
          (column :class "research-shelf-shell" :width '(viewport)
                  :height '(viewport-height)
@@ -544,6 +579,8 @@ structural children instead of leaking through a direct material `expr'."
                      :checked dark
                      :on-change (lambda (value)
                                   (setf (etaf-value (plist-get model :dark)) value)
+                                  (etaf-research-shelf--apply-buffer-palette
+                                   (etaf-research-shelf--theme model))
                                   (setf (etaf-value (plist-get model :toast))
                                         (if value "Dark theme" "Light theme")))))
           (grid :class "research-shelf-workspace" :width 'stretch
