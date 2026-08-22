@@ -198,10 +198,45 @@ Show MESSAGE on success, or preserve the resulting error state."
         (concat "● " label)
       label)))
 
+(defun etaf-research-shelf--button-style (palette variant disabled)
+  "Return theme-aware style props for a Research Shelf action button.
+
+The public `button' Component owns interaction and pressed state; this small
+adapter only maps the app palette to its ordinary presentation props so ghost
+buttons do not fall back to a light-theme paper surface in dark mode."
+  (let ((secondary (eq variant 'secondary)))
+    (list :color (plist-get palette (if disabled :muted
+                                     (if secondary :paper :ink)))
+          :bgcolor (plist-get palette (if disabled :soft
+                                       (if secondary :mint :panel)))
+          :border (plist-get palette (if secondary :mint :line))
+          :face (if (and secondary (not disabled)) 'bold 'normal))))
+
+(etaf-define-component etaf-research-shelf-button
+    (&key theme label ref variant disabled on-press)
+  "Compose the public Button with the Research Shelf theme palette."
+  :setup
+  (lambda ()
+    (let* ((theme (etaf-current-prop :theme))
+           (label (etaf-current-prop :label))
+           (ref (etaf-current-prop :ref))
+           (variant (etaf-current-prop :variant))
+           (disabled (etaf-current-prop :disabled))
+           (on-press (etaf-current-prop :on-press))
+           (style (etaf-research-shelf--button-style
+                   theme variant disabled)))
+      (etaf-view
+       (button :label label :ref ref :variant variant :disabled disabled
+               :on-press on-press
+               :color (plist-get style :color)
+               :bgcolor (plist-get style :bgcolor)
+               :border (plist-get style :border)
+               :face (plist-get style :face))))))
+
 (defun etaf-research-shelf--filter-view (model form)
   "Return the filter rail from MODEL and static FILTER FORM."
   (etaf-view
-     (column :class "research-shelf-filter-rail" :width 'stretch
+     (column :class "research-shelf-filter-rail" :width 'stretch :min-width 0
              :padding '(1 1)
              :border (etaf-research-shelf--color model :line)
              :color (etaf-research-shelf--color model :ink)
@@ -211,40 +246,45 @@ Show MESSAGE on success, or preserve the resulting error state."
              :bgcolor (etaf-research-shelf--color model :panel))
       (label :text "VIEWS" :color (etaf-research-shelf--color model :muted)
              :bgcolor (etaf-research-shelf--color model :panel))
-      (button :label (etaf-research-shelf--filter-label model form 'all "All")
-              :ref 'research-shelf-filter-all
-              :variant (if (eq (etaf-value (plist-get model :filter)) 'all)
-                           'secondary 'ghost)
-              :on-press (lambda ()
-                          (etaf-research-shelf--set-filter model 'all)))
-      (button :label (etaf-research-shelf--filter-label
-                      model form 'reading "In progress")
-              :ref 'research-shelf-filter-reading
-              :variant (if (eq (etaf-value (plist-get model :filter)) 'reading)
-                           'secondary 'ghost)
-              :on-press (lambda ()
-                          (etaf-research-shelf--set-filter model 'reading)))
-      (button :label (etaf-research-shelf--filter-label
-                      model form 'unread "Unread")
-              :ref 'research-shelf-filter-unread
-              :variant (if (eq (etaf-value (plist-get model :filter)) 'unread)
-                           'secondary 'ghost)
-              :on-press (lambda ()
-                          (etaf-research-shelf--set-filter model 'unread)))
-      (button :label (etaf-research-shelf--filter-label
-                      model form 'finished "Finished")
-              :ref 'research-shelf-filter-finished
-              :variant (if (eq (etaf-value (plist-get model :filter)) 'finished)
-                           'secondary 'ghost)
-              :on-press (lambda ()
-                          (etaf-research-shelf--set-filter model 'finished)))
-      (button :label (etaf-research-shelf--filter-label
-                      model form 'starred "★ Starred")
-              :ref 'research-shelf-filter-starred
-              :variant (if (eq (etaf-value (plist-get model :filter)) 'starred)
-                           'secondary 'ghost)
-              :on-press (lambda ()
-                          (etaf-research-shelf--set-filter model 'starred)))
+      (etaf-research-shelf-button
+       :theme (etaf-research-shelf--theme model)
+       :label (etaf-research-shelf--filter-label model form 'all "All")
+       :ref 'research-shelf-filter-all
+       :variant (if (eq (etaf-value (plist-get model :filter)) 'all)
+                    'secondary 'ghost)
+       :on-press (lambda () (etaf-research-shelf--set-filter model 'all)))
+      (etaf-research-shelf-button
+       :theme (etaf-research-shelf--theme model)
+       :label (etaf-research-shelf--filter-label
+               model form 'reading "In progress")
+       :ref 'research-shelf-filter-reading
+       :variant (if (eq (etaf-value (plist-get model :filter)) 'reading)
+                    'secondary 'ghost)
+       :on-press (lambda () (etaf-research-shelf--set-filter model 'reading)))
+      (etaf-research-shelf-button
+       :theme (etaf-research-shelf--theme model)
+       :label (etaf-research-shelf--filter-label
+               model form 'unread "Unread")
+       :ref 'research-shelf-filter-unread
+       :variant (if (eq (etaf-value (plist-get model :filter)) 'unread)
+                    'secondary 'ghost)
+       :on-press (lambda () (etaf-research-shelf--set-filter model 'unread)))
+      (etaf-research-shelf-button
+       :theme (etaf-research-shelf--theme model)
+       :label (etaf-research-shelf--filter-label
+               model form 'finished "Finished")
+       :ref 'research-shelf-filter-finished
+       :variant (if (eq (etaf-value (plist-get model :filter)) 'finished)
+                    'secondary 'ghost)
+       :on-press (lambda () (etaf-research-shelf--set-filter model 'finished)))
+      (etaf-research-shelf-button
+       :theme (etaf-research-shelf--theme model)
+       :label (etaf-research-shelf--filter-label
+               model form 'starred "★ Starred")
+       :ref 'research-shelf-filter-starred
+       :variant (if (eq (etaf-value (plist-get model :filter)) 'starred)
+                    'secondary 'ghost)
+       :on-press (lambda () (etaf-research-shelf--set-filter model 'starred)))
       (spacer :height 1)
       (label :text "STORAGE" :color (etaf-research-shelf--color model :muted)
              :bgcolor (etaf-research-shelf--color model :panel))
@@ -252,9 +292,11 @@ Show MESSAGE on success, or preserve the resulting error state."
                     (plist-get model :database-file))
              :color (etaf-research-shelf--color model :ink)
              :bgcolor (etaf-research-shelf--color model :panel))
-      (button :label "↻ Reload library" :ref 'research-shelf-reload
-              :variant 'ghost
-              :on-press (lambda () (etaf-research-shelf--load model "✓ Library reloaded"))))))
+      (etaf-research-shelf-button
+       :theme (etaf-research-shelf--theme model)
+       :label "↻ Reload library" :ref 'research-shelf-reload
+       :variant 'ghost
+       :on-press (lambda () (etaf-research-shelf--load model "✓ Library reloaded"))))))
 
 (defun etaf-research-shelf--row-press (model row)
   "Select ROW as the single current record in MODEL."
@@ -265,7 +307,7 @@ Show MESSAGE on success, or preserve the resulting error state."
   "Return the main reading list for MODEL and static MAIN FORM."
   (let ((controller (etaf-research-shelf--controller model)))
     (etaf-view
-     (column :class "research-shelf-list" :width 'stretch
+     (column :class "research-shelf-list" :width 'stretch :min-width 0
              :padding '(1 2)
              :border (etaf-research-shelf--color model :line)
              :color (etaf-research-shelf--color model :ink)
@@ -281,27 +323,29 @@ Show MESSAGE on success, or preserve the resulting error state."
                             (or (etaf-value (etaf-data-total controller)) 0))
                :color (etaf-research-shelf--color model :muted)
                :bgcolor (etaf-research-shelf--color model :panel)))
-       (button :label "＋ Add reading" :ref 'research-shelf-add
-               :variant 'secondary
-               :on-press
-               (lambda ()
-                 (let ((id (etaf-value (plist-get model :next-id))))
-                   (etaf-research-shelf--mutate
-                    model 'insert
-                    (list :id id :title (format "New reading %d" id)
-                          :author "You" :kind "Notes" :status "unread"
-                          :progress 0 :priority "Medium" :starred 0
-                          :note "A new note waiting for your attention."
-                          :updated "Just now")
-                    "✓ Added to your shelf")
-                   (setf (etaf-value (plist-get model :next-id)) (1+ id))))))
+      (etaf-research-shelf-button
+        :theme (etaf-research-shelf--theme model)
+        :label "＋ Add reading" :ref 'research-shelf-add
+        :variant 'secondary
+        :on-press
+        (lambda ()
+          (let ((id (etaf-value (plist-get model :next-id))))
+            (etaf-research-shelf--mutate
+             model 'insert
+             (list :id id :title (format "New reading %d" id)
+                   :author "You" :kind "Notes" :status "unread"
+                   :progress 0 :priority "Medium" :starred 0
+                   :note "A new note waiting for your attention."
+                   :updated "Just now")
+             "✓ Added to your shelf")
+            (setf (etaf-value (plist-get model :next-id)) (1+ id))))))
       (data-grid
        :controller controller
-       :columns '((:key :title :label "Title" :width 30)
-                  (:key :author :label "Author" :width 16)
-                  (:key :status :label "Status" :width 14)
-                  (:key :progress :label "Progress" :width 10)
-                  (:key :kind :label "Kind" :width 10))
+       :columns '((:key :title :label "Title" :width 22)
+                  (:key :author :label "Author" :width 12)
+                  (:key :status :label "Status" :width 11)
+                  (:key :progress :label "Progress" :width 9)
+                  (:key :kind :label "Kind" :width 8))
        :row-key (lambda (row) (plist-get row :id))
        :row-ref (lambda (row)
                   (intern (format "research-shelf-row-%s"
@@ -321,7 +365,7 @@ Show MESSAGE on success, or preserve the resulting error state."
 (defun etaf-research-shelf--detail-view (model form)
   "Return the selected record inspector for MODEL and static FORM."
   (etaf-view
-   (column :class "research-shelf-detail" :width 'stretch
+   (column :class "research-shelf-detail" :width 'stretch :min-width 0
            :padding '(2 2)
            :border (etaf-research-shelf--color model :line)
            :color (etaf-research-shelf--color model :ink)
@@ -375,50 +419,56 @@ Show MESSAGE on success, or preserve the resulting error state."
   :setup
   (let ((model (etaf-current-prop :model)))
     (lambda ()
-      (let* ((row (etaf-research-shelf--selected model))
+      (let* ((theme (etaf-research-shelf--theme model))
+             (row (etaf-research-shelf--selected model))
              (progress (or (and row (plist-get row :progress)) 0))
              (finished (and row (equal (plist-get row :status) "finished")))
              (archived (and row (equal (plist-get row :status) "archived"))))
         (etaf-view
          (flex :width 'stretch :flex-wrap 'wrap :gap '(1 (6))
-          (button :label "+ 10%" :ref 'research-shelf-progress
-                  :variant 'secondary :disabled (or (null row) (>= progress 100))
-                  :on-press
-                  (lambda ()
-                    (when-let* ((current (etaf-research-shelf--selected model))
-                                (value (or (plist-get current :progress) 0)))
-                      (etaf-research-shelf--update-selected
-                       model (list :progress (min 100 (+ value 10))
-                                   :status (if (>= (+ value 10) 100)
-                                               "finished" "reading")
-                                   :updated "Just now")
-                       "✓ Progress saved"))))
-          (button :label "✓ Finish" :ref 'research-shelf-finish
-                  :variant 'secondary :disabled (or (null row) finished)
-                  :on-press
-                  (lambda ()
-                    (etaf-research-shelf--update-selected
-                     model '(:progress 100 :status "finished" :updated "Just now")
-                     "✓ Marked finished")))
-          (button :label "★ Star" :ref 'research-shelf-star :variant 'ghost
-                  :disabled (null row)
-                  :on-press
-                  (lambda ()
-                    (when-let ((current (etaf-research-shelf--selected model)))
-                      (let ((current-starred
-                             (= 1 (or (plist-get current :starred) 0))))
-                        (etaf-research-shelf--update-selected
-                         model (list :starred (if current-starred 0 1)
-                                     :updated "Just now")
-                         (if current-starred
-                             "Removed star" "★ Starred locally"))))))
-          (button :label "Archive" :ref 'research-shelf-archive
-                  :variant 'ghost :disabled (or (null row) archived)
-                  :on-press
-                  (lambda ()
-                    (etaf-research-shelf--update-selected
-                     model '(:status "archived" :updated "Just now")
-                     "↗ Archived")))))))))
+          (etaf-research-shelf-button
+           :theme theme :label "+ 10%" :ref 'research-shelf-progress
+           :variant 'secondary
+           :disabled (or (null row) archived (>= progress 100))
+           :on-press
+           (lambda ()
+             (when-let* ((current (etaf-research-shelf--selected model))
+                         (value (or (plist-get current :progress) 0)))
+               (etaf-research-shelf--update-selected
+                model (list :progress (min 100 (+ value 10))
+                            :status (if (>= (+ value 10) 100)
+                                        "finished" "reading")
+                            :updated "Just now")
+                "✓ Progress saved"))))
+          (etaf-research-shelf-button
+           :theme theme :label "✓ Finish" :ref 'research-shelf-finish
+           :variant 'secondary :disabled (or (null row) finished archived)
+           :on-press
+           (lambda ()
+             (etaf-research-shelf--update-selected
+              model '(:progress 100 :status "finished" :updated "Just now")
+              "✓ Marked finished")))
+          (etaf-research-shelf-button
+           :theme theme :label "★ Star" :ref 'research-shelf-star
+           :variant 'ghost :disabled (null row)
+           :on-press
+           (lambda ()
+             (when-let ((current (etaf-research-shelf--selected model)))
+               (let ((current-starred
+                      (= 1 (or (plist-get current :starred) 0))))
+                 (etaf-research-shelf--update-selected
+                  model (list :starred (if current-starred 0 1)
+                              :updated "Just now")
+                  (if current-starred
+                      "Removed star" "★ Starred locally"))))))
+          (etaf-research-shelf-button
+           :theme theme :label "Archive" :ref 'research-shelf-archive
+           :variant 'ghost :disabled (or (null row) archived)
+           :on-press
+           (lambda ()
+             (etaf-research-shelf--update-selected
+              model '(:status "archived" :updated "Just now")
+              "↗ Archived")))))))))
 
 (etaf-define-component etaf-research-shelf-filter-rail
     (&key model static-form)
@@ -497,7 +547,11 @@ structural children instead of leaking through a direct material `expr'."
                                   (setf (etaf-value (plist-get model :toast))
                                         (if value "Dark theme" "Light theme")))))
           (grid :class "research-shelf-workspace" :width 'stretch
-                :grid-template-columns '(2fr 5fr 3fr) :gap '(1 (10))
+                :grid-template-columns
+                '((minmax (0) (fr 2))
+                  (minmax (0) (fr 5))
+                  (minmax (0) (fr 3)))
+                :gap '(1 (6))
                 :color (plist-get palette :ink)
                 :bgcolor (plist-get palette :paper)
            (etaf-research-shelf-filter-rail :model model :static-form filters)
@@ -532,11 +586,15 @@ structural children instead of leaking through a direct material `expr'."
 (defun etaf-research-shelf-open (&optional buffer-name)
   "Mount and optionally display the Research Shelf application in BUFFER-NAME."
   (interactive)
-  (let ((buffer (etaf-mount (or buffer-name "*ETAF Research Shelf*")
-                            (etaf-research-shelf-root
-                             (etaf-playground-read-static "research-shelf")))))
-    (when (called-interactively-p 'interactive) (pop-to-buffer buffer))
-    buffer))
+  (let* ((name (or buffer-name "*ETAF Research Shelf*"))
+         ;; Put the target in its real GUI window before the first Ebox
+         ;; projection so `(viewport)' resolves against the user's frame.
+         (buffer (get-buffer-create name)))
+    (when (called-interactively-p 'interactive)
+      (switch-to-buffer buffer))
+    (etaf-mount buffer
+                (etaf-research-shelf-root
+                 (etaf-playground-read-static "research-shelf")))))
 
 (provide 'etaf-research-shelf)
 ;;; research-shelf.el ends here

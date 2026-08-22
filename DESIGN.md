@@ -115,10 +115,13 @@
 ## Responsive behavior
 
 - Wide/fullscreen: three-column grid (rail / list / detail).
-- Compact: rail becomes a top filter row, detail follows the list, and all
-  controls remain intrinsic single-line widths.
-- Use `grid` for the product skeleton, `flex` for toolbars and action groups,
-  and `row` only for compact intrinsic controls.
+- Compact: the same grid uses zero-minimum fractional tracks; rail, list, and
+  detail shrink within the viewport instead of imposing min-content overflow,
+  while the action group wraps through Flex and long table cells wrap inside
+  their tracks.
+- Use `grid` for the product skeleton, `flex` for toolbars/action groups, and
+  `row` only for compact intrinsic controls. `minmax(0, fr)` is the responsive
+  track contract; do not reintroduce fixed child widths at the shell boundary.
 
 ## Interaction states
 

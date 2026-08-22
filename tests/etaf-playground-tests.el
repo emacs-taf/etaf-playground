@@ -72,6 +72,22 @@ database and mounts a test buffer before running BODY."
     (should-not (string-match-p "operations-console" framework))
     (should (string-match-p "research-shelf" catalog))))
 
+(ert-deftest etaf-playground-displays-before-responsive-mount ()
+  "GUI entry points establish the containing window before Ebox mount."
+  (let ((calls nil)
+        (noninteractive nil))
+    (cl-letf (((symbol-function 'switch-to-buffer)
+               (lambda (buffer)
+                 (push (list 'display (buffer-name buffer)) calls)
+                 buffer))
+              ((symbol-function 'etaf-playground-mount-example)
+               (lambda (buffer name)
+                 (push (list 'mount buffer name) calls)
+                 buffer)))
+      (etaf-playground--mount-for-display
+       " *etaf-playground-display-order*" "research-shelf"))
+    (should (equal '(display mount) (mapcar #'car (nreverse calls))))))
+
 (ert-deftest etaf-playground-compile-builds-the-dependency-graph ()
   "Integration builds must compile the framework's dependency graph first."
   (let ((makefile (with-temp-buffer
@@ -189,6 +205,12 @@ database and mounts a test buffer before running BODY."
       (etaf-dispatch-event runtime 'research-shelf-star 'press)
       (should (string-match-p "Removed star"
                               (etaf-playground-test--text buffer)))
+      (etaf-dispatch-event runtime 'research-shelf-archive 'press)
+      (should (equal t
+                     (plist-get
+                      (etaf-runtime-host-props-for runtime
+                                                   'research-shelf-finish)
+                      :disabled)))
       (etaf-dispatch-event runtime 'research-shelf-add 'press)
       (should (string-match-p "Added to your shelf"
                               (etaf-playground-test--text buffer)))

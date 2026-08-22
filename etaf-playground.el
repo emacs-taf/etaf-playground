@@ -126,27 +126,33 @@ ENTRY must contain a string `:pair', symbol `:root-component', symbol
     (with-current-buffer buffer (setq etaf-playground-current-example name))
     buffer))
 
-(defun etaf-playground--display-buffer (buffer)
-  "Display BUFFER interactively and return it."
-  (unless noninteractive (pop-to-buffer buffer))
-  buffer)
+(defun etaf-playground--mount-for-display (buffer-name name)
+  "Display BUFFER-NAME before mounting pair NAME when running in a GUI.
+
+Ebox resolves viewport-relative widths from the window that owns the target
+buffer.  Mounting first would make an off-window daemon/terminal window the
+initial containing block, leaving a responsive pair permanently laid out at
+that stale width until a later explicit resize."
+  (unless noninteractive
+    ;; Keep the current window as the containing block.  `pop-to-buffer' may
+    ;; split a clean frame, cutting a responsive three-column app in half.
+    (switch-to-buffer (get-buffer-create buffer-name)))
+  (etaf-playground-mount-example buffer-name name))
 
 ;;;###autoload
 (defun etaf-playground-open (&optional buffer-name)
   "Open the registered default pair in BUFFER-NAME."
   (interactive)
-  (etaf-playground--display-buffer
-   (etaf-playground-mount-example
-    (or buffer-name etaf-playground-buffer-name)
-    etaf-playground-default-pair)))
+  (etaf-playground--mount-for-display
+   (or buffer-name etaf-playground-buffer-name)
+   etaf-playground-default-pair))
 
 ;;;###autoload
 (defun etaf-playground-open-example (name &optional buffer-name)
   "Open registered pair NAME in BUFFER-NAME."
   (interactive (list (completing-read "Pair: " etaf-playground-example-names)))
-  (etaf-playground--display-buffer
-   (etaf-playground-mount-example
-    (or buffer-name etaf-playground-buffer-name) name)))
+  (etaf-playground--mount-for-display
+   (or buffer-name etaf-playground-buffer-name) name))
 
 ;;;###autoload
 (defun etaf-playground-reset (&optional buffer-name)
@@ -158,8 +164,7 @@ ENTRY must contain a string `:pair', symbol `:root-component', symbol
                                             buffer))
                    etaf-playground-default-pair)))
     (unless buffer (user-error "No ETAF Playground pair is mounted"))
-    (etaf-playground--display-buffer
-     (etaf-playground-mount-example name pair))))
+    (etaf-playground--mount-for-display name pair)))
 
 ;;;###autoload
 (defun etaf-playground-close (&optional buffer-name)

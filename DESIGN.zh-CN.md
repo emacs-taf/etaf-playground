@@ -69,8 +69,11 @@ Component 边界，避免新增 helper 层或抽象泄漏。
 ## 响应式与验证
 
 - Wide/fullscreen 使用 rail / list / detail 三列 grid。
-- Compact 时筛选栏收为顶部工具行，detail 位于 list 后面；不使用固定宽度撑坏
-  viewport，所有操作控件仍保持独立 hover/focus 语义。
+- Compact 时仍使用三列骨架，但每列采用零最小值的 fractional track，在 viewport
+  内收缩而不是被 min-content 撑出边界；长表格单元格在自己的 track 内换行，动作组
+  由 Flex 自动换行。不要在 shell 边界重新引入固定宽度。
+- `minmax(0, fr)` 是响应式 track 合同；`grid` 负责骨架，`flex` 负责 toolbar/action
+  group，`row` 只负责紧凑 intrinsic 控件，所有操作控件仍保持独立 hover/focus 语义。
 - 用 SQLite 临时文件测试 mount/remount、筛选、分页、重复选行、mutation、错误
   状态和 cleanup；GUI 用干净 fullscreen 单窗口截图验证真实布局。
 - 目标：一次 Data mutation 对应一次 Runtime generation/publication；warm 交互
