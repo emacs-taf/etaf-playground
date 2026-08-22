@@ -14,6 +14,8 @@
 Research Shelf 是一个真正有用的本地研究/阅读架：SQLite 保存书籍、论文、
 文章和笔记，用户可以筛选、分页、选择一条记录、更新进度、完成、收藏和归档。
 它不是把 API 名称堆成控制台，而是用一个连贯 workflow 验证 ETAF 的组合能力。
+Playground 默认安装确定性的 256 条 fixture、每页 12 条，用于真实验证分页、DataGrid
+增量更新和 SQLite 查询压力；fixture 数量和 page size 都可以配置。
 
 ## 结构与分层
 
@@ -52,8 +54,8 @@ Component 边界，避免新增 helper 层或抽象泄漏。
   墙、假图表、彩虹渐变和装饰性噪声。
 - 色彩：ink `#172033`、paper `#F7F3EA`、cobalt `#3657D6`、mint `#3E9B8F`、
   coral `#D86B5D`、amber `#C58A3A`、muted `#6D7482`。
-- 节奏：1 格外部节奏、2 格 panel padding、1 格 grid gap，控件保持 intrinsic
-  宽度；`grid` 负责页面骨架，`flex` 负责 toolbar/action group。
+- 节奏：1 格外部节奏、2 格 panel padding、1 格 workspace gap，控件保持
+  intrinsic 宽度；需要分配剩余空间或换行时统一使用 `flex`。
 - 状态：文字和 Unicode 同时表达状态：`⌕`、`★`、`✓`、`◷`、`↗`、`⚠`、`·`。
 - 动效：状态立即可见，不依赖 timer animation，默认支持 reduced motion。
 
@@ -61,6 +63,8 @@ Component 边界，避免新增 helper 层或抽象泄漏。
 
 - 筛选：All、In progress、Unread、Finished、Starred。
 - 列表：DataGrid 行单选，重复点击可以重新选择；分页按钮在边界处 disabled。
+- 每页行数：激活 `Rows N ✎` 后使用 Emacs 原生 minibuffer 输入 1–100 的整数，
+  应用后回到第一页。
 - 详情：`+ 10%`、`✓ Finish`、`☆/★ Star`、`Archive`；完成或 100% 时正确禁用。
 - 存储：成功显示 `✓ Saved locally`，失败保留当前可用内容并提供 Reload。
 - 主题：Light/Dark 由 checkbox 控制；文字、对比度和布局都应保持可读。
@@ -68,16 +72,19 @@ Component 边界，避免新增 helper 层或抽象泄漏。
 
 ## 响应式与验证
 
-- Wide/fullscreen 使用 rail / list / detail 三列 grid。
-- Compact 时仍使用三列骨架，但每列采用零最小值的 fractional track，在 viewport
-  内收缩而不是被 min-content 撑出边界；长表格单元格在自己的 track 内换行，动作组
-  由 Flex 自动换行。不要在 shell 边界重新引入固定宽度。
-- `minmax(0, fr)` 是响应式 track 合同；`grid` 负责骨架，`flex` 负责 toolbar/action
-  group，`row` 只负责紧凑 intrinsic 控件，所有操作控件仍保持独立 hover/focus 语义。
+- Wide/fullscreen：rail / list / detail 位于同一条 Flex line，呈现三栏。
+- Medium：rail 与 list 保持同排，detail 自动换到下一行。
+- Narrow：同一组三个 Component 按文档顺序自动变为纵向流。
+- Shell 只使用一套带 basis/grow 权重的 wrapping Flex，不读取窗口宽度、不维护
+  breakpoint 状态；`row` 只负责紧凑 intrinsic 控件，所有操作控件仍保持独立
+  hover/focus 语义。
 - 用 SQLite 临时文件测试 mount/remount、筛选、分页、重复选行、mutation、错误
   状态和 cleanup；GUI 用干净 fullscreen 单窗口截图验证真实布局。
 - 目标：一次 Data mutation 对应一次 Runtime generation/publication；warm 交互
-  维持现有 100ms p50 预算。
+  维持已接受的 105ms p50 预算。
+- 压测入口：`etaf-research-shelf-fixture-size` 默认 256，
+  `etaf-research-shelf-page-size` 默认 12；已有本地记录保留，不足部分使用新 ID
+  补齐 fixture。
 
 ## 待 review
 

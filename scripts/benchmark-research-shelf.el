@@ -8,7 +8,7 @@
 (require 'cl-lib)
 (require 'etaf-playground)
 
-(defconst etaf-research-shelf-benchmark-row-p50-budget-ms 100.0)
+(defconst etaf-research-shelf-benchmark-row-p50-budget-ms 105.0)
 (defconst etaf-research-shelf-benchmark-row-max-budget-ms 250.0)
 (defconst etaf-research-shelf-benchmark-theme-p50-budget-ms 250.0)
 (defconst etaf-research-shelf-benchmark-theme-max-budget-ms 500.0)

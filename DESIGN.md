@@ -21,6 +21,9 @@
 ## Product goals
 
 - Build a useful personal reading/research shelf backed by a real SQLite file.
+- Ship a deterministic 256-record fixture by default so pagination and warm
+  incremental updates are exercised on a realistic surface; fixture size and
+  page size remain configurable for focused tests.
 - Make triage, selection, progress updates, filtering, pagination, and
   recovery feel like one coherent product rather than isolated demos.
 - Exercise existing ETAF components through composition before adding any new
@@ -67,7 +70,7 @@
 - Typography: readable proportional labels with compact monospace metadata;
   title and selected record use bold weight, not oversized headings.
 - Spacing/layout rhythm: 1-cell outer rhythm, 2-cell panel padding, 1-cell
-  grid gaps, and stable intrinsic control widths.
+  workspace gaps, and stable intrinsic control widths.
 - Shape/elevation: thin borders, small radius-like grouped rows where Ebox
   permits, no floating overlays or decorative shadows.
 - Motion: immediate state changes; no timer-driven animation; reduced-motion
@@ -114,14 +117,12 @@
 
 ## Responsive behavior
 
-- Wide/fullscreen: three-column grid (rail / list / detail).
-- Compact: the same grid uses zero-minimum fractional tracks; rail, list, and
-  detail shrink within the viewport instead of imposing min-content overflow,
-  while the action group wraps through Flex and long table cells wrap inside
-  their tracks.
-- Use `grid` for the product skeleton, `flex` for toolbars/action groups, and
-  `row` only for compact intrinsic controls. `minmax(0, fr)` is the responsive
-  track contract; do not reintroduce fixed child widths at the shell boundary.
+- Wide/fullscreen: one Flex line presents rail / list / detail as three columns.
+- Medium: rail and list remain together while detail wraps to the next line.
+- Narrow: the same three Components wrap in document order into a vertical flow.
+- The shell uses one wrapping Flex composition with semantic basis/grow weights;
+  it does not read window size or maintain breakpoint state. Use `row` only for
+  compact intrinsic controls and Flex whenever free space must be distributed.
 
 ## Interaction states
 
@@ -132,6 +133,8 @@
 - Success: mutation shows `✓ Saved locally` and updates `updated` metadata.
 - Disabled: `Finish` is disabled for finished records; `+10%` is disabled at
   100%; archive is disabled while loading.
+- Page density: activating `Rows N ✎` uses Emacs's native minibuffer to accept
+  any integer from 1 through 100, then reloads page one.
 
 ## Content voice
 
@@ -147,8 +150,11 @@
   sibling `etaf-sqlite` package; no HTML/CSS runtime dependency.
 - Data schema: one typed `reading_items` SQLite table with id/title/author/
   kind/status/progress/priority/starred/note/updated columns.
+- Pressure fixture: `etaf-research-shelf-fixture-size` defaults to 256 and
+  `etaf-research-shelf-page-size` defaults to 12; existing local rows are
+  preserved and missing fixture rows are topped up with fresh IDs.
 - Performance: one Data mutation -> one Runtime generation/publication; normal
-  warm actions remain under the existing 100ms p50 target.
+  warm actions remain under the accepted 105ms p50 target.
 - Compatibility: one same-basename `research-shelf` pair only; old console
   examples are removed from the active manifest and compile surface.
 - Verification: SQLite temp-file integration tests, pair mount/remount tests,

@@ -19,7 +19,8 @@
      :refs (research-shelf-filter-all research-shelf-filter-reading
             research-shelf-filter-unread research-shelf-filter-finished
             research-shelf-filter-starred research-shelf-theme-toggle
-            research-shelf-reload research-shelf-add research-shelf-progress
+            research-shelf-reload research-shelf-page-size research-shelf-add
+            research-shelf-progress
             research-shelf-finish research-shelf-star research-shelf-archive
             research-shelf-page-previous research-shelf-page-next)
      :gui-checkpoints (compact fullscreen all reading unread detail theme)

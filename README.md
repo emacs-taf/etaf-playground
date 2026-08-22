@@ -14,3 +14,10 @@ before adding abstractions.
 
 Run `make check EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs`.
 Run `make perf` for the 1413×62 warm row-selection/theme latency gate.
+
+The example installs a deterministic 256-record SQLite fixture with 12 records
+per page. Bind `etaf-research-shelf-fixture-size` and
+`etaf-research-shelf-page-size` for smaller tests or larger pressure runs.
+In the UI, activate `Rows N ✎` to enter any value from 1 through 100. The
+workspace is one responsive wrapping Flex composition: three columns when
+wide, rail/list plus wrapped detail at medium widths, and vertical when narrow.

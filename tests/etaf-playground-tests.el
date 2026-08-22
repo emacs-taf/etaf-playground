@@ -40,7 +40,11 @@ database and mounts a test buffer before running BODY."
        (ignore ,database)
        (etaf-playground-test--ensure-app-loaded)
      (unwind-protect
-         (let ((etaf-research-shelf-database-file ,database))
+         (let ((etaf-research-shelf-database-file ,database)
+               (etaf-research-shelf-fixture-size 8)
+               (etaf-research-shelf-page-size 4))
+             (ignore etaf-research-shelf-fixture-size
+                     etaf-research-shelf-page-size)
              (ignore etaf-research-shelf-database-file)
              ,@body)
          (etaf-playground-test--close ,buffer)
@@ -141,9 +145,31 @@ database and mounts a test buffer before running BODY."
       (dolist (ref '(research-shelf-filter-all research-shelf-filter-reading
                      research-shelf-filter-unread research-shelf-filter-finished
                      research-shelf-filter-starred research-shelf-reload
-                     research-shelf-add research-shelf-page-next
+                     research-shelf-page-size research-shelf-add
+                     research-shelf-page-next
                      research-shelf-theme-toggle))
         (should (etaf-runtime-handler-for runtime ref))))))
+
+(ert-deftest etaf-playground-fixture-supports-realistic-page-counts ()
+  "The Playground can mount a larger deterministic fixture for pressure runs."
+  (etaf-playground-test--ensure-app-loaded)
+  (let ((database (make-temp-file "etaf-research-shelf-large-" nil ".sqlite"))
+        (buffer " *etaf-research-shelf-large-test*"))
+    (unwind-protect
+        (let ((etaf-research-shelf-database-file database)
+              (etaf-research-shelf-fixture-size 32)
+              (etaf-research-shelf-page-size 8))
+          (ignore etaf-research-shelf-database-file
+                  etaf-research-shelf-fixture-size
+                  etaf-research-shelf-page-size)
+          (etaf-playground-mount-example buffer "research-shelf")
+          (let ((text (etaf-playground-test--text buffer)))
+            (should (string-match-p "32 items · SQLite-backed" text))
+            (should (string-match-p "Page 1 / 4" text)))
+          (should (file-exists-p database)))
+      (etaf-playground-test--close buffer)
+      (when (file-exists-p database)
+        (delete-file database)))))
 
 (ert-deftest etaf-playground-row-selection-is-repeatable ()
   "Repeated DataGrid row presses replace one selected identity."
@@ -168,12 +194,16 @@ database and mounts a test buffer before running BODY."
             (should (string-match-p (regexp-quote detail) text)))
           (should (string-match-p
                    "selected"
-                   (plist-get (etaf-runtime-host-props-for runtime selected)
-                              :class)))
-          (should-not (string-match-p
-                       "selected"
-                       (plist-get (etaf-runtime-host-props-for runtime other)
-                                  :class))))))))
+                   (or (plist-get
+                        (etaf-runtime-host-props-for runtime selected)
+                        :class)
+                       "")))
+          (should-not
+           (string-match-p
+            "selected"
+            (or (plist-get (etaf-runtime-host-props-for runtime other)
+                           :class)
+                ""))))))))
 
 (ert-deftest etaf-playground-filters-and-pagination-reload-data ()
   "Filter and pager refs drive the SQLite-backed Data Controller."
@@ -191,7 +221,48 @@ database and mounts a test buffer before running BODY."
                               (etaf-playground-test--text buffer)))
       (etaf-dispatch-event runtime 'research-shelf-page-previous 'press)
       (should (string-match-p "Page 1 / 2"
-                              (etaf-playground-test--text buffer))))))
+                              (etaf-playground-test--text buffer)))
+      (cl-letf (((symbol-function 'read-number)
+                 (lambda (&rest _) 6)))
+        (etaf-dispatch-event runtime 'research-shelf-page-size 'press))
+      (should (string-match-p "Rows 6 ✎"
+                              (etaf-playground-test--text buffer)))
+      (should (string-match-p "Page 1 / 2"
+                              (etaf-playground-test--text buffer)))
+      (cl-letf (((symbol-function 'read-number)
+                 (lambda (&rest _) 0)))
+        (should-error
+         (etaf-dispatch-event runtime 'research-shelf-page-size 'press)
+         :type 'user-error)))))
+
+(ert-deftest etaf-playground-workspace-reflows-at-responsive-widths ()
+  "Workspace cards share a row when wide and wrap in document order."
+  (etaf-playground-test--with-app (buffer database)
+    (etaf-playground-open buffer)
+    (cl-labels
+        ((line-of (label)
+           (with-current-buffer buffer
+             (save-excursion
+               (goto-char (point-min))
+               (search-forward label)
+               (line-number-at-pos (match-beginning 0)))))
+         (layout-at (width)
+           (ebox-surface-update-buffer-viewport (get-buffer buffer) width 80)
+           (list (line-of "Library")
+                 (line-of "Reading queue")
+                 (line-of "Selected item"))))
+      (pcase-let ((`(,filter-line ,list-line ,detail-line)
+                   (layout-at 1600)))
+        (should (= filter-line list-line))
+        (should (<= (- detail-line list-line) 1)))
+      (pcase-let ((`(,filter-line ,list-line ,detail-line)
+                   (layout-at 900)))
+        (should (= filter-line list-line))
+        (should (> detail-line list-line)))
+      (pcase-let ((`(,filter-line ,list-line ,detail-line)
+                   (layout-at 600)))
+        (should (< filter-line list-line))
+        (should (< list-line detail-line))))))
 
 (ert-deftest etaf-playground-mutations-persist-and-refresh ()
   "Add and mutate actions persist through the SQLite source and refresh UI."
