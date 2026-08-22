@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Research Shelf</title>
+  <style>
+    :root {
+      --ink: #172033;
+      --muted: #6d7482;
+      --paper: #f7f3ea;
+      --panel: #fffdf8;
+      --line: #d9d4c9;
+      --cobalt: #3657d6;
+      --mint: #3e9b8f;
+      --coral: #d86b5d;
+      --amber: #c58a3a;
+      --shadow: 0 18px 48px rgba(23, 32, 51, .09);
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--paper); }
+    .shell { max-width: 1440px; margin: 0 auto; padding: 28px 34px 34px; }
+    .topbar { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
+    .eyebrow { color: var(--cobalt); font: 700 11px/1.2 ui-monospace, monospace; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { margin: 7px 0 5px; font-size: clamp(28px, 4vw, 48px); letter-spacing: -.05em; line-height: .98; }
+    .subtitle { margin: 0; color: var(--muted); max-width: 590px; font-size: 14px; }
+    .sync { display: flex; align-items: center; gap: 9px; color: var(--mint); font: 700 12px ui-monospace, monospace; white-space: nowrap; }
+    .sync i { width: 9px; height: 9px; border-radius: 50%; background: var(--mint); }
+    .workspace { display: grid; grid-template-columns: 190px minmax(420px, 1.45fr) minmax(280px, .85fr); gap: 18px; align-items: start; }
+    .rail, .list-card, .detail-card { border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); }
+    .rail { padding: 18px 12px; }
+    .rail h2, .card-head h2 { margin: 0; font-size: 14px; letter-spacing: -.01em; }
+    .rail-label { margin: 20px 10px 8px; color: var(--muted); font: 700 10px ui-monospace, monospace; text-transform: uppercase; letter-spacing: .12em; }
+    .filter { width: 100%; display: flex; justify-content: space-between; border: 0; background: transparent; color: var(--ink); padding: 10px; border-radius: 8px; text-align: left; font: inherit; cursor: pointer; }
+    .filter:hover, .filter.active { color: var(--cobalt); background: #eef1ff; }
+    .filter span { color: var(--muted); font: 12px ui-monospace, monospace; }
+    .list-card, .detail-card { overflow: hidden; }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+    .result-count { color: var(--muted); font: 12px ui-monospace, monospace; }
+    .table-head, .book-row { display: grid; grid-template-columns: minmax(0, 1.6fr) 100px 96px 72px; gap: 12px; align-items: center; }
+    .table-head { padding: 11px 20px; color: var(--muted); background: #f1eee7; font: 700 10px ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .book-row { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); padding: 14px 20px; text-align: left; cursor: pointer; }
+    .book-row:hover { background: #f7f8ff; }
+    .book-row.active { box-shadow: inset 4px 0 0 var(--cobalt); background: #eef1ff; }
+    .book-title { font-weight: 750; }
+    .book-author, .book-kind { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .status { display: inline-flex; width: fit-content; padding: 4px 7px; border-radius: 99px; background: #e7f4ef; color: #267567; font: 700 10px ui-monospace, monospace; }
+    .status.progress { background: #fff2dc; color: #9a6819; }
+    .progress { height: 6px; border-radius: 99px; background: #e9e6df; overflow: hidden; }
+    .progress i { display: block; height: 100%; background: var(--cobalt); border-radius: inherit; }
+    .detail-card { padding: 22px; }
+    .detail-kicker { color: var(--cobalt); font: 700 10px ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .detail-card h2 { margin: 8px 0 4px; font-size: 25px; letter-spacing: -.04em; }
+    .detail-author { color: var(--muted); }
+    .detail-rule { height: 1px; margin: 20px 0; background: var(--line); }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .meta small { display: block; color: var(--muted); font: 10px ui-monospace, monospace; text-transform: uppercase; letter-spacing: .1em; }
+    .meta strong { display: block; margin-top: 4px; }
+    .note { padding: 12px; background: #f8f5ed; border-left: 3px solid var(--amber); color: #4b4e57; font-size: 13px; line-height: 1.5; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+    .actions button { border: 1px solid var(--cobalt); border-radius: 7px; padding: 9px 12px; background: var(--cobalt); color: white; font-weight: 700; cursor: pointer; }
+    .actions button.secondary { background: transparent; color: var(--cobalt); }
+    .footer { display: flex; justify-content: space-between; gap: 14px; margin-top: 16px; color: var(--muted); font: 11px ui-monospace, monospace; }
+    @media (max-width: 980px) {
+      .shell { padding: 20px; }
+      .workspace { grid-template-columns: 160px minmax(0, 1fr); }
+      .detail-card { grid-column: 1 / -1; }
+    }
+    @media (max-width: 680px) {
+      .topbar { display: block; }
+      .sync { margin-top: 18px; }
+      .workspace { display: block; }
+      .rail { display: flex; gap: 5px; overflow: auto; margin-bottom: 14px; }
+      .rail h2, .rail-label { display: none; }
+      .filter { width: auto; white-space: nowrap; }
+      .list-card { margin-bottom: 14px; }
+      .table-head { display: none; }
+      .book-row { grid-template-columns: 1fr auto; gap: 8px; }
+      .book-row > :nth-child(n+2) { grid-column: 2; }
+      .book-row > :nth-child(3), .book-row > :nth-child(4) { display: none; }
+      .footer { display: block; line-height: 1.8; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">A quiet place for unfinished ideas</div>
+        <h1>Research Shelf</h1>
+        <p class="subtitle">Keep the next paper, book, and note close enough to become part of the work.</p>
+      </div>
+      <div class="sync"><i></i> SQLite · saved locally</div>
+    </header>
+
+    <section class="workspace">
+      <aside class="rail">
+        <h2>Library</h2>
+        <div class="rail-label">Views</div>
+        <button class="filter active">All <span>12</span></button>
+        <button class="filter">In progress <span>4</span></button>
+        <button class="filter">Unread <span>5</span></button>
+        <button class="filter">Finished <span>3</span></button>
+        <div class="rail-label">Collections</div>
+        <button class="filter">★ Starred <span>6</span></button>
+        <button class="filter">⌕ Essays <span>7</span></button>
+        <button class="filter">↗ Papers <span>5</span></button>
+      </aside>
+
+      <section class="list-card">
+        <div class="card-head"><h2>Reading queue</h2><span class="result-count">12 records · page 1</span></div>
+        <div class="table-head"><span>Title</span><span>Status</span><span>Progress</span><span>Kind</span></div>
+        <button class="book-row active"><span><b class="book-title">The Shape of Tools</b><small class="book-author">M. Abramson</small></span><span class="status progress">In progress</span><span><div class="progress"><i style="width: 64%"></i></div></span><small class="book-kind">Essay</small></button>
+        <button class="book-row"><span><b class="book-title">Ways of Seeing</b><small class="book-author">John Berger</small></span><span class="status">Unread</span><span><div class="progress"><i style="width: 0%"></i></div></span><small class="book-kind">Book</small></button>
+        <button class="book-row"><span><b class="book-title">The Cathedral and the Bazaar</b><small class="book-author">Eric S. Raymond</small></span><span class="status">Finished</span><span><div class="progress"><i style="width: 100%"></i></div></span><small class="book-kind">Paper</small></button>
+        <button class="book-row"><span><b class="book-title">Designing for Calm</b><small class="book-author">A. Ito</small></span><span class="status progress">In progress</span><span><div class="progress"><i style="width: 32%"></i></div></span><small class="book-kind">Notes</small></button>
+        <div class="card-head"><span class="result-count">Showing 1–4 of 12</span><div class="actions"><button class="secondary">‹</button><button class="secondary">›</button></div></div>
+      </section>
+
+      <aside class="detail-card">
+        <div class="detail-kicker">Selected item · 01</div>
+        <h2>The Shape of Tools</h2>
+        <div class="detail-author">M. Abramson · Essay · 2025</div>
+        <div class="detail-rule"></div>
+        <div class="meta"><div><small>Status</small><strong>◷ In progress</strong></div><div><small>Priority</small><strong>High</strong></div><div><small>Progress</small><strong>64%</strong></div><div><small>Updated</small><strong>Today</strong></div></div>
+        <div class="progress" style="margin-top: 18px"><i style="width: 64%"></i></div>
+        <div class="detail-rule"></div>
+        <div class="note">“The best tools make attention feel larger, not more fragmented.”</div>
+        <div class="actions"><button>+ 10%</button><button>✓ Finish</button><button class="secondary">★ Star</button><button class="secondary">Archive</button></div>
+      </aside>
+    </section>
+    <footer class="footer"><span>⌂ ~/.emacs.d/research-shelf.sqlite</span><span>✓ Saved locally · 12 items · last sync just now</span></footer>
+  </main>
+</body>
+</html>

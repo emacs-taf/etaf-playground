@@ -1,0 +1,16 @@
+;; Static composition only.  Storage, state, Components, and events live in
+;; the same-basename `.el' companion.
+(research-shelf-shell
+ :title "Research Shelf"
+ :subtitle "A quiet place for unfinished ideas"
+ (header :eyebrow "A quiet place for unfinished ideas")
+ (filters
+  (filter :key all :label "All")
+  (filter :key reading :label "In progress")
+  (filter :key unread :label "Unread")
+  (filter :key finished :label "Finished")
+  (filter :key starred :label "★ Starred"))
+ (main
+  (library :title "Reading queue")
+  (detail :title "Selected item"))
+ (footer :label "SQLite · saved locally"))

@@ -1,97 +1,125 @@
-;;; etaf-playground.el --- ETAF operations-console application pair -*- lexical-binding: t; -*-
+;;; etaf-playground.el --- Generic ETAF pair playground framework -*- lexical-binding: t; -*-
+
 ;;; Commentary:
-;; One reviewed pair: inert `.etaf' data plus an executable companion.
+;; The Playground owns only pair registration, inert `.etaf' validation,
+;; companion loading, mounting, and cleanup.  Applications belong in their
+;; same-basename companion modules and never leak into this framework.
+
 ;;; Code:
 (require 'cl-lib)
 (require 'etaf)
-(require 'etaf-ui)
+(require 'etaf-playground-catalog)
 
-(defconst etaf-playground-buffer-name "*ETAF Playground*")
+;; `read' consults this dynamically scoped safety switch.  Declare it here
+;; so the lexical-binding compiler does not mistake the protected binding for
+;; an unused lexical local.
+(defvar read-eval)
+
+(defconst etaf-playground-buffer-name "*ETAF Playground*"
+  "Default buffer used by the generic Playground launcher.")
 (defconst etaf-playground-example-directory
   (expand-file-name "examples"
-                    (file-name-directory (or load-file-name buffer-file-name))))
-(defconst etaf-playground-scenario-manifest
-  '((:pair "operations-console" :root-component etaf-operations-console-root
-     :category "Complete application"
-     :capabilities (view component reactivity context theme behavior events
-                    actions data resource lifecycle etaf-ui)
-     :refs (operations-console-alpha-increment operations-console-alpha-reset
-            operations-console-beta-increment operations-console-beta-reset
-            operations-console-nav-overview operations-console-nav-data
-            operations-console-nav-resource operations-console-theme-toggle
-            operations-console-local-callback operations-console-named-action
-            operations-console-behavior-toggle operations-console-clear-selection
-            operations-console-row-1 operations-console-row-2 operations-console-row-3
-            operations-console-fail-next
-            operations-console-resource-reload operations-console-error-boundary)
-     :gui-checkpoints (compact fullscreen overview data resource theme focus)
-     :performance (:warm-runs 10 :publication-per-event 1)))
-  "The sole active Playground pair and its public review metadata.")
-(defconst etaf-playground-example-names '("operations-console"))
+                    (file-name-directory (or load-file-name buffer-file-name)))
+  "Directory containing same-basename `.etaf' and `.el' pairs.")
+(defvar etaf-playground-default-pair
+  (plist-get (car etaf-playground-catalog) :pair)
+  "Pair opened by `etaf-playground-open'.")
+(defvar etaf-playground-scenario-manifest
+  (copy-tree etaf-playground-catalog)
+  "Registered Playground pair specifications.
+
+Each entry declares the pair name, companion feature, root factory, inert
+static tags, public refs, and review metadata.  The framework does not inspect
+or special-case the application's business model.")
+(defvar etaf-playground-example-names
+  (mapcar (lambda (entry) (plist-get entry :pair))
+          etaf-playground-scenario-manifest)
+  "Names of registered Playground pairs.")
 (defvar-local etaf-playground-current-example nil)
-(defconst etaf-playground--static-tags
-  '(operations-console-shell header brand summary theme-control navigation tab
-    main overview hero metric-strip metric workspace activity-panel
-    capability-panel timeline data resource status
-    column row text spacer panel label viewport-height stretch))
+
+(defun etaf-playground-register-pair (entry)
+  "Register or replace a generic Playground pair ENTRY.
+
+ENTRY must contain a string `:pair', symbol `:root-component', symbol
+`:companion-feature', and a proper-list `:static-tags'."
+  (let ((name (plist-get entry :pair)))
+    (unless (and (stringp name) (symbolp (plist-get entry :root-component))
+                 (symbolp (plist-get entry :companion-feature))
+                 (proper-list-p (plist-get entry :static-tags)))
+      (error "Invalid Playground pair manifest entry: %S" entry))
+    (setq etaf-playground-scenario-manifest
+          (cons entry
+                (cl-remove name etaf-playground-scenario-manifest
+                           :key (lambda (item) (plist-get item :pair))
+                           :test #'equal)))
+    (setq etaf-playground-example-names
+          (mapcar (lambda (item) (plist-get item :pair))
+                  etaf-playground-scenario-manifest))
+    entry))
 
 (defun etaf-playground-scenario (name)
-  "Return the sole manifest entry named NAME."
-  (or (and (equal name "operations-console")
-           (car etaf-playground-scenario-manifest))
+  "Return the registered pair specification named NAME."
+  (or (cl-find name etaf-playground-scenario-manifest
+               :key (lambda (entry) (plist-get entry :pair))
+               :test #'equal)
       (user-error "Unknown ETAF Playground pair: %s" name)))
 
 (defun etaf-playground--pair-file (name suffix)
   "Return NAME pair path ending in SUFFIX."
   (expand-file-name (concat name suffix) etaf-playground-example-directory))
 
-(defun etaf-playground--validate-static-node (node)
-  "Validate inert static View NODE and return it."
+(defun etaf-playground--validate-static-node (node tags)
+  "Validate inert static View NODE against allowlisted TAGS."
   (cond
    ((or (null node) (stringp node) (numberp node) (keywordp node)
         (memq node '(t stretch viewport-height))) node)
+   ;; Symbols in a static pair are inert enum/data values.  They are not
+   ;; evaluated because only proper-list nodes become View forms; reject
+   ;; private runtime names while keeping the manifest format composable.
+   ((symbolp node)
+    (unless (or (string-prefix-p "etaf--" (symbol-name node))
+                (string-prefix-p "ebox--" (symbol-name node)))
+      node))
    ((consp node)
     (unless (and (proper-list-p node) (symbolp (car node))
-                 (memq (car node) etaf-playground--static-tags)
+                 (memq (car node) tags)
                  (not (string-prefix-p "etaf--" (symbol-name (car node))))
                  (not (string-prefix-p "ebox--" (symbol-name (car node)))))
       (error "Unsafe ETAF static View form: %S" node))
-    (mapc #'etaf-playground--validate-static-node (cdr node))
+    (mapc (lambda (child) (etaf-playground--validate-static-node child tags))
+          (cdr node))
     node)
    (t (error "Unsafe ETAF static View value: %S" node))))
 
 (defun etaf-playground-read-static (name)
   "Read and validate NAME's single inert `.etaf' form."
-  (with-temp-buffer
-    (insert-file-contents (etaf-playground--pair-file name ".etaf"))
-    (let ((read-eval nil)
-          (form (read (current-buffer))))
-      (ignore read-eval)
-      (condition-case nil
-          (progn (read (current-buffer))
-                 (error "ETAF static file contains multiple forms"))
-        (end-of-file nil))
-      (etaf-playground--validate-static-node form))))
+  (let ((scenario (etaf-playground-scenario name)))
+    (with-temp-buffer
+      (insert-file-contents (etaf-playground--pair-file name ".etaf"))
+      (let ((read-eval nil))
+        (ignore read-eval)
+        (let ((form (read (current-buffer))))
+          (condition-case nil
+              (progn (read (current-buffer))
+                     (error "ETAF static file contains multiple forms"))
+            (end-of-file nil))
+          (etaf-playground--validate-static-node
+           form (plist-get scenario :static-tags)))))))
 
 (defun etaf-playground-read-pair (name)
   "Read NAME data, load its companion, and return its root View."
   (let* ((scenario (etaf-playground-scenario name))
          (form (etaf-playground-read-static name))
+         (feature (plist-get scenario :companion-feature))
          (root (plist-get scenario :root-component)))
-    (unless (featurep 'etaf-operations-console)
-      ;; Use Emacs's normal source/bytecode resolution.  `load-file' forced
-      ;; the 39KB companion through the Lisp interpreter on every fresh
-      ;; process, making the first retained render look like a layout
-      ;; regression.  A compiled companion is the production path; source is
-      ;; still the deterministic fallback when no `.elc' exists.
+    (unless (featurep feature)
       (load (file-name-sans-extension
-             (etaf-playground--pair-file name ".el"))
-            nil nil nil))
+             (etaf-playground--pair-file name ".el")) nil nil nil))
     (unless (functionp root) (error "Missing root factory: %S" root))
     (funcall root form)))
 
 (defun etaf-playground-mount-example (buffer-name name)
-  "Mount pair NAME in BUFFER-NAME."
+  "Mount registered pair NAME in BUFFER-NAME."
   (when-let ((runtime (etaf-runtime-for-buffer buffer-name)))
     (etaf-unmount runtime))
   (let ((buffer (etaf-mount buffer-name (etaf-playground-read-pair name))))
@@ -105,32 +133,37 @@
 
 ;;;###autoload
 (defun etaf-playground-open (&optional buffer-name)
-  "Open the operations-console pair in BUFFER-NAME."
+  "Open the registered default pair in BUFFER-NAME."
   (interactive)
   (etaf-playground--display-buffer
    (etaf-playground-mount-example
-    (or buffer-name etaf-playground-buffer-name) "operations-console")))
+    (or buffer-name etaf-playground-buffer-name)
+    etaf-playground-default-pair)))
 
 ;;;###autoload
 (defun etaf-playground-open-example (name &optional buffer-name)
-  "Open pair NAME in BUFFER-NAME."
+  "Open registered pair NAME in BUFFER-NAME."
+  (interactive (list (completing-read "Pair: " etaf-playground-example-names)))
   (etaf-playground--display-buffer
    (etaf-playground-mount-example
     (or buffer-name etaf-playground-buffer-name) name)))
 
 ;;;###autoload
 (defun etaf-playground-reset (&optional buffer-name)
-  "Remount the active pair in BUFFER-NAME."
-  (interactive)
-  (let ((name (or buffer-name etaf-playground-buffer-name)))
-    (unless (get-buffer name) (user-error "No Playground pair is mounted"))
+  "Remount the current/default registered pair in BUFFER-NAME."
+  (let* ((name (or buffer-name etaf-playground-buffer-name))
+         (buffer (get-buffer name))
+         (pair (or (and buffer
+                        (buffer-local-value 'etaf-playground-current-example
+                                            buffer))
+                   etaf-playground-default-pair)))
+    (unless buffer (user-error "No ETAF Playground pair is mounted"))
     (etaf-playground--display-buffer
-     (etaf-playground-mount-example name "operations-console"))))
+     (etaf-playground-mount-example name pair))))
 
 ;;;###autoload
 (defun etaf-playground-close (&optional buffer-name)
   "Unmount and kill the Playground BUFFER-NAME."
-  (interactive)
   (let* ((name (or buffer-name etaf-playground-buffer-name))
          (buffer (get-buffer name)))
     (when-let ((runtime (and buffer (etaf-runtime-for-buffer buffer))))

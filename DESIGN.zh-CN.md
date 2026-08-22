@@ -2,94 +2,80 @@
 
 ## 来源与状态
 
-- 状态：唯一 reviewed pair 的 active draft
-- 更新日期：2026-08-20
-- 主产品面：`examples/operations-console.etaf` + `examples/operations-console.el`
-- 视觉参考：`design/operations-console.html`
-- 已审查证据：pair loader/manifest、`etaf-ui.el`、Ebox viewport 合同及当前 GUI/性能证据。
+- 状态：active
+- 更新日期：2026-08-22
+- 主产品面：`examples/research-shelf.etaf` + `examples/research-shelf.el`
+- HTML 视觉基线：`design/research-shelf.html`
+- 已审查：ETAF View/Component/Data API、`etaf-ui` 的公开组件，以及
+  `etaf-sqlite` 的 typed source 合同。
 
-## 品牌
+## 产品定位
 
-- 气质：安静的操作控制台；准确、温暖、克制地体现技术感。
-- 信任信号：状态 chip、更新时间、明确计数、清晰的成功/错误反馈。
-- 避免：普通玩具 dashboard、彩虹渐变、无语义状态的装饰控件和杂乱控制区。
+Research Shelf 是一个真正有用的本地研究/阅读架：SQLite 保存书籍、论文、
+文章和笔记，用户可以筛选、分页、选择一条记录、更新进度、完成、收藏和归档。
+它不是把 API 名称堆成控制台，而是用一个连贯 workflow 验证 ETAF 的组合能力。
 
-## 产品目标
+## 结构与分层
 
-- 用一个好看的 app 同时展示 Component、组合、响应式、Context/Theme、Behavior、事件/Action、Data、Resource、错误边界、焦点和生命周期。
-- 不扩展第二个 Playground 场景，不伪装成完整生产分析产品，不用假动画掩盖框架问题。
-- HTML 原型和 ETAF 实现保持同一层级、状态文字、交互结果和 compact/fullscreen 几何。
+- Shell：标题/副标题/主题切换 → 三列 workspace → 持久化状态栏。
+- 三列 workspace：筛选栏 / SQLite reading list / selected-item detail inspector。
+- `.etaf`：只保存经过白名单校验的静态结构和文案（section、filter、label）。
+- 同名 `.el`：消费 `.etaf`，组合公开 UI Components，创建 SQLite schema、Data
+  Controller、refs、事件处理和生命周期清理。
+- 现有可复用组件：`button`、`checkbox`、`label`、`panel`、`data-grid`、
+  `pagination`；应用只负责把它们组合成产品，不复制一套 UI kit。
 
-## 信息架构
+## Playground 框架边界（必须长期遵守）
 
-- Shell：品牌/header → 导航 tabs → page surface → 持久 status footer。
-- Overview：hero/status、KPI 卡片、活动/控制 workspace、能力卡片和事件时间线。
-- Data：选择摘要、可交互 DataGrid、selection detail。
-- Resource：资源状态、reload/fail-next、boundary 结果和 cleanup 计数。
-- 层级：先显示页面标题和状态，再显示主操作，最后显示诊断/细节。
+`etaf-playground.el` 是通用 pair playground 框架，不是业务应用模块。
+`etaf-playground-catalog.el` 是独立、可替换的部署目录；业务 pair 的名字、refs
+和验证元数据放在 catalog，不写进 loader 实现。
 
-## 设计原则
+框架只负责：
 
-1. 一个视觉层级：每个控件属于有名字的 surface，每个 surface 都有可见状态。
-2. 状态优先于装饰：theme、loading、error、selected、disabled、success 都有文字表达。
-3. 几何稳定：compact 下控件保持单行，页面只替换 page surface。
-4. API 真实：HTML 可以用普通 HTML/JS，但 ETAF 只用公开 ETAF/ETAF-UI API。
+- pair 注册语义和 catalog 读取；
+- `.etaf` 的惰性、inert、白名单读取；
+- 按同名 pair 加载 companion；
+- mount、reset、close，以及测试/GUI 入口。
+
+框架绝不负责：业务 Component、数据库包或表结构、palette、业务 state、
+handlers、resources 或应用 refs。它不能 `require etaf-sqlite`，也不能把业务
+组件实现塞进 loader/helper。未来新增例子时，只增加一个同名 `.etaf`/`.el` pair
+和 catalog entry，不改变框架语义。
+
+组合和复用是默认设计：优先复用 ETAF/`etaf-ui` 的公开契约，优先拆出清晰的
+Component 边界，避免新增 helper 层或抽象泄漏。
 
 ## 视觉语言
 
-- 色彩：墨蓝 `#142235`、纸张 `#F6F1E8`、灰蓝 `#526174`、青绿 `#2E8B83`、珊瑚 `#E26D5A`、琥珀 `#D99A3D`、成功绿 `#3E9B72`。
-- 字体：易读 sans body，紧凑 monospace 指标/标签，粗体页面标题。
-- 节奏：一行外部节奏、双列 workspace、固定 gap、shell 全宽，卡片有明确内边距。
-- 形状：细深色边框、克制 elevation；ETAF 不依赖浮层。
-- 动效：不以动画为正确性前提，状态变化即时且支持 reduced motion。
-- 图形：只用文字标记和 Unicode 状态符号，不依赖外部资源。
+- 气质：editorial、专注、温暖、安静而聪明；避免通用 admin dashboard、KPI
+  墙、假图表、彩虹渐变和装饰性噪声。
+- 色彩：ink `#172033`、paper `#F7F3EA`、cobalt `#3657D6`、mint `#3E9B8F`、
+  coral `#D86B5D`、amber `#C58A3A`、muted `#6D7482`。
+- 节奏：1 格外部节奏、2 格 panel padding、1 格 grid gap，控件保持 intrinsic
+  宽度；`grid` 负责页面骨架，`flex` 负责 toolbar/action group。
+- 状态：文字和 Unicode 同时表达状态：`⌕`、`★`、`✓`、`◷`、`↗`、`⚠`、`·`。
+- 动效：状态立即可见，不依赖 timer animation，默认支持 reduced motion。
 
-## 组件
+## 交互合同
 
-- 复用公开 `button`、`checkbox`、`label`、`panel`、`data-grid`。
-- companion 组件：`operations-console-shell`、`hero-status`、`metric-strip`、`activity-card`、`capability-card`、`timeline`、`data-page`、`resource-page`。
-- 状态：active/inactive nav、light/dark theme、selected/unselected row、Behavior on/off、resource ready/loading/error、boundary handled、compact/fullscreen。
-- 所有权：`.etaf` 只放静态 composition 和 section 名称；`.el` 持有 token、props、refs、资源、handlers 和 state。
+- 筛选：All、In progress、Unread、Finished、Starred。
+- 列表：DataGrid 行单选，重复点击可以重新选择；分页按钮在边界处 disabled。
+- 详情：`+ 10%`、`✓ Finish`、`☆/★ Star`、`Archive`；完成或 100% 时正确禁用。
+- 存储：成功显示 `✓ Saved locally`，失败保留当前可用内容并提供 Reload。
+- 主题：Light/Dark 由 checkbox 控制；文字、对比度和布局都应保持可读。
+- 键盘：Tab 顺序为筛选 → 行 → 详情动作 → 分页，RET 使用同一组公开 refs。
 
-## 无障碍
+## 响应式与验证
 
-- 目标：键盘完整、高对比文字，使用公开组件提供语义 role。
-- Tab/Shift-Tab 遍历 nav/action/data rows；RET 派发 focused ref；移除目标时清焦点。
-- 每个状态都有文字反馈，颜色不是唯一信号；不依赖 hover-only 行为。
-- Ebox Theme 承载继承的 Ebox 默认属性；应用 palette 仍由 companion 查询，
-  Renderer 会在进入 Ebox 几何层前过滤未知 token 名。
-
-## 响应式
-
-- 支持 compact 900–940px body 和 fullscreen desktop GUI。
-- metric 尽量一行展示，workspace 从双列退化为上下堆叠，控件保持 intrinsic 单行宽度。
-- 需要分配剩余宽度的行使用 `flex`，固定 intrinsic 控件组才使用 `row`；导航
-  控件组使用 max-content，确保每个 hover/active 区域都是独立控件。
-- mouse-1 和键盘激活使用同一组公开 refs。
-
-## 交互状态
-
-- Loading：Resource 显示 `Loading…`，shell 几何不移动。
-- Empty：DataGrid 明确显示 empty，选择控件仍可用。
-- Error：reload 可故意失败一次，Boundary 显示 handled error 且仍可恢复。
-- Success：action/status 和 timestamp 可见更新。
-- Disabled：不可用操作暴露 disabled 语义，不静默吞输入。
-
-## 内容语气
-
-- 简洁、操作化、解释性；标签明确指出正在展示的框架能力。
-- 统一使用 `Component`、`Context`、`Theme`、`Behavior`、`Action`、`Data`、`Resource`、`Boundary`。
-- 优先“动词 + 结果”（如 `Reload resource`、`Handled: …`、`Selected Beacon`）。
-
-## 实现约束
-
-- 使用 `.etaf`/`.el` 的公开 ETAF View DSL，由 Ebox 渲染，不引入 HTML/CSS runtime dependency。
-- palette/spacing token 在 companion 单处定义并复用，禁止散落临时色值。
-- 性能：普通 warm p50 <=100ms，counter/resource p50 <=150ms，每个 warm max <=250ms；每个逻辑动作一次 publication。
-- 保留唯一同名 `operations-console` pair、静态安全读取、公开 API boundary、双 mount/unmount cleanup 和 manifest 语义。
-- 导航：稳定的 page ref 由 retained router Component 读取；页面 Host 是唯一 semantic Range 锚点，页面切换只替换一个 Range payload，不重建 shell root。
-- HTML 是视觉参考；ETAF 需要 compact/fullscreen 截图和动态键鼠 checkpoint 证明布局、宽度、焦点和状态。
+- Wide/fullscreen 使用 rail / list / detail 三列 grid。
+- Compact 时筛选栏收为顶部工具行，detail 位于 list 后面；不使用固定宽度撑坏
+  viewport，所有操作控件仍保持独立 hover/focus 语义。
+- 用 SQLite 临时文件测试 mount/remount、筛选、分页、重复选行、mutation、错误
+  状态和 cleanup；GUI 用干净 fullscreen 单窗口截图验证真实布局。
+- 目标：一次 Data mutation 对应一次 Runtime generation/publication；warm 交互
+  维持现有 100ms p50 预算。
 
 ## 待 review
 
-- [ ] 用户可在第一版 HTML/ETAF 对照后调整 palette 或页面命名；行为和公开 ref 覆盖保持不变。
+- [ ] 用户可调整产品命名或 palette；pair 边界、组合/复用原则和公开交互合同不变。

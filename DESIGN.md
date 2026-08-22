@@ -2,104 +2,156 @@
 
 ## Source of truth
 
-- Status: Active draft for the sole reviewed pair
-- Last refreshed: 2026-08-20
-- Primary product surface: `examples/operations-console.etaf` + `examples/operations-console.el`
-- Visual reference: `design/operations-console.html`
-- Evidence reviewed: current pair loader/manifest, `etaf-ui.el`, Ebox viewport contract, and the current GUI/performance evidence.
+- Status: Active
+- Last refreshed: 2026-08-22
+- Primary product surface: `examples/research-shelf.etaf` + `examples/research-shelf.el`
+- Visual reference: `design/research-shelf.html`
+- Evidence reviewed: ETAF public View/Component/Data/Resource APIs, `etaf-ui`
+  Button/Checkbox/Panel/DataGrid/Pagination, and `etaf-sqlite`'s typed source
+  contract.
 
 ## Brand
 
-- Personality: calm operations cockpit; precise, warm, and quietly technical.
-- Trust signals: explicit status chips, visible last-updated time, deterministic counts, clear success/error feedback.
-- Avoid: generic toy dashboard, rainbow gradients, dense ungrouped controls, decorative widgets with no semantic state.
+- Personality: editorial, focused, warm, quietly intelligent.
+- Trust signals: durable SQLite data, visible save state, selected-item detail,
+  explicit progress/status, and recoverable storage errors.
+- Avoid: generic admin dashboards, KPI walls, fake charts, rainbow gradients,
+  and a showcase that exists only to exercise APIs.
 
 ## Product goals
 
-- Make one attractive app prove ETAF's Component, composition, reactive, Context/Theme, Behavior, event/Action, Data, Resource, error-boundary, focus, and lifecycle contracts.
-- Do not add another Playground scenario or hide framework limitations behind fake animation.
-- Keep the HTML prototype and ETAF rendering aligned in hierarchy, state labels, interaction outcomes, and compact/fullscreen geometry.
+- Build a useful personal reading/research shelf backed by a real SQLite file.
+- Make triage, selection, progress updates, filtering, pagination, and
+  recovery feel like one coherent product rather than isolated demos.
+- Exercise existing ETAF components through composition before adding any new
+  component type.
+- Keep the static `.etaf` file responsible for shell/section composition while
+  the `.el` companion owns storage, state, callbacks, and lifecycle.
 
 ## Personas and jobs
 
-- Primary personas: ETAF framework reviewer and application author learning the public API.
-- User jobs: understand the layout model, trigger each capability, inspect visible state changes, and verify recovery/cleanup behavior.
-- Key contexts: 900–940 px compact GUI, fullscreen GUI, keyboard-only review, and batch semantic tests.
+- Primary persona: an Emacs user collecting papers, books, essays, and notes.
+- Jobs: find what to read next, filter by state/priority, inspect one item,
+  update progress, mark an item finished, and recover after a storage error.
+- Contexts: compact desktop window, fullscreen review, keyboard-first use, and
+  a local SQLite database that survives unmount/remount.
 
 ## Information architecture
 
-- Shell: brand/header -> navigation tabs -> page surface -> persistent status footer.
-- Overview: hero/status strip, KPI cards, activity/control workspace, capability cards, and event timeline.
-- Data: query/selection summary, interactive DataGrid, and selection detail panel.
-- Resource: resource status, reload/fail-next controls, boundary result, and cleanup counter.
-- Content hierarchy: page title and status first; primary action second; diagnostics/details third.
+- Shell: compact brand bar -> filter rail -> reading list -> detail inspector.
+- Filter rail: All, In progress, Unread, Finished, and Starred; each is a real
+  action and the list summary exposes the matching count.
+- Reading list: title/author/status/progress rows, single selection, paging,
+  empty/loading/error states.
+- Detail inspector: title, author, type, status, progress, priority, note,
+  last updated, and actions (`+10%`, `Finish`, `Star`, `Archive`).
+- Footer: database path/status, visible result count, and current page.
 
 ## Design principles
 
-1. One visual hierarchy: every control belongs to a named surface and every surface has a visible status.
-2. State before decoration: theme, loading, error, selected, disabled, and success states are readable as text as well as color.
-3. Stable geometry: controls remain single-line at compact width; page changes replace only the page surface.
-4. Public API truth: the prototype may use ordinary HTML/JS, but the ETAF port uses only public ETAF/ETAF-UI APIs.
+1. One useful workflow: every visible control helps decide or update what to
+   read next.
+2. Editorial hierarchy over dashboard chrome: one strong title, restrained
+   metadata, and generous whitespace around the selected record.
+3. State is durable and observable: SQLite is the source of truth; UI status
+   tells the user when a mutation is loading, saved, or failed.
+4. Composition first: reuse public UI Components and keep storage/state in the
+   companion, not in `.etaf` or a parallel widget layer.
+5. Fail closed: a SQLite failure keeps the last usable list and exposes a
+   retry action instead of replacing the whole surface with a stack trace.
 
 ## Visual language
 
-- Color: ink navy `#142235`, paper `#F6F1E8`, slate `#526174`, teal `#2E8B83`, coral `#E26D5A`, amber `#D99A3D`, success `#3E9B72`.
-- Typography: readable sans body, compact monospace labels/metrics, bold page titles.
-- Spacing/layout rhythm: one-line outer rhythm, two-column workspace, fixed gaps, full-width shell, deliberate card padding.
-- Shape/elevation: thin dark borders and restrained card elevation; no floating overlay is required by the ETAF port.
-- Motion: no animation is required; state changes are immediate and reduced-motion safe.
-- Imagery/iconography: text marks and Unicode status glyphs only; no external asset dependency.
+- Color: ink `#172033`, paper `#F7F3EA`, cobalt `#3657D6`, mint `#3E9B8F`,
+  coral `#D86B5D`, amber `#C58A3A`, muted slate `#6D7482`.
+- Typography: readable proportional labels with compact monospace metadata;
+  title and selected record use bold weight, not oversized headings.
+- Spacing/layout rhythm: 1-cell outer rhythm, 2-cell panel padding, 1-cell
+  grid gaps, and stable intrinsic control widths.
+- Shape/elevation: thin borders, small radius-like grouped rows where Ebox
+  permits, no floating overlays or decorative shadows.
+- Motion: immediate state changes; no timer-driven animation; reduced-motion
+  safe by construction.
+- Imagery/iconography: Unicode marks with semantic meaning: `⌕`, `★`, `✓`,
+  `◷`, `↗`, `⚠`, and `·`.
 
 ## Components
 
-- Existing components to reuse: public `button`, `checkbox`, `label`, `panel`, and `data-grid` from `etaf-ui`.
-- New/changed components: `operations-console-shell`, `hero-status`, `metric-strip`, `activity-card`, `capability-card`, `timeline`, `data-page`, and `resource-page` in the companion.
-- Variants/states: active/inactive nav, light/dark theme, selected/unselected row, Behavior on/off, resource ready/loading/error, boundary handled, compact/fullscreen.
-- Ownership: `.etaf` owns static composition and section names; `.el` owns tokens, props, refs, resources, handlers, and state.
+- Existing components to reuse: public `button`, `checkbox`, `label`, `panel`,
+  `data-grid`, and `pagination` from `etaf-ui`.
+- Companion composition: `research-shelf-shell`, `filter-rail`,
+  `reading-list`, and `detail-inspector`; these are ordinary ETAF Components,
+  not a second UI kit.
+- Variants/states: light/dark Theme, selected/unselected row, starred, empty,
+  loading, error, saved, disabled-at-boundary, and archived.
+- Token ownership: palette and spacing tokens live in the companion; `.etaf`
+  contains only validated structural facts and labels.
+
+## Playground framework boundary
+
+- `etaf-playground.el` is a reusable framework, not an application module.
+- The framework owns pair registration semantics, safe inert `.etaf` parsing,
+  companion loading, mount/reset/close, and test/GUI entry points. Replaceable
+  deployment metadata lives in `etaf-playground-catalog.el`, outside the
+  loader implementation.
+- A pair companion owns its Components, storage adapters, state, resources,
+  events, and root factory. The framework must not reference a business
+  component, database package, table schema, palette, or application-specific
+  ref.
+- Reuse is expressed through the generic manifest/loader contract and the
+  existing public ETAF/etaf-ui components. New business behavior belongs in a
+  same-basename pair, never in the framework.
+- Any future Playground example must add a catalog entry and its own `.etaf`/
+  `.el` files without changing framework semantics.
 
 ## Accessibility
 
-- Target: keyboard-complete, high-contrast text, semantic roles through public UI components.
-- Keyboard/focus: Tab and Shift-Tab traverse nav/actions/data rows; RET dispatches the focused ref; focus clears when a target is removed.
-- Every state has text feedback; color is never the only signal. No hover-only behavior.
-- Ebox Theme carries inherited Ebox defaults; application palette lookups remain
-  in the companion, while the Renderer filters unknown token names before they
-  reach Ebox geometry.
+- Target: keyboard-complete and high-contrast desktop UI.
+- Keyboard/focus: Tab order follows filters -> rows -> detail actions -> pager;
+  RET dispatches the focused public ref; selected row is announced in text.
+- Color is never the only state signal; status uses text and Unicode marks.
+- Disabled actions remain visible with disabled semantics and explanatory help.
 
 ## Responsive behavior
 
-- Supported surfaces: compact 900–940 px GUI body and fullscreen desktop GUI.
-- Metric cards remain in one row when possible; workspace falls back from two columns to stacked sections; controls keep intrinsic single-line widths.
-- Use `flex` for rows that distribute remaining width; reserve `row` for fixed
-  intrinsic control groups. The navigation control group is max-content so
-  each hover/active range remains an independent control.
-- Mouse-1 and keyboard activation use the same public refs.
+- Wide/fullscreen: three-column grid (rail / list / detail).
+- Compact: rail becomes a top filter row, detail follows the list, and all
+  controls remain intrinsic single-line widths.
+- Use `grid` for the product skeleton, `flex` for toolbars and action groups,
+  and `row` only for compact intrinsic controls.
 
 ## Interaction states
 
-- Loading: resource card reports `Loading…` without moving the shell.
-- Empty: DataGrid reports an explicit empty state and keeps selection controls available.
-- Error: resource reload can fail once; the boundary card reports the handled error and recovery remains available.
-- Success: action/status and timestamp update visibly.
-- Disabled: unavailable actions expose disabled semantics rather than silently ignoring input.
+- Loading: list keeps its frame and shows `◷ Loading library…`.
+- Empty: selected filter explains why there are no matches and offers `All`.
+- Error: storage card shows `⚠ Could not save` with `Retry`; last committed
+  data remains visible.
+- Success: mutation shows `✓ Saved locally` and updates `updated` metadata.
+- Disabled: `Finish` is disabled for finished records; `+10%` is disabled at
+  100%; archive is disabled while loading.
 
 ## Content voice
 
-- Tone: concise, operational, and explanatory; labels name the framework capability being demonstrated.
-- Terminology: use `Component`, `Context`, `Theme`, `Behavior`, `Action`, `Data`, `Resource`, and `Boundary` consistently.
-- Microcopy: prefer a visible verb + result (`Reload resource`, `Handled: …`, `Selected Beacon`) over generic `Done`.
+- Tone: concise, observant, and useful; never framework-centric in primary UI.
+- Terminology: Reading, In progress, Finished, Starred, Saved locally,
+  Storage issue.
+- Microcopy: action + result (`Mark finished`, `Saved locally`) instead of
+  generic `Done`.
 
 ## Implementation constraints
 
-- Framework/styling: ETAF public View DSL in `.etaf`/`.el`; Ebox renders the result; no HTML/CSS runtime dependency.
-- Design tokens: keep palette/spacing tokens in one companion source and reuse them; no scattered ad-hoc colors.
-- Performance: ordinary warm p50 <=100 ms, counter/resource p50 <=150 ms, every measured max <=250 ms; one publication per logical action.
-- Compatibility: preserve one same-basename `operations-console` pair, safe static reader, public API boundary, mount twice/unmount cleanup, and manifest refs.
-- Navigation: the stable page ref is read by the retained router Component; its
-  page Host is the single semantic Range anchor, so page switches replace one
-  Range payload instead of rebuilding the shell root.
-- Review: HTML is the visual reference; ETAF needs compact/fullscreen screenshots and dynamic keyboard/mouse checkpoints.
+- Framework/styling: public ETAF View DSL and `etaf-ui`; SQLite through the
+  sibling `etaf-sqlite` package; no HTML/CSS runtime dependency.
+- Data schema: one typed `reading_items` SQLite table with id/title/author/
+  kind/status/progress/priority/starred/note/updated columns.
+- Performance: one Data mutation -> one Runtime generation/publication; normal
+  warm actions remain under the existing 100ms p50 target.
+- Compatibility: one same-basename `research-shelf` pair only; old console
+  examples are removed from the active manifest and compile surface.
+- Verification: SQLite temp-file integration tests, pair mount/remount tests,
+  repeated selection/mutation tests, and clean fullscreen GUI screenshots.
 
 ## Open questions
 
-- [ ] User review may adjust palette or page naming after the first HTML/ETAF comparison; behavior and public-ref coverage remain fixed.
+- [ ] User may rename the product after reviewing the first HTML/ETAF render;
+  architecture and interaction contracts remain unchanged.
