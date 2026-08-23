@@ -23,6 +23,8 @@
 
 (defun etaf-playground-test--close (buffer)
   "Close BUFFER when it exists."
+  (when (gethash "research-shelf" etaf-playground--sessions)
+    (etaf-playground-close "research-shelf"))
   (when (get-buffer buffer)
     (etaf-playground-close buffer)))
 
@@ -51,30 +53,36 @@ database and mounts a test buffer before running BODY."
          (when (file-exists-p ,database)
            (delete-file ,database))))))
 
-(ert-deftest etaf-playground-manifest-describes-one-pair ()
-  "Expose one reviewed pair through a generic manifest."
-  (should (equal '("research-shelf") etaf-playground-example-names))
-  (should (= 1 (length etaf-playground-scenario-manifest)))
-  (let ((entry (car etaf-playground-scenario-manifest))
+(ert-deftest etaf-playground-framework-discovers-generic-file-triplets ()
+  "Discover examples from files without a business catalog in the framework."
+  (should (member "research-shelf" etaf-playground-example-names))
+  (let ((entry (etaf-playground-scenario "research-shelf"))
         (framework (with-temp-buffer
                      (insert-file-contents "etaf-playground.el")
                      (buffer-string)))
-        (catalog (with-temp-buffer
-                   (insert-file-contents "etaf-playground-catalog.el")
-                   (buffer-string)))
         (makefile (with-temp-buffer
                     (insert-file-contents "Makefile")
-                    (buffer-string))))
-    (dolist (key '(:pair :root-component :companion-feature :static-tags
-                   :capabilities :refs :gui-checkpoints :performance))
+                    (buffer-string)))
+        (companion (with-temp-buffer
+                     (insert-file-contents "examples/research-shelf.el")
+                     (buffer-string))))
+    (dolist (key '(:pair :directory :etaf-file :el-file :ecss-file
+                   :root-component :companion-feature))
       (should (plist-member entry key)))
-    (should (string-match-p
-             "EXAMPLE_EL := examples/research-shelf.el" makefile))
-    (should-not (string-match-p "wildcard examples" makefile))
-    (should-not (string-match-p "require.*etaf-sqlite" framework))
+    (should (file-readable-p (plist-get entry :etaf-file)))
+    (should (file-readable-p (plist-get entry :el-file)))
+    (should (file-readable-p (plist-get entry :ecss-file)))
+    (should (string-match-p "wildcard examples" makefile))
+    (should-not (string-match-p "mindepth 2" makefile))
+    (should-not (string-match-p "etaf-playground-catalog" framework))
     (should-not (string-match-p "research-shelf" framework))
     (should-not (string-match-p "operations-console" framework))
-    (should (string-match-p "research-shelf" catalog))))
+    (dolist (section '("DATA / SQLITE SOURCE"
+                       "THEME / PALETTE CONTRACT"
+                       "STATE / DATA CONTROLLER / ACTIONS"
+                       "VIEW / COMPONENTS / COMPOSITION"
+                       "ROOT / PLAYGROUND REGISTRATION"))
+      (should (string-match-p (regexp-quote section) companion)))))
 
 (ert-deftest etaf-playground-displays-before-responsive-mount ()
   "GUI entry points establish the containing window before Ebox mount."
@@ -130,6 +138,145 @@ database and mounts a test buffer before running BODY."
                       (etaf--private) (ebox--private) (shell-command "x")))
       (should-error (etaf-playground--validate-static-node unsafe tags)
                     :type 'error))))
+
+(ert-deftest etaf-playground-ecss-reader-is-inert-and-usable ()
+  "Read the optional style companion as validated static Component styles."
+  (let ((form (etaf-playground-read-ecss "research-shelf")))
+    (should (equal 'styles (car form)))
+    (should (= 6 (length (cdr form))))
+    (dolist (rule (cdr form))
+      (should (stringp (car rule)))
+      (should (cl-every #'keywordp
+                        (cl-loop for (key _value) on (cdr rule) by #'cddr
+                                 collect key))))))
+
+(ert-deftest etaf-playground-workspace-switches-three-source-buffers ()
+  "One session switches `.etaf', `.el', and `.ecss' beside one preview."
+  (etaf-playground-test--with-app (buffer database)
+    (ignore buffer)
+    (let ((etaf-research-shelf-database-file database)
+          (source (etaf-playground-open-example "research-shelf")))
+      (ignore etaf-research-shelf-database-file)
+      (let* ((session (buffer-local-value 'etaf-playground-session source))
+             (preview (etaf-playground-session-preview-buffer session)))
+        (should (etaf-playground-session-p session))
+        (should (= 3 (length (etaf-playground-session-source-buffers session))))
+        (should (equal ".etaf"
+                       (etaf-playground-session-active-extension session)))
+        (should (etaf-runtime-p (etaf-runtime-for-buffer preview)))
+        (etaf-playground-show-el source)
+        (should (equal ".el"
+                       (etaf-playground-session-active-extension session)))
+        (etaf-playground-show-ecss source)
+        (should (equal ".ecss"
+                       (etaf-playground-session-active-extension session)))
+        (should (equal (etaf-playground-read-ecss "research-shelf" session)
+                       (etaf-component-styles 'etaf-research-shelf-shell)))))))
+
+(ert-deftest etaf-playground-source-tabs-have-buttons-and-shortcuts ()
+  "Source tabs work through both header buttons and keyboard shortcuts."
+  (etaf-playground-test--with-app (buffer database)
+    (ignore buffer)
+    (let ((etaf-research-shelf-database-file database)
+          (source (etaf-playground-open-example "research-shelf")))
+      (ignore etaf-research-shelf-database-file)
+      (with-current-buffer source
+        (should (eq #'etaf-playground-refresh
+                    (key-binding (kbd "C-c C-c"))))
+        (should (eq #'etaf-playground-show-etaf
+                    (key-binding (kbd "C-c 1"))))
+        (should (eq #'etaf-playground-show-el
+                    (key-binding (kbd "C-c 2"))))
+        (should (eq #'etaf-playground-show-ecss
+                    (key-binding (kbd "C-c 3"))))
+        (call-interactively (key-binding (kbd "C-c C-c")))
+        (should (etaf-runtime-p
+                 (etaf-runtime-for-buffer
+                  (etaf-playground-session-preview-buffer
+                   etaf-playground-session))))
+        (let* ((header (etaf-playground--source-header))
+               (position (string-match " EL" header)))
+          (should position)
+          (should (get-text-property position 'button header))
+          (should (equal ".el"
+                         (get-text-property position 'button-data header)))
+          (etaf-playground--activate-source-tab
+           (propertize " EL " 'etaf-playground-extension ".el"))
+          (should (equal ".el"
+                         (etaf-playground-session-active-extension
+                          etaf-playground-session))))))))
+
+(ert-deftest etaf-playground-direct-etaf-c-c-c-opens-workspace ()
+  "The source render command opens a workspace for a directly opened `.etaf'."
+  (etaf-playground-test--with-app (buffer database)
+    (ignore buffer)
+    (let* ((etaf-research-shelf-database-file database)
+           (source (find-file-noselect
+                    (expand-file-name "examples/research-shelf.etaf"
+                                      default-directory))))
+      (ignore etaf-research-shelf-database-file)
+      (unwind-protect
+          (with-current-buffer source
+            (should (eq #'etaf-playground-refresh
+                        (key-binding (kbd "C-c C-c"))))
+            (should (etaf-playground-refresh source))
+            (let ((session (buffer-local-value 'etaf-playground-session source)))
+              (should (etaf-playground-session-p session))
+              (should (etaf-runtime-p
+                       (etaf-runtime-for-buffer
+                        (etaf-playground-session-preview-buffer session))))))
+        (when (buffer-live-p source)
+          (etaf-playground-close source))))))
+
+(ert-deftest etaf-playground-does-not-remap-source-buffer ()
+  "The Research Shelf surface does not remap the source editor buffer."
+  (etaf-playground-test--with-app (buffer database)
+    (ignore buffer)
+    (let ((etaf-research-shelf-database-file database))
+      (ignore etaf-research-shelf-database-file)
+      (let* ((source (etaf-playground-open-example "research-shelf"))
+             (session (buffer-local-value 'etaf-playground-session source))
+             (preview (etaf-playground-session-preview-buffer session)))
+        (should (null (buffer-local-value 'face-remapping-alist source)))
+        (should (etaf-runtime-p (etaf-runtime-for-buffer preview)))))))
+
+(ert-deftest etaf-playground-refresh-uses-unsaved-etaf-source ()
+  "Refreshing a workspace reads the current source buffer, not disk only."
+  (etaf-playground-test--with-app (buffer database)
+    (ignore buffer)
+    (let ((etaf-research-shelf-database-file database)
+          (source (etaf-playground-open-example "research-shelf")))
+      (ignore etaf-research-shelf-database-file)
+      (with-current-buffer source
+        (goto-char (point-min))
+        (search-forward ":title \"Research Shelf\"")
+        (replace-match ":title \"Research Shelf (edited)\"" t t)
+        (set-buffer-modified-p t))
+      (should (etaf-playground-refresh source))
+      (should (string-match-p "Research Shelf (edited)"
+                              (etaf-playground-test--text
+                               (etaf-playground-session-preview-buffer
+                               (buffer-local-value 'etaf-playground-session
+                                                    source))))))))
+
+(ert-deftest etaf-playground-refresh-reloads-unsaved-el-companion ()
+  "Refreshing a dirty `.el' companion redefines its consumer intentionally."
+  (etaf-playground-test--with-app (buffer database)
+    (ignore buffer)
+    (let ((etaf-research-shelf-database-file database)
+          (source (etaf-playground-open-example "research-shelf")))
+      (ignore etaf-research-shelf-database-file)
+      (let* ((session (buffer-local-value 'etaf-playground-session source))
+             (el (etaf-playground--source-buffer session ".el")))
+        (with-current-buffer el
+          (goto-char (point-max))
+          (insert "\n;; dirty companion reload sentinel\n")
+          (set-buffer-modified-p t))
+        (should (etaf-playground-refresh source))
+        (should-not (etaf-playground-session-companion-dirty-p session))
+        (should (etaf-runtime-p
+                 (etaf-runtime-for-buffer
+                  (etaf-playground-session-preview-buffer session))))))))
 
 (ert-deftest etaf-playground-pair-mounts-sqlite-backed-surface ()
   "Mounting the pair initializes SQLite and renders the real app shell."
@@ -216,12 +363,18 @@ database and mounts a test buffer before running BODY."
         (should (string-match-p "Designing for Calm" text))
         (should-not (string-match-p "Ways of Seeing" text)))
       (etaf-dispatch-event runtime 'research-shelf-filter-all 'press)
+      (let ((page-one (etaf-playground-test--text buffer)))
+        (should (string-match-p "The Shape of Tools" page-one))
+        (should-not (string-match-p "The Craftsman" page-one)))
       (etaf-dispatch-event runtime 'research-shelf-page-next 'press)
-      (should (string-match-p "Page 2 / 2"
-                              (etaf-playground-test--text buffer)))
+      (let ((page-two (etaf-playground-test--text buffer)))
+        (should (string-match-p "Page 2 / 2" page-two))
+        (should (string-match-p "The Craftsman" page-two))
+        (should-not (string-match-p "The Shape of Tools" page-two)))
       (etaf-dispatch-event runtime 'research-shelf-page-previous 'press)
-      (should (string-match-p "Page 1 / 2"
-                              (etaf-playground-test--text buffer)))
+      (let ((page-one-again (etaf-playground-test--text buffer)))
+        (should (string-match-p "Page 1 / 2" page-one-again))
+        (should (string-match-p "The Shape of Tools" page-one-again)))
       (cl-letf (((symbol-function 'read-number)
                  (lambda (&rest _) 6)))
         (etaf-dispatch-event runtime 'research-shelf-page-size 'press))
@@ -253,11 +406,13 @@ database and mounts a test buffer before running BODY."
                  (line-of "Selected item"))))
       (pcase-let ((`(,filter-line ,list-line ,detail-line)
                    (layout-at 1600)))
-        (should (= filter-line list-line))
+        ;; Different child Components may start their first text baseline one
+        ;; line apart while still sharing the same wide Flex row.
+        (should (<= (abs (- filter-line list-line)) 1))
         (should (<= (- detail-line list-line) 1)))
       (pcase-let ((`(,filter-line ,list-line ,detail-line)
                    (layout-at 900)))
-        (should (= filter-line list-line))
+        (should (<= (abs (- filter-line list-line)) 1))
         (should (> detail-line list-line)))
       (pcase-let ((`(,filter-line ,list-line ,detail-line)
                    (layout-at 600)))

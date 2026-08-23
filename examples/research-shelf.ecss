@@ -1,0 +1,10 @@
+;; Static presentation belongs to the ECSS companion, not the behavior file.
+;; The form deliberately uses ETAF's validated Component style contract so it
+;; can be re-read safely by the generic Playground on every refresh.
+(styles
+ (".research-shelf-shell" :width stretch)
+ (".research-shelf-header" :width stretch :padding (1 0))
+ (".research-shelf-filter-rail" :width stretch)
+ (".research-shelf-list" :width stretch)
+ (".research-shelf-detail" :width stretch)
+ (".research-shelf-footer" :width stretch :padding (0 1)))

@@ -8,7 +8,7 @@
 (require 'cl-lib)
 (require 'etaf-playground)
 
-(defconst etaf-research-shelf-benchmark-row-p50-budget-ms 105.0)
+(defconst etaf-research-shelf-benchmark-row-p50-budget-ms 100.0)
 (defconst etaf-research-shelf-benchmark-row-max-budget-ms 250.0)
 (defconst etaf-research-shelf-benchmark-theme-p50-budget-ms 250.0)
 (defconst etaf-research-shelf-benchmark-theme-max-budget-ms 500.0)
@@ -40,8 +40,14 @@ The number of measured events is `RUNS'."
 
 (defun etaf-research-shelf-benchmark-run ()
   "Run the Research Shelf evaluator and return non-nil on success."
-  (load-file (expand-file-name "examples/research-shelf.el"
-                              default-directory))
+  (let* ((source (expand-file-name "examples/research-shelf.el"
+                                  default-directory))
+         (compiled (concat (file-name-sans-extension source) ".elc"))
+         (file (if (and (file-readable-p compiled)
+                        (not (file-newer-than-file-p source compiled)))
+                    compiled
+                  source)))
+    (load file nil nil t))
   (let ((database (make-temp-file "etaf-research-shelf-perf-" nil ".sqlite"))
         (buffer " *etaf-research-shelf-perf*"))
     (unwind-protect

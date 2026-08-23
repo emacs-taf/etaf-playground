@@ -3,8 +3,9 @@
 ## Source of truth
 
 - Status: Active
-- Last refreshed: 2026-08-22
-- Primary product surface: `examples/research-shelf.etaf` + `examples/research-shelf.el`
+- Last refreshed: 2026-08-23
+- Primary product surface: generic `etaf-playground.el` workspace plus the
+  `examples/research-shelf.etaf` / `.el` / `.ecss` consumer triplet
 - Visual reference: `design/research-shelf.html`
 - Evidence reviewed: ETAF public View/Component/Data/Resource APIs, `etaf-ui`
   Button/Checkbox/Panel/DataGrid/Pagination, and `etaf-sqlite`'s typed source
@@ -92,20 +93,46 @@
 
 ## Playground framework boundary
 
-- `etaf-playground.el` is a reusable framework, not an application module.
-- The framework owns pair registration semantics, safe inert `.etaf` parsing,
-  companion loading, mount/reset/close, and test/GUI entry points. Replaceable
-  deployment metadata lives in `etaf-playground-catalog.el`, outside the
-  loader implementation.
-- A pair companion owns its Components, storage adapters, state, resources,
-  events, and root factory. The framework must not reference a business
-  component, database package, table schema, palette, or application-specific
-  ref.
-- Reuse is expressed through the generic manifest/loader contract and the
-  existing public ETAF/etaf-ui components. New business behavior belongs in a
-  same-basename pair, never in the framework.
-- Any future Playground example must add a catalog entry and its own `.etaf`/
-  `.el` files without changing framework semantics.
+- `etaf-playground.el` is a reusable source/preview workspace, not an
+  application module. It discovers same-basename `.etaf`/`.el` files and an
+  optional `.ecss` file, creates the left source session, and mounts the right
+  preview.
+- The framework owns inert source readers, companion registration overrides,
+  source tabs, window layout, refresh/reset/close, and ETAF Runtime lifecycle.
+  It does not require a catalog or name a business application.
+- A companion owns its Components, storage adapters, state, resources, events,
+  style consumers, and root factory. The framework must not reference a
+  business component, database package, table schema, palette, or
+  application-specific ref.
+- `.etaf` and `.ecss` are read as data. `.el` is evaluated only when a preview
+  is first loaded or the companion source is explicitly dirty; normal ETAF
+  duplicate-definition errors remain intact outside that deliberate reload
+  boundary.
+- New examples add a same-basename `.etaf`/`.el` pair and may add `.ecss`; the
+  generic framework and its build file do not change.
+
+## Research Shelf companion boundary
+
+Research Shelf is intentionally compact: the executable companion is one file,
+with comments making the small app's boundaries visible:
+
+```text
+examples/research-shelf.etaf                inert structure source
+examples/research-shelf.ecss                inert style source
+examples/research-shelf.el                  DATA / THEME / STATE / VIEW / ROOT
+```
+
+The `.el` file is the only Playground registration point and palette owner:
+its THEME section may use the optional `etaf-theme-tp` adapter to turn
+TP light/dark pairs into an ETAF semantic Theme plist. The rest of the app
+never calls TP or embeds renderer palette names. The VIEW section creates a
+Data Controller inside the shell Component, so ETAF owns its effect Scope and
+disposes the SQLite source with the Component. Detail and filter Components
+consume Context and dispatch named Actions; they do not reach into SQLite or
+duplicate selection matching. The `.etaf` structure and `.ecss` tokens are
+applied at the root. If the product grows beyond this size, these commented
+sections can later move into modules without changing the public Playground
+triplet.
 
 ## Accessibility
 
@@ -146,8 +173,14 @@
 
 ## Implementation constraints
 
-- Framework/styling: public ETAF View DSL and `etaf-ui`; SQLite through the
-  sibling `etaf-sqlite` package; no HTML/CSS runtime dependency.
+- Framework/styling: source/preview orchestration is public ETAF API only;
+  concrete examples may use `etaf-ui` and `etaf-sqlite`; no HTML/CSS runtime
+  dependency.
+- Public authoring boundary: intentional hot reload goes through
+  `etaf-component-redefine-run`; application code does not bind ETAF private
+  registry variables. Controllers created in Component setup use automatic
+  Scope ownership, and selected rows use `etaf-data-selected-item` with an
+  explicit `:item-key`.
 - Data schema: one typed `reading_items` SQLite table with id/title/author/
   kind/status/progress/priority/starred/note/updated columns.
 - Pressure fixture: `etaf-research-shelf-fixture-size` defaults to 256 and
@@ -155,10 +188,12 @@
   preserved and missing fixture rows are topped up with fresh IDs.
 - Performance: one Data mutation -> one Runtime generation/publication; normal
   warm actions remain under the accepted 105ms p50 target.
-- Compatibility: one same-basename `research-shelf` pair only; old console
-  examples are removed from the active manifest and compile surface.
-- Verification: SQLite temp-file integration tests, pair mount/remount tests,
-  repeated selection/mutation tests, and clean fullscreen GUI screenshots.
+- Compatibility: any same-basename `.etaf`/`.el` example is discoverable;
+  `.ecss` is optional, and the bundled Research Shelf remains only one
+  consumer.
+- Verification: inert reader tests, source-tab/session tests, unsaved source
+  refresh tests, SQLite temp-file integration tests, mount/remount tests,
+  repeated selection/mutation tests, and clean GUI screenshots.
 
 ## Open questions
 
