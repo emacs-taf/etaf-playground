@@ -19,6 +19,29 @@ into the right-hand preview. Saving a source file also refreshes by default.
 `etaf-playground-register-example` is available when a companion needs a
 non-conventional root or feature name.
 
+Preview placement uses the standard Emacs `display-buffer` action stored in
+`etaf-playground-display-action`.  The default is a right side window using
+half the frame:
+
+```elisp
+;; Right preview using 40% of the frame.
+(setq etaf-playground-display-action
+      '((display-buffer-in-side-window)
+        (side . right)
+        (window-width . 0.4)))
+
+;; Right preview fixed at 100 columns.
+(setq etaf-playground-display-action
+      '((display-buffer-in-side-window)
+        (side . right)
+        (window-width . 100)))
+
+;; Preview in its own frame.
+(setq etaf-playground-display-action
+      '((display-buffer-pop-up-frame)
+        (pop-up-frame-parameters . ((width . 120) (height . 45)))))
+```
+
 The low-level `etaf-playground-mount-example` API remains available for batch
 tests and consumers that only need a preview buffer. Business Components,
 database schemas, palettes, refs, and handlers stay in the example companion.

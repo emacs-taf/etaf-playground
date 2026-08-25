@@ -18,9 +18,32 @@ ETAF Playground 是通用的应用构建工作区：左侧编辑同一个应用�
 也会刷新。若 root 或 feature 不遵循命名约定，可在 companion 中调用
 `etaf-playground-register-example` 注册覆盖。
 
+预览位置使用标准 Emacs `display-buffer` action，由
+`etaf-playground-display-action` 配置。默认在右侧使用一半 frame：
+
+```elisp
+;; 右侧预览占 frame 的 40%。
+(setq etaf-playground-display-action
+      '((display-buffer-in-side-window)
+        (side . right)
+        (window-width . 0.4)))
+
+;; 右侧预览固定为 100 列。
+(setq etaf-playground-display-action
+      '((display-buffer-in-side-window)
+        (side . right)
+        (window-width . 100)))
+
+;; 使用独立 frame。
+(setq etaf-playground-display-action
+      '((display-buffer-pop-up-frame)
+        (pop-up-frame-parameters . ((width . 120) (height . 45)))))
+```
+
 `etaf-playground-mount-example` 仍作为低层 batch/consumer API 保留。业务
 Component、数据库 schema、palette、refs 和 handlers 都应该留在 example companion
-中；Playground 只提供 source/preview 会话、读文件、窗口切换与生命周期。
+中；Playground 只提供 source/preview 会话、读文件、标准 `display-buffer` 展示与
+生命周期。
 
 Research Shelf 本身还没有复杂到需要 feature 目录，所以完整的可执行 companion
 集中在一个 `.el` 文件里，用注释区分 DATA / THEME / STATE / VIEW / ROOT；只有

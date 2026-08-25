@@ -173,6 +173,52 @@ database and mounts a test buffer before running BODY."
         (should (equal (etaf-playground-read-ecss "research-shelf" session)
                        (etaf-component-styles 'etaf-research-shelf-shell)))))))
 
+(ert-deftest etaf-playground-show-session-uses-display-buffer-action ()
+  "Workspace display delegates preview placement to standard `display-buffer'."
+  (let* ((source (get-buffer-create " *etaf-display-source*"))
+         (preview (get-buffer-create " *etaf-display-preview*"))
+         (session
+          (etaf-playground--session-create
+           :name "display-test"
+           :source-buffers (list (cons ".etaf" source))
+           :preview-buffer preview
+           :active-extension ".etaf"))
+         (action '((display-buffer-in-side-window)
+                   (side . right)
+                   (window-width . 0.4)))
+         calls)
+    (unwind-protect
+        (let ((noninteractive nil)
+              (etaf-playground-display-action action))
+          (cl-letf (((symbol-function 'current-window-configuration)
+                     (lambda () 'saved-window-configuration))
+                    ((symbol-function 'switch-to-buffer)
+                     (lambda (buffer)
+                       (push (list 'source buffer) calls)
+                       buffer))
+                    ((symbol-function 'display-buffer)
+                     (lambda (buffer supplied-action)
+                       (push (list 'preview buffer supplied-action) calls)
+                       (selected-window)))
+                    ((symbol-function 'delete-other-windows)
+                     (lambda (&rest _)
+                       (ert-fail "Workspace must not delete user windows")))
+                    ((symbol-function 'split-window-right)
+                     (lambda (&rest _)
+                       (ert-fail "Workspace must not split windows directly")))
+                    ((symbol-function 'split-window-below)
+                     (lambda (&rest _)
+                       (ert-fail "Workspace must not split windows directly"))))
+            (should (windowp (etaf-playground--show-session session))))
+          (should
+           (equal
+            (list (list 'source source) (list 'preview preview action))
+            (nreverse calls)))
+          (should (eq (etaf-playground-session-preview-window session)
+                      (selected-window))))
+      (when (buffer-live-p source) (kill-buffer source))
+      (when (buffer-live-p preview) (kill-buffer preview)))))
+
 (ert-deftest etaf-playground-source-tabs-have-buttons-and-shortcuts ()
   "Source tabs work through both header buttons and keyboard shortcuts."
   (etaf-playground-test--with-app (buffer database)
@@ -217,15 +263,24 @@ database and mounts a test buffer before running BODY."
                                       default-directory))))
       (ignore etaf-research-shelf-database-file)
       (unwind-protect
-          (with-current-buffer source
-            (should (eq #'etaf-playground-refresh
-                        (key-binding (kbd "C-c C-c"))))
-            (should (etaf-playground-refresh source))
-            (let ((session (buffer-local-value 'etaf-playground-session source)))
-              (should (etaf-playground-session-p session))
-              (should (etaf-runtime-p
-                       (etaf-runtime-for-buffer
-                        (etaf-playground-session-preview-buffer session))))))
+          (let ((mount-count 0)
+                (original-mount
+                 (symbol-function 'etaf-playground-mount-example)))
+            (cl-letf (((symbol-function 'etaf-playground-mount-example)
+                       (lambda (&rest arguments)
+                         (cl-incf mount-count)
+                         (apply original-mount arguments))))
+              (with-current-buffer source
+                (should (eq #'etaf-playground-refresh
+                            (key-binding (kbd "C-c C-c"))))
+                (should (etaf-playground-refresh source))
+                (let ((session
+                       (buffer-local-value 'etaf-playground-session source)))
+                  (should (etaf-playground-session-p session))
+                  (should (etaf-runtime-p
+                           (etaf-runtime-for-buffer
+                            (etaf-playground-session-preview-buffer session)))))))
+            (should (= mount-count 1)))
         (when (buffer-live-p source)
           (etaf-playground-close source))))))
 

@@ -67,9 +67,17 @@
   :type 'boolean
   :group 'etaf-playground)
 
-(defcustom etaf-playground-window-layout 'side-by-side
-  "Window layout used by `etaf-playground-open-example'."
-  :type '(choice (const side-by-side) (const stacked))
+(defcustom etaf-playground-display-action
+  '((display-buffer-in-side-window)
+    (side . right)
+    (slot . 0)
+    (window-width . 0.5))
+  "Standard `display-buffer' action used for the preview buffer.
+The default shows the preview in a right side window using half the frame.
+Set `window-width' to a float for a ratio or an integer for a fixed column
+count.  Use `display-buffer-pop-up-frame' to place the preview in its own
+frame."
+  :type 'sexp
   :group 'etaf-playground)
 
 ;; `read' consults this dynamically scoped safety switch.  Declaring it also
@@ -83,6 +91,8 @@
   spec
   source-buffers
   preview-buffer
+  preview-window
+  source-frame
   active-extension
   owned-source-buffers
   companion-dirty-p
@@ -503,6 +513,29 @@ forwarded to `etaf-mount', including an optional initial viewport."
                     (format " ETAF Preview  %s  |  ERROR  |  g retry  q close"
                             (etaf-playground-session-name session)))))))
 
+(defun etaf-playground--refresh-session (session)
+  "Refresh the single mounted preview owned by SESSION."
+  (let ((preview (etaf-playground-session-preview-buffer session)))
+    (condition-case err
+        (progn
+          (when-let ((runtime (etaf-runtime-for-buffer preview)))
+            (with-current-buffer preview
+              (etaf-unmount runtime)))
+          (with-current-buffer preview
+            (setq-local buffer-read-only nil))
+          (etaf-playground-mount-example
+           preview (etaf-playground-session-name session) session)
+          (with-current-buffer preview
+            (setq-local buffer-read-only t
+                        header-line-format
+                        (format " ETAF Preview  %s  |  g refresh  q close"
+                                (etaf-playground-session-name session))))
+          (force-mode-line-update t)
+          preview)
+      ((error quit)
+       (etaf-playground--render-error session err)
+       nil))))
+
 (defun etaf-playground-refresh (&optional target)
   "Refresh the preview associated with TARGET or the current source buffer.
 
@@ -512,38 +545,22 @@ is mounted again from the Playground's perspective.  Errors stay visible in
 the preview instead of destroying the source workspace."
   (interactive)
   (let ((session (etaf-playground--session-for-target target)))
-    ;; Make `C-c C-c' useful when the user opened a source file directly
-    ;; instead of entering through `etaf-playground-open'.
-    (unless session
-      (when-let* ((source (cond ((bufferp target) target)
-                                ((and (stringp target) (get-buffer target))
-                                 (get-buffer target))
-                                (t (current-buffer))))
-                  (name (etaf-playground--source-example-name source)))
+    (if session
+        (etaf-playground--refresh-session session)
+      ;; Make `C-c C-c' useful when the user opened a source file directly.
+      ;; `etaf-playground-open-example' creates, displays, and refreshes the
+      ;; session once, so this outer entry only returns its mounted preview.
+      (let* ((source (cond ((bufferp target) target)
+                           ((and (stringp target) (get-buffer target))
+                            (get-buffer target))
+                           (t (current-buffer))))
+             (name (etaf-playground--source-example-name source)))
+        (unless name
+          (user-error
+           "No ETAF Playground workspace is associated with this buffer"))
         (etaf-playground-open-example name)
-        (setq session (etaf-playground--session-for-target name))))
-    (unless session
-      (user-error "No ETAF Playground workspace is associated with this buffer"))
-    (let ((preview (etaf-playground-session-preview-buffer session)))
-      (condition-case err
-          (progn
-            (when-let ((runtime (etaf-runtime-for-buffer preview)))
-              (with-current-buffer preview
-                (etaf-unmount runtime)))
-            (with-current-buffer preview
-              (setq-local buffer-read-only nil))
-            (etaf-playground-mount-example
-             preview (etaf-playground-session-name session) session)
-            (with-current-buffer preview
-              (setq-local buffer-read-only t
-                          header-line-format
-                          (format " ETAF Preview  %s  |  g refresh  q close"
-                                  (etaf-playground-session-name session))))
-            (force-mode-line-update t)
-            preview)
-        ((error quit)
-         (etaf-playground--render-error session err)
-         nil)))))
+        (setq session (etaf-playground--session-for-target name))
+        (and session (etaf-playground-session-preview-buffer session))))))
 
 ;;; Source modes and navigation
 
@@ -854,30 +871,22 @@ the preview instead of destroying the source workspace."
           session))))
 
 (defun etaf-playground--show-session (session)
-  "Display SESSION in a left-source/right-preview layout."
+  "Display SESSION through standard `display-buffer' policy."
   (unless noninteractive
     (unless (etaf-playground-session-previous-window-configuration session)
       (setf (etaf-playground-session-previous-window-configuration session)
             (current-window-configuration)))
-    (delete-other-windows)
-    (let* ((window-min-width 1)
-           (window-min-height 1)
-           (left (selected-window))
-           (right (if (eq etaf-playground-window-layout 'stacked)
-                      (progn (set-window-buffer
-                              left
-                              (etaf-playground--source-buffer
-                               session
-                               (etaf-playground-session-active-extension session)))
-                             (split-window-below))
-                    (split-window-right)))
-           (source (etaf-playground--source-buffer
+    (setf (etaf-playground-session-source-frame session) (selected-frame))
+    (let* ((source (etaf-playground--source-buffer
                     session
                     (etaf-playground-session-active-extension session)))
            (preview (etaf-playground-session-preview-buffer session)))
-      (set-window-buffer left source)
-      (set-window-buffer right preview)
-      (select-window left))))
+      (switch-to-buffer source)
+      (let ((window (display-buffer preview etaf-playground-display-action)))
+        (unless (window-live-p window)
+          (error "ETAF Playground display action did not return a live window"))
+        (setf (etaf-playground-session-preview-window session) window)
+        window))))
 
 (defun etaf-playground--active-source-buffer (session)
   "Return SESSION's active source buffer."
@@ -950,6 +959,13 @@ default example there."
   (interactive)
   (if-let ((session (etaf-playground--session-for-target target)))
       (let* ((preview (etaf-playground-session-preview-buffer session))
+             (preview-window
+              (etaf-playground-session-preview-window session))
+             (source-frame
+              (etaf-playground-session-source-frame session))
+             (preview-frame
+              (and (window-live-p preview-window)
+                   (window-frame preview-window)))
              (configuration
               (etaf-playground-session-previous-window-configuration session)))
         (when-let ((runtime (and (buffer-live-p preview)
@@ -965,6 +981,13 @@ default example there."
                           etaf-playground-source-extension nil))))
         (dolist (buffer (etaf-playground-session-owned-source-buffers session))
           (when (buffer-live-p buffer) (kill-buffer buffer)))
+        (when (window-live-p preview-window)
+          (if (and (frame-live-p preview-frame)
+                   (frame-live-p source-frame)
+                   (not (eq preview-frame source-frame))
+                   (= (length (window-list preview-frame 'no-minibuf)) 1))
+              (delete-frame preview-frame)
+            (quit-window nil preview-window)))
         (when (buffer-live-p preview)
           (kill-buffer preview))
         (when (and configuration (window-configuration-p configuration))
