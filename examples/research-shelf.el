@@ -247,9 +247,11 @@ user's prior local additions cannot collide with the generated dataset."
   "Return stable identity for a reading ROW."
   (plist-get row :id))
 
-(defun etaf-research-shelf--create-model (&optional initial-result)
-  "Create the Research Shelf model, optionally from INITIAL-RESULT."
-  (let* ((database (etaf-research-shelf--ensure-database))
+(defun etaf-research-shelf--create-model (&optional initial-result database)
+  "Create the Research Shelf model from DATABASE and INITIAL-RESULT.
+DATABASE is bootstrapped by the root adapter exactly once before the App is
+constructed.  When omitted, initialize it for direct programmatic callers."
+  (let* ((database (or database (etaf-research-shelf--ensure-database)))
          (controller
           (etaf-data-controller
            (etaf-sqlite-source database)
@@ -310,10 +312,6 @@ user's prior local additions cannot collide with the generated dataset."
     (etaf-data-set-page controller 1)
     (etaf-research-shelf--load
      model (format "Showing %d rows per page" page-size))))
-
-(defun etaf-research-shelf--items (model)
-  "Return loaded items for MODEL."
-  (etaf-value (etaf-data-items (etaf-research-shelf--controller model))))
 
 (defun etaf-research-shelf--selected (model)
   "Return MODEL's selected item through the Data Controller identity contract."
@@ -411,14 +409,6 @@ user's prior local additions cannot collide with the generated dataset."
     (:key :kind :label "Kind" :width 7))
   "Compact DataGrid columns for the Research Shelf list.")
 
-(defun etaf-research-shelf--static-child (form tag)
-  "Return the first TAG child from inert FORM."
-  (etaf-playground-static-child form tag))
-
-(defun etaf-research-shelf--static-value (form key default)
-  "Return KEY from inert FORM, or DEFAULT."
-  (etaf-playground-static-value form key default))
-
 (defun etaf-research-shelf--status-label (status)
   "Return a readable status label for STATUS."
   (pcase status
@@ -430,7 +420,7 @@ user's prior local additions cannot collide with the generated dataset."
 (defun etaf-research-shelf--filter-label (form key fallback)
   "Return the static FILTER label from FORM for KEY, or FALLBACK."
   (let ((entry
-         (etaf-research-shelf--static-child
+         (etaf-playground-static-child
           form 'research-shelf-filter-spec)))
     (or (and entry (eq (plist-get (cdr entry) :key) key)
              (plist-get (cdr entry) :label))
@@ -508,7 +498,7 @@ user's prior local additions cannot collide with the generated dataset."
              :bgcolor (etaf-theme-token :panel)
       (flex :width 'stretch :flex-wrap 'wrap :align-items 'center :gap '(1 (8))
        (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
-        (label :text (etaf-research-shelf--static-value
+        (label :text (etaf-playground-static-value
                       form :title "Reading queue") :face 'bold)
         (label :text (format "%d items · SQLite-backed"
                             (or (etaf-value (etaf-data-total controller)) 0))
@@ -550,7 +540,7 @@ user's prior local additions cannot collide with the generated dataset."
            :padding '(2 2)
            :border (etaf-theme-token :line)
            :bgcolor (etaf-theme-token :panel)
-    (label :text (etaf-research-shelf--static-value form :title
+    (label :text (etaf-playground-static-value form :title
                                                      "Selected item")
            :color (etaf-theme-token :accent))
     (text :face 'bold
@@ -645,31 +635,103 @@ user's prior local additions cannot collide with the generated dataset."
         (form (etaf-inject 'research-shelf-detail nil t)))
     (lambda () (etaf-research-shelf--detail-view model form))))
 
-(etaf-define-component etaf-research-shelf-shell
-    (&key static-form initial-result)
-  "Compose the Research Shelf app and provide its model/theme Context."
+(etaf-define-component etaf-research-shelf-header ()
+  "Render the default `header' slot from App Context."
+  :setup
+  (let ((model (etaf-inject 'research-shelf-model nil t))
+        (root-spec (etaf-inject 'research-shelf-root-spec nil t))
+        (header-spec (etaf-inject 'research-shelf-header-spec nil t)))
+    (lambda ()
+      (etaf-view
+       (flex :class "research-shelf-header" :width 'stretch :min-width 0
+             :flex-wrap 'wrap :align-items 'center :gap '(1 (10))
+        (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
+         (label :text (etaf-playground-static-value
+                       header-spec :eyebrow "Research Shelf")
+                :color (etaf-theme-token :accent))
+         (label :text (etaf-playground-static-value
+                       root-spec :title "Research Shelf") :face 'bold)
+         (label :text (etaf-playground-static-value
+                       root-spec :subtitle
+                       "A quiet place for unfinished ideas")
+                :color (etaf-theme-token :muted)))
+        (column :width 'max-content :min-width 0
+                :flex-grow 0 :flex-shrink 0
+         (checkbox :label "Dark" :ref 'research-shelf-theme-toggle
+                   :checked (plist-get model :dark)
+                   :on-change (lambda (value)
+                                (setf (etaf-value (plist-get model :dark)) value)
+                                (setf (etaf-value (plist-get model :toast))
+                                      (if value "Dark theme" "Light theme"))))))))))
+
+(etaf-define-component etaf-research-shelf-footer ()
+  "Render the default `footer' slot from App Context."
+  :setup
+  (let ((model (etaf-inject 'research-shelf-model nil t))
+        (footer-spec (etaf-inject 'research-shelf-footer-spec nil t)))
+    (lambda ()
+      (etaf-view
+        (flex :class "research-shelf-footer" :width 'stretch
+             :flex-wrap 'wrap :gap '(1 (8))
+        (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
+         (label :text (plist-get model :toast))
+         (label :text (etaf-playground-static-value
+                       footer-spec :label "SQLite · saved locally")
+                :color (etaf-theme-token :muted)))
+        (label :text (file-name-nondirectory
+                      (plist-get model :database-file))
+               :color (etaf-theme-token :muted)))))))
+
+(etaf-define-component etaf-research-shelf-shell ()
+  "Pure responsive layout shell with named content slots.
+The App supplies `header', `filters', `library', `detail', and `footer'; each
+slot has a reusable built-in fallback for direct composition."
+  :view
+  (column :class "research-shelf-shell" :width '(viewport)
+          :height 'auto :min-height '(viewport-height)
+          :color (etaf-theme-token :ink)
+          :bgcolor (etaf-theme-token :paper)
+   (slot :name 'header
+         (etaf-research-shelf-header))
+   (flex :class "research-shelf-workspace" :width 'stretch
+         :flex-wrap 'wrap :align-items 'stretch :align-content 'start
+         :gap '(1 (6))
+    (slot :name 'filters
+          (etaf-research-shelf-filter-rail))
+    (slot :name 'library
+          (etaf-research-shelf-reading-list))
+    (slot :name 'detail
+          (etaf-research-shelf-detail-inspector)))
+   (slot :name 'footer
+         (etaf-research-shelf-footer))))
+
+(etaf-define-component etaf-research-shelf-app
+    (&key static-form initial-result database)
+  "Own Research Shelf state and fill the pure Shell's named slots."
   :setup
   (let* ((static-form (etaf-current-prop :static-form))
          (initial-result (etaf-current-prop :initial-result))
-         (model (etaf-research-shelf--create-model initial-result))
+         (database (or (etaf-current-prop :database)
+                       (etaf-research-shelf--ensure-database)))
+         (model (etaf-research-shelf--create-model initial-result database))
          (theme (etaf-computed
                  (lambda ()
                    (etaf-research-shelf--theme-defaults model))
                  :name 'research-shelf-theme))
          (header
-          (etaf-research-shelf--static-child
+          (etaf-playground-static-child
            static-form 'research-shelf-header-spec))
          (filters
-          (etaf-research-shelf--static-child
+          (etaf-playground-static-child
            static-form 'research-shelf-filter-specs))
          (content
-          (etaf-research-shelf--static-child
+          (etaf-playground-static-child
            static-form 'research-shelf-content-spec))
          (library
-          (etaf-research-shelf--static-child
+          (etaf-playground-static-child
            content 'research-shelf-library-spec))
          (detail
-          (etaf-research-shelf--static-child
+          (etaf-playground-static-child
            content 'research-shelf-detail-spec)))
     (unless initial-result
       (etaf-on-mounted
@@ -677,50 +739,29 @@ user's prior local additions cannot collide with the generated dataset."
          (etaf-research-shelf--load model "✓ SQLite shelf ready"))))
     (etaf-theme-provide theme)
     (etaf-provide 'research-shelf-model model)
+    (etaf-provide 'research-shelf-root-spec static-form)
+    (etaf-provide 'research-shelf-header-spec header)
     (etaf-provide 'research-shelf-filters filters)
     (etaf-provide 'research-shelf-library library)
     (etaf-provide 'research-shelf-detail detail)
+    (etaf-provide 'research-shelf-footer-spec
+                  (etaf-playground-static-child
+                   static-form 'research-shelf-footer-spec))
     (lambda ()
       (etaf-view
-       (column :class "research-shelf-shell" :width '(viewport)
-               :height 'auto :min-height '(viewport-height)
-               :color (etaf-theme-token :ink)
-               :bgcolor (etaf-theme-token :paper)
-          (flex :class "research-shelf-header" :width 'stretch :min-width 0
-                :flex-wrap 'wrap :align-items 'center :gap '(1 (10))
-           (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
-            (label :text (etaf-research-shelf--static-value
-                          header :eyebrow "Research Shelf")
-                   :color (etaf-theme-token :accent))
-            (label :text (etaf-research-shelf--static-value
-                          static-form :title "Research Shelf") :face 'bold)
-            (label :text (etaf-research-shelf--static-value
-                          static-form :subtitle
-                          "A quiet place for unfinished ideas")
-                   :color (etaf-theme-token :muted)))
-           (column :width 'max-content :min-width 0
-                   :flex-grow 0 :flex-shrink 0
-            (checkbox :label "Dark" :ref 'research-shelf-theme-toggle
-                      :checked (plist-get model :dark)
-                      :on-change (lambda (value)
-                                   (setf (etaf-value (plist-get model :dark)) value)
-                                   (setf (etaf-value (plist-get model :toast))
-                                         (if value
-                                             "Dark theme"
-                                           "Light theme"))))))
-          (flex :class "research-shelf-workspace" :width 'stretch
-                :flex-wrap 'wrap :align-items 'stretch :align-content 'start
-                :gap '(1 (6))
-           (etaf-research-shelf-filter-rail)
-           (etaf-research-shelf-reading-list)
-           (etaf-research-shelf-detail-inspector))
-          (flex :class "research-shelf-footer" :width 'stretch
-                :flex-wrap 'wrap :gap '(1 (8))
-           (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
-            (label :text (plist-get model :toast)))
-           (label :text (file-name-nondirectory
-                         (plist-get model :database-file))
-                  :color (etaf-theme-token :muted))))))))
+       ;; These are real ETAF named slot inputs; the `.etaf' manifest remains
+       ;; inert configuration and never pretends to be View syntax.
+       (etaf-research-shelf-shell
+        (slot :name 'header
+              (etaf-research-shelf-header))
+        (slot :name 'filters
+              (etaf-research-shelf-filter-rail))
+        (slot :name 'library
+              (etaf-research-shelf-reading-list))
+        (slot :name 'detail
+              (etaf-research-shelf-detail-inspector))
+        (slot :name 'footer
+              (etaf-research-shelf-footer)))))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; ROOT / PLAYGROUND REGISTRATION
@@ -730,7 +771,16 @@ user's prior local additions cannot collide with the generated dataset."
   "Consume validated STATIC-FORM and ECSS-FORM as one root View."
   (unless (eq (car static-form) 'research-shelf-shell)
     (error "Unsupported Research Shelf static root: %S" static-form))
-  (etaf-component-set-styles 'etaf-research-shelf-shell ecss-form)
+  ;; ECSS styles are scoped to a Component.  Attach the same validated
+  ;; companion stylesheet to each owning Component instead of relying on
+  ;; selectors crossing a nested Component boundary.
+  (dolist (component '(etaf-research-shelf-shell
+                       etaf-research-shelf-header
+                       etaf-research-shelf-filter-rail
+                       etaf-research-shelf-reading-list
+                       etaf-research-shelf-detail-inspector
+                       etaf-research-shelf-footer))
+    (etaf-component-set-styles component ecss-form))
   (let* ((database (etaf-research-shelf--ensure-database))
          (initial-result
           (condition-case nil
@@ -740,8 +790,10 @@ user's prior local additions cannot collide with the generated dataset."
             (error nil))))
     (lambda ()
       (etaf-view
-       (research-shelf-shell
-        :static-form static-form :initial-result initial-result)))))
+       (etaf-research-shelf-app
+        :static-form static-form
+        :initial-result initial-result
+        :database database)))))
 
 (etaf-playground-register-example
  "research-shelf"

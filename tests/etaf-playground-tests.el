@@ -191,6 +191,22 @@ database and mounts a test buffer before running BODY."
       (should-error (etaf-playground--validate-static-node unsafe tags)
                     :type 'error))))
 
+(ert-deftest etaf-playground-research-shelf-uses-runtime-named-slots ()
+  "The companion composes the Shell through ETAF's public named-slot API."
+  (let ((source (with-temp-buffer
+                  (insert-file-contents "examples/research-shelf.el")
+                  (buffer-string))))
+    (dolist (slot '("header" "filters" "library" "detail" "footer"))
+      (should (string-match-p
+               (format "(slot :name '%s" slot)
+               source)))
+    (should (string-match-p
+             "(etaf-define-component etaf-research-shelf-shell ()"
+             source))
+    (should (string-match-p
+             "(etaf-define-component etaf-research-shelf-app"
+             source))))
+
 (ert-deftest etaf-playground-ecss-reader-is-inert-and-usable ()
   "Read the optional style companion as validated static Component styles."
   (let ((form (etaf-playground-read-ecss "research-shelf")))
