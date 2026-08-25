@@ -100,6 +100,38 @@ database and mounts a test buffer before running BODY."
        " *etaf-playground-display-order*" "research-shelf"))
     (should (equal '(display mount) (mapcar #'car (nreverse calls))))))
 
+(ert-deftest etaf-playground-mount-owns-complete-render-burst ()
+  "Source construction and ETAF mount share the host render transaction."
+  (let ((buffer " *etaf-playground-burst-test*")
+        (inside nil)
+        calls)
+    (unwind-protect
+        (cl-letf (((symbol-function 'ebox-call-with-render-burst)
+                   (lambda (function &rest arguments)
+                     (push 'begin calls)
+                     (setq inside t)
+                     (unwind-protect
+                         (prog1 (apply function arguments)
+                           (push 'end calls))
+                       (setq inside nil))))
+                  ((symbol-function 'etaf-playground-read-pair)
+                   (lambda (_name _session)
+                     (should inside)
+                     (push 'root calls)
+                     'test-view))
+                  ((symbol-function 'etaf-mount)
+                   (lambda (target view options)
+                     (should inside)
+                     (should (equal view 'test-view))
+                     (should (equal options '(:viewport-width 900)))
+                     (push 'mount calls)
+                     target)))
+          (should (bufferp
+                   (etaf-playground-mount-example
+                    buffer "test" nil '(:viewport-width 900))))
+          (should (equal '(begin root mount end) (nreverse calls))))
+      (when (get-buffer buffer) (kill-buffer buffer)))))
+
 (ert-deftest etaf-playground-compile-builds-the-dependency-graph ()
   "Integration builds must compile the framework's dependency graph first."
   (let ((makefile (with-temp-buffer

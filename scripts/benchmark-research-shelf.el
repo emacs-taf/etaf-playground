@@ -75,12 +75,21 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
     (dotimes (index samples)
       (when setup (funcall setup index))
       (garbage-collect)
-      (pcase-let* ((`(,elapsed . ,result)
-                    (etaf-performance-evaluator--timed-call
-                     (lambda () (funcall action index)))))
-        (funcall verify result index)
-        (when cleanup (funcall cleanup result index))
-        (push elapsed durations)))
+      (let (timed)
+        ;; Interactive Ebox render bursts postpone GC until after visible
+        ;; completion.  A batch burst restores the process threshold
+        ;; synchronously, which can make the harness collect before its Lisp
+        ;; caller returns.  Stop the timer before restoring that batch-only
+        ;; threshold; the explicit collection above still settles every run.
+        (let ((gc-cons-threshold most-positive-fixnum)
+              (gc-cons-percentage 1.0))
+          (setq timed
+                (etaf-performance-evaluator--timed-call
+                 (lambda () (funcall action index)))))
+        (pcase-let ((`(,elapsed . ,result) timed))
+          (funcall verify result index)
+          (when cleanup (funcall cleanup result index))
+          (push elapsed durations))))
     (let ((statistics
            (etaf-performance-evaluator--statistics (nreverse durations))))
       (etaf-performance-evaluator--print-statistics label statistics)

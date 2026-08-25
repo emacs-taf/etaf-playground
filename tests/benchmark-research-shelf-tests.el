@@ -37,6 +37,24 @@
       (should (equal '(-1 0 1 2) (nreverse verifications)))
       (should (= 3 (plist-get (cdr result) :count))))))
 
+(ert-deftest etaf-performance-evaluator-models-visible-gc-boundary ()
+  "Measured actions defer GC like an interactive Ebox render burst."
+  (let ((gc-cons-threshold 1000)
+        (gc-cons-percentage 0.1)
+        observed)
+    (etaf-performance-evaluator--measure
+     "visible-gc-boundary"
+     (lambda (_index)
+       (push (list gc-cons-threshold gc-cons-percentage) observed)
+       t)
+     (lambda (result _index) (should result))
+     :samples 1)
+    ;; Warmup is intentionally outside the timed visible transaction; the
+    ;; measured sample owns the raised threshold and caller settings restore.
+    (should (equal (car observed) (list most-positive-fixnum 1.0)))
+    (should (= gc-cons-threshold 1000))
+    (should (= gc-cons-percentage 0.1))))
+
 (ert-deftest etaf-performance-evaluator-reports-both-hard-budget-failures ()
   "Report p95 and max independently when both exceed the hard budget."
   (let ((failures

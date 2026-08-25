@@ -84,6 +84,9 @@ frame."
 ;; keeps byte compilation from treating the protected binding as lexical.
 (defvar read-eval)
 
+(declare-function ebox-call-with-render-burst
+                  "ebox-buffer-backend" (function &rest arguments))
+
 (cl-defstruct (etaf-playground-session
                (:constructor etaf-playground--session-create))
   "State shared by one source/preview workspace."
@@ -476,13 +479,11 @@ only file evaluated by the framework."
     (setq-local truncate-lines nil))
   buffer)
 
-(defun etaf-playground-mount-example
-    (buffer-name name &optional session mount-options)
-  "Mount example NAME into BUFFER-NAME and return its buffer.
-
-This is the low-level consumer API.  `etaf-playground-open-example' adds the
-source editors and side-by-side workspace around it.  MOUNT-OPTIONS is
-forwarded to `etaf-mount', including an optional initial viewport."
+(defun etaf-playground--mount-example-now
+    (buffer-name name session mount-options)
+  "Build and mount example NAME into BUFFER-NAME.
+SESSION supplies authoritative source buffers.  MOUNT-OPTIONS is forwarded to
+`etaf-mount'.  The caller owns the complete framework render burst."
   (let ((buffer (get-buffer-create buffer-name)))
     (when-let ((runtime (etaf-runtime-for-buffer buffer)))
       (with-current-buffer buffer
@@ -497,6 +498,19 @@ forwarded to `etaf-mount', including an optional initial viewport."
     (with-current-buffer buffer
       (setq-local etaf-playground-current-example name))
     buffer))
+
+(defun etaf-playground-mount-example
+    (buffer-name name &optional session mount-options)
+  "Mount example NAME into BUFFER-NAME and return its buffer.
+
+This is the low-level consumer API.  `etaf-playground-open-example' adds the
+source editors and side-by-side workspace around it.  MOUNT-OPTIONS is
+forwarded to `etaf-mount', including an optional initial viewport.  Source
+loading, root construction, ETAF publication, and Ebox rendering share one
+public framework render burst so GC cannot split an interactive mount."
+  (ebox-call-with-render-burst
+   #'etaf-playground--mount-example-now
+   buffer-name name session mount-options))
 
 (defun etaf-playground--render-error (session error-data)
   "Show ERROR-DATA in SESSION's preview buffer after a failed refresh."
