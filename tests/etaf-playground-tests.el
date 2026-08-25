@@ -402,6 +402,18 @@ database and mounts a test buffer before running BODY."
                      research-shelf-theme-toggle))
         (should (etaf-runtime-handler-for runtime ref))))))
 
+(ert-deftest etaf-playground-research-shelf-uses-window-document-height ()
+  "Research Shelf fills the viewport without creating a root scroll owner."
+  (etaf-playground-test--with-app (buffer database)
+    (etaf-playground-mount-example
+     buffer "research-shelf" nil
+     '(:viewport-width 900 :viewport-height 40))
+    (let* ((state (ebox--buffer-render-state (get-buffer buffer)))
+           (root (plist-get state :root-node)))
+      (should (eq (plist-get root :height) 'auto))
+      (should (equal (plist-get root :min-height) '(viewport-height)))
+      (should-not (plist-get state :scroll-region-ids)))))
+
 (ert-deftest etaf-playground-fixture-supports-realistic-page-counts ()
   "The Playground can mount a larger deterministic fixture for pressure runs."
   (etaf-playground-test--ensure-app-loaded)

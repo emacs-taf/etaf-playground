@@ -670,7 +670,7 @@ user's prior local additions cannot collide with the generated dataset."
     (lambda ()
       (etaf-view
        (column :class "research-shelf-shell" :width '(viewport)
-               :height '(viewport-height)
+               :height 'auto :min-height '(viewport-height)
                :color (etaf-theme-token :ink)
                :bgcolor (etaf-theme-token :paper)
           (flex :class "research-shelf-header" :width 'stretch :min-width 0
