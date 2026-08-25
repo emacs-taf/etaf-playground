@@ -11,7 +11,7 @@
                   "../scripts/benchmark-research-shelf")
 (declare-function etaf-performance-evaluator--latency-failures
                   "../scripts/benchmark-research-shelf")
-(declare-function etaf-performance-evaluator--verify-compiled-runtime
+(declare-function etaf-performance-evaluator--verify-runtime-accelerator
                   "../scripts/benchmark-research-shelf")
 (declare-function etaf-performance-evaluator--verify-environment
                   "../scripts/benchmark-research-shelf")
@@ -58,17 +58,16 @@
                '(("theme-toggle" :count 20 :min 80.0 :p50 84.0
                                  :p95 91.0 :max 111.0)))))))
 
-(ert-deftest etaf-performance-evaluator-requires-native-compiled-runtime ()
+(ert-deftest etaf-performance-evaluator-requires-native-runtime ()
   "Never report fallback-renderer latency as the optimized product gate."
-  (cl-letf (((symbol-function 'princ) #'ignore))
-    (should
-     (equal
-      (etaf-performance-evaluator--verify-compiled-runtime
-       '(:status current :runtime-accelerator ready))
-      '(:status current :runtime-accelerator ready))))
-  (should-error
-   (etaf-performance-evaluator--verify-compiled-runtime
-    '(:status current :runtime-accelerator unavailable)))
+  (cl-letf (((symbol-function 'princ) #'ignore)
+            ((symbol-function 'ebox-native-reflow-layout-ready-p)
+             (lambda () t)))
+    (should (etaf-performance-evaluator--verify-runtime-accelerator)))
+  (cl-letf (((symbol-function 'ebox-native-reflow-layout-ready-p)
+             (lambda () nil)))
+    (should-error
+     (etaf-performance-evaluator--verify-runtime-accelerator)))
   (let ((makefile (with-temp-buffer
                     (insert-file-contents "Makefile")
                     (buffer-string))))

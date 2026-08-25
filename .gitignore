@@ -1,3 +1,2 @@
 *.elc
 tests/*.elc
-.etaf-build/

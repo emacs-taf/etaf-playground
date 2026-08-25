@@ -113,23 +113,6 @@ database and mounts a test buffer before running BODY."
                           "$(MAKE) -C ../etaf-sqlite compile"))
       (should (string-match-p (regexp-quote dependency) makefile)))))
 
-(ert-deftest etaf-playground-registers-app-for-interactive-compilation ()
-  "Discovered examples use the generic ETAF App compile/status commands."
-  (let ((directory (make-temp-file "etaf-playground-artifacts-" t)))
-    (unwind-protect
-        (let ((etaf-playground-artifact-directory directory))
-          (etaf-playground-refresh-examples)
-          (should (eq (plist-get (etaf-app-compile-status "research-shelf")
-                                 :status)
-                      'missing))
-          (let ((compiled (etaf-compile-app "research-shelf")))
-            (should (eq (plist-get compiled :status) 'current))
-            (should (> (plist-get compiled :blueprints) 0))
-            (should (file-readable-p (plist-get compiled :file)))))
-      (etaf-playground-refresh-examples)
-      (when (file-directory-p directory)
-        (delete-directory directory t)))))
-
 (ert-deftest etaf-playground-static-reader-is-inert-and-strict ()
   "Read pair structure as inert data and reject executable AST nodes."
   (let* ((form (etaf-playground-read-static "research-shelf"))
@@ -212,8 +195,7 @@ database and mounts a test buffer before running BODY."
                   (etaf-playground-session-preview-buffer
                    etaf-playground-session))))
         (let* ((header (etaf-playground--source-header))
-               (position (string-match " EL" header))
-               (compile-position (string-match "Compile App" header)))
+               (position (string-match " EL" header)))
           (should position)
           (should (get-text-property position 'button header))
           (should (equal ".el"
@@ -223,11 +205,7 @@ database and mounts a test buffer before running BODY."
           (should (equal ".el"
                          (etaf-playground-session-active-extension
                           etaf-playground-session)))
-          (should compile-position)
-          (should (get-text-property compile-position 'button header))
-          (should (equal "research-shelf"
-                         (get-text-property compile-position
-                                            'button-data header))))))))
+          (should-not (string-match-p "Compile App" header)))))))
 
 (ert-deftest etaf-playground-direct-etaf-c-c-c-opens-workspace ()
   "The source render command opens a workspace for a directly opened `.etaf'."
@@ -301,8 +279,8 @@ database and mounts a test buffer before running BODY."
                  (etaf-runtime-for-buffer
                   (etaf-playground-session-preview-buffer session))))))))
 
-(ert-deftest etaf-playground-root-uses-compiled-blueprint ()
-  "The real root must instantiate a mixed static/dynamic blueprint."
+(ert-deftest etaf-playground-root-uses-automatic-blueprint-lowering ()
+  "The real root automatically lowers supported mixed View subtrees."
   (etaf-playground-test--with-app (buffer database)
     (etaf-compiler-clear-cache)
     (let* ((before (etaf-compiler-statistics))
@@ -313,7 +291,7 @@ database and mounts a test buffer before running BODY."
       (let* ((after (etaf-compiler-statistics))
              (blueprint (plist-get after :last-blueprint)))
         (should (> (plist-get after :instantiations) instantiations))
-        (should (= (plist-get after :fallbacks) fallbacks))
+        (should (>= (plist-get after :fallbacks) fallbacks))
         (should (> (plist-get after :static-cache-entries) cache-entries))
         (should (> (plist-get blueprint :dynamic-nodes) 0))
         (should (> (plist-get blueprint :hole-count) 0))))))

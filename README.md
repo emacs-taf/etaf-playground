@@ -19,13 +19,6 @@ into the right-hand preview. Saving a source file also refreshes by default.
 `etaf-playground-register-example` is available when a companion needs a
 non-conventional root or feature name.
 
-ETAF core provides the generic `M-x etaf-compile-app` and
-`M-x etaf-app-compile-status` commands; see the [ETAF
-documentation](../etaf/README.md) for the full contract. Playground does not
-implement compilation. It registers discovered examples as ETAF Apps and adds
-a `Compile App` shortcut plus status to the header line. Its default artifact
-directory is `.etaf-build/`.
-
 The low-level `etaf-playground-mount-example` API remains available for batch
 tests and consumers that only need a preview buffer. Business Components,
 database schemas, palettes, refs, and handlers stay in the example companion.

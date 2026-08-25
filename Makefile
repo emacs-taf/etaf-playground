@@ -53,7 +53,7 @@ perf-evaluator: compile
 
 # Run package regressions in dependency order.  Keeping them in one recipe
 # prevents parallel make from cleaning/recompiling a sibling while another
-# package is loading its artifacts.
+# package is loading its compiled dependencies.
 perf-regressions:
 	$(MAKE) -C ../ecss test EMACS="$(EMACS)"
 	$(MAKE) -C ../tp test EMACS="$(EMACS)"

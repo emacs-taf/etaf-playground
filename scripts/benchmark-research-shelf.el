@@ -11,6 +11,7 @@
 (require 'seq)
 (require 'etaf-playground)
 (require 'etaf-performance)
+(require 'ebox-native-reflow)
 
 (defvar etaf-research-shelf-database-file)
 (defvar etaf-research-shelf-fixture-size)
@@ -129,14 +130,13 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
                (> (file-attribute-size (file-attributes database)) 0))
     (error "Prepared SQLite fixture was not created: %s" database)))
 
-(defun etaf-performance-evaluator--verify-compiled-runtime (status)
-  "Require compiled App STATUS to include its native runtime accelerator."
-  (unless (and (eq (plist-get status :status) 'current)
-               (eq (plist-get status :runtime-accelerator) 'ready))
-    (error "Performance evaluator requires the compiled native runtime: %S"
-           status))
+(defun etaf-performance-evaluator--verify-runtime-accelerator ()
+  "Require the optional Ebox native runtime accelerator."
+  (unless (and (require 'ebox-native-reflow nil t)
+               (ebox-native-reflow-layout-ready-p))
+    (error "Performance evaluator requires the Ebox native runtime"))
   (princ "perf-runtime-accelerator=ready\n")
-  status)
+  t)
 
 (defun etaf-performance-evaluator--verify-environment (environment)
   "Require ENVIRONMENT to be suitable for an absolute latency gate."
@@ -350,12 +350,7 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
     (unwind-protect
         (progn
           (etaf-performance-evaluator--prepare-database database)
-          ;; The maintained product path is a manually compiled App.  Compile
-          ;; and activate its optional native runtime before latency samples;
-          ;; compiler command latency remains visible through the generic
-          ;; compiler operation when users profile that command itself.
-          (etaf-performance-evaluator--verify-compiled-runtime
-           (etaf-compile-app "research-shelf"))
+          (etaf-performance-evaluator--verify-runtime-accelerator)
           ;; Latency samples measure the product path without observer work.
           ;; Trace behavior and overhead have separate, explicit gates below.
           (etaf-performance-mode -1)
