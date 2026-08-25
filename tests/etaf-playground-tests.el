@@ -169,14 +169,19 @@ database and mounts a test buffer before running BODY."
     (should (equal (plist-get (cdr form) :title) "Research Shelf"))
     (should (equal (mapcar #'car
                            (cl-remove-if-not #'consp (cdr form)))
-                   '(header filters main footer)))
+                   '(research-shelf-header-spec
+                     research-shelf-filter-specs
+                     research-shelf-content-spec
+                     research-shelf-footer-spec)))
     (let* ((filters (cl-find-if
                      (lambda (entry) (and (consp entry)
-                                          (eq (car entry) 'filters)))
+                                          (eq (car entry)
+                                              'research-shelf-filter-specs)))
                      (cdr form)))
            (all-filter (cl-find-if
                         (lambda (entry) (and (consp entry)
-                                             (eq (car entry) 'filter)
+                                             (eq (car entry)
+                                                 'research-shelf-filter-spec)
                                              (eq (plist-get (cdr entry) :key)
                                                  'all)))
                         (cdr filters))))

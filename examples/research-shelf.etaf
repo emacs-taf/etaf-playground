@@ -1,16 +1,21 @@
-;; Static composition only.  Storage, state, Components, and events live in
-;; the same-basename `.el' companion.
+;; Static application specification only.
+;;
+;; `research-shelf-shell' is the runtime Component defined in the same-basename
+;; `.el' companion.  The `*-spec' forms below are inert configuration nodes;
+;; they are read by that Component and are not built-in ETAF tags or implicit
+;; Components.  Storage, state, behavior, and events stay in the companion.
 (research-shelf-shell
  :title "Research Shelf"
  :subtitle "A quiet place for unfinished ideas"
- (header :eyebrow "A quiet place for unfinished ideas")
- (filters
-  (filter :key all :label "All")
-  (filter :key reading :label "In progress")
-  (filter :key unread :label "Unread")
-  (filter :key finished :label "Finished")
-  (filter :key starred :label "★ Starred"))
- (main
-  (library :title "Reading queue")
-  (detail :title "Selected item"))
- (footer :label "SQLite · saved locally"))
+ (research-shelf-header-spec
+  :eyebrow "A quiet place for unfinished ideas")
+ (research-shelf-filter-specs
+  (research-shelf-filter-spec :key all :label "All")
+  (research-shelf-filter-spec :key reading :label "In progress")
+  (research-shelf-filter-spec :key unread :label "Unread")
+  (research-shelf-filter-spec :key finished :label "Finished")
+  (research-shelf-filter-spec :key starred :label "★ Starred"))
+ (research-shelf-content-spec
+  (research-shelf-library-spec :title "Reading queue")
+  (research-shelf-detail-spec :title "Selected item"))
+ (research-shelf-footer-spec :label "SQLite · saved locally"))

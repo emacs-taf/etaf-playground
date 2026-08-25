@@ -429,12 +429,15 @@ user's prior local additions cannot collide with the generated dataset."
 
 (defun etaf-research-shelf--filter-label (form key fallback)
   "Return the static FILTER label from FORM for KEY, or FALLBACK."
-  (let ((entry (etaf-research-shelf--static-child form 'filter)))
+  (let ((entry
+         (etaf-research-shelf--static-child
+          form 'research-shelf-filter-spec)))
     (or (and entry (eq (plist-get (cdr entry) :key) key)
              (plist-get (cdr entry) :label))
         (let ((entry (cl-find-if
                       (lambda (item)
-                        (and (consp item) (eq (car item) 'filter)
+                        (and (consp item)
+                             (eq (car item) 'research-shelf-filter-spec)
                              (eq (plist-get (cdr item) :key) key)))
                       (cdr form))))
           (or (and entry (plist-get (cdr entry) :label)) fallback)))))
@@ -653,11 +656,21 @@ user's prior local additions cannot collide with the generated dataset."
                  (lambda ()
                    (etaf-research-shelf--theme-defaults model))
                  :name 'research-shelf-theme))
-         (header (etaf-research-shelf--static-child static-form 'header))
-         (filters (etaf-research-shelf--static-child static-form 'filters))
-         (main (etaf-research-shelf--static-child static-form 'main))
-         (library (etaf-research-shelf--static-child main 'library))
-         (detail (etaf-research-shelf--static-child main 'detail)))
+         (header
+          (etaf-research-shelf--static-child
+           static-form 'research-shelf-header-spec))
+         (filters
+          (etaf-research-shelf--static-child
+           static-form 'research-shelf-filter-specs))
+         (content
+          (etaf-research-shelf--static-child
+           static-form 'research-shelf-content-spec))
+         (library
+          (etaf-research-shelf--static-child
+           content 'research-shelf-library-spec))
+         (detail
+          (etaf-research-shelf--static-child
+           content 'research-shelf-detail-spec)))
     (unless initial-result
       (etaf-on-mounted
        (lambda ()
