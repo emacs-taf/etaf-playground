@@ -145,6 +145,21 @@ database and mounts a test buffer before running BODY."
                           "$(MAKE) -C ../etaf-sqlite compile"))
       (should (string-match-p (regexp-quote dependency) makefile)))))
 
+(ert-deftest etaf-playground-performance-gate-runs-before-regressions ()
+  "CPU-heavy regressions must not contaminate absolute latency samples."
+  (let* ((makefile (with-temp-buffer
+                     (insert-file-contents "Makefile")
+                     (buffer-string)))
+         (target (string-match "^perf-check:" makefile))
+         (evaluator (and target
+                         (string-match "perf-evaluator" makefile target)))
+         (regressions (and target
+                           (string-match "perf-regressions" makefile target))))
+    (should target)
+    (should evaluator)
+    (should regressions)
+    (should (< evaluator regressions))))
+
 (ert-deftest etaf-playground-static-reader-is-inert-and-strict ()
   "Read pair structure as inert data and reject executable AST nodes."
   (let* ((form (etaf-playground-read-static "research-shelf"))

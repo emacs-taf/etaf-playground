@@ -63,9 +63,11 @@ perf-regressions:
 	$(MAKE) -C ../etaf-sqlite test EMACS="$(EMACS)"
 	$(MAKE) test EMACS="$(EMACS)"
 
+# Measure absolute latency before the CPU-heavy regression graph.  Regressions
+# still gate the same target, but cannot thermally contaminate product samples.
 perf-check:
-	$(MAKE) perf-regressions EMACS="$(EMACS)"
 	$(MAKE) perf-evaluator EMACS="$(EMACS)"
+	$(MAKE) perf-regressions EMACS="$(EMACS)"
 
 load: compile
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(require (quote etaf-playground))' \

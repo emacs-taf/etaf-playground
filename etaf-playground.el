@@ -333,7 +333,7 @@ rejecting executable forms and private runtime heads."
 
 (defun etaf-playground--file-content (file session extension)
   "Return FILE content, preferring SESSION's unsaved EXTENSION buffer."
-  (if-let ((buffer (etaf-playground--source-buffer session extension)))
+  (if-let* ((buffer (etaf-playground--source-buffer session extension)))
       (with-current-buffer buffer
         (buffer-substring-no-properties (point-min) (point-max)))
     (with-temp-buffer
@@ -485,7 +485,7 @@ only file evaluated by the framework."
 SESSION supplies authoritative source buffers.  MOUNT-OPTIONS is forwarded to
 `etaf-mount'.  The caller owns the complete framework render burst."
   (let ((buffer (get-buffer-create buffer-name)))
-    (when-let ((runtime (etaf-runtime-for-buffer buffer)))
+    (when-let* ((runtime (etaf-runtime-for-buffer buffer)))
       (with-current-buffer buffer
         (etaf-unmount runtime)))
     ;; Root factories and lifecycle callbacks are application code.  Run them
@@ -532,7 +532,7 @@ public framework render burst so GC cannot split an interactive mount."
   (let ((preview (etaf-playground-session-preview-buffer session)))
     (condition-case err
         (progn
-          (when-let ((runtime (etaf-runtime-for-buffer preview)))
+          (when-let* ((runtime (etaf-runtime-for-buffer preview)))
             (with-current-buffer preview
               (etaf-unmount runtime)))
           (with-current-buffer preview
@@ -644,7 +644,7 @@ the preview instead of destroying the source workspace."
        " ETAF Source  "
        (mapconcat
         (lambda (extension)
-          (when-let ((buffer (etaf-playground--source-buffer
+          (when-let* ((buffer (etaf-playground--source-buffer
                               session extension)))
             (let* ((active (equal extension
                                   (etaf-playground-session-active-extension
@@ -695,7 +695,7 @@ the preview instead of destroying the source workspace."
          (position (posn-point start)))
     (when (and (window-live-p window) (integer-or-marker-p position))
       (with-current-buffer (window-buffer window)
-        (when-let ((extension
+        (when-let* ((extension
                     (get-text-property position
                                        'etaf-playground-extension)))
           (etaf-playground-switch-source extension))))))
@@ -720,7 +720,7 @@ the preview instead of destroying the source workspace."
 
 (defun etaf-playground--source-example-name (&optional buffer)
   "Return the discovered example name owning BUFFER's source file."
-  (when-let ((file (buffer-file-name (or buffer (current-buffer)))))
+  (when-let* ((file (buffer-file-name (or buffer (current-buffer)))))
     (let ((file (file-truename file)))
       (cl-loop for spec in etaf-playground-scenario-manifest
                for name = (plist-get spec :pair)
@@ -758,7 +758,7 @@ the preview instead of destroying the source workspace."
       (user-error "No live ETAF Playground source %s" extension))
     (setf (etaf-playground-session-active-extension session) extension)
     (etaf-playground--refresh-source-headers session)
-    (when-let ((window (etaf-playground--source-window session)))
+    (when-let* ((window (etaf-playground--source-window session)))
       (set-window-buffer window buffer)
       (select-window window))
     buffer))
@@ -955,7 +955,7 @@ default example there."
 (defun etaf-playground-reset (&optional target)
   "Refresh TARGET's workspace or remount its direct preview."
   (interactive)
-  (if-let ((session (etaf-playground--session-for-target target)))
+  (if-let* ((session (etaf-playground--session-for-target target)))
       (etaf-playground-refresh session)
     (let* ((buffer (cond ((bufferp target) target)
                          ((stringp target) (get-buffer target))
@@ -971,7 +971,7 @@ default example there."
 (defun etaf-playground-close (&optional target)
   "Close TARGET's workspace, or unmount and kill a direct preview buffer."
   (interactive)
-  (if-let ((session (etaf-playground--session-for-target target)))
+  (if-let* ((session (etaf-playground--session-for-target target)))
       (let* ((preview (etaf-playground-session-preview-buffer session))
              (preview-window
               (etaf-playground-session-preview-window session))
@@ -982,7 +982,7 @@ default example there."
                    (window-frame preview-window)))
              (configuration
               (etaf-playground-session-previous-window-configuration session)))
-        (when-let ((runtime (and (buffer-live-p preview)
+        (when-let* ((runtime (and (buffer-live-p preview)
                                  (etaf-runtime-for-buffer preview))))
           (with-current-buffer preview
             (etaf-unmount runtime)))

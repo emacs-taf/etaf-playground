@@ -332,7 +332,7 @@ user's prior local additions cannot collide with the generated dataset."
 
 (defun etaf-research-shelf--update-selected (model fields message)
   "Update selected MODEL record with FIELDS and show MESSAGE."
-  (when-let ((row (etaf-research-shelf--selected model)))
+  (when-let* ((row (etaf-research-shelf--selected model)))
     (etaf-research-shelf--mutate
      model 'update
      (append (list :id (plist-get row :id)) fields)
@@ -387,7 +387,7 @@ user's prior local additions cannot collide with the generated dataset."
 (etaf-action-define etaf-research-shelf-star (runtime model)
   "Toggle the selected reading's star."
   (ignore runtime)
-  (when-let ((current (etaf-research-shelf--selected model)))
+  (when-let* ((current (etaf-research-shelf--selected model)))
     (let ((starred (= 1 (or (plist-get current :starred) 0))))
       (etaf-research-shelf--update-selected
        model (list :starred (if starred 0 1) :updated "Just now")
@@ -552,24 +552,24 @@ user's prior local additions cannot collide with the generated dataset."
            :color (etaf-theme-token :accent))
     (text :face 'bold
      (expr :value
-           (if-let ((row (etaf-research-shelf--selected model)))
+           (if-let* ((row (etaf-research-shelf--selected model)))
                (plist-get row :title)
              "Choose a record")))
     (text :color (etaf-theme-token :muted)
      (expr :value
-           (if-let ((row (etaf-research-shelf--selected model)))
+           (if-let* ((row (etaf-research-shelf--selected model)))
                (format "%s · %s" (plist-get row :author)
                        (plist-get row :kind))
              "Select one row to inspect it.")))
     (spacer :height 1)
     (text :face 'bold
      (expr :value
-           (if-let ((row (etaf-research-shelf--selected model)))
+           (if-let* ((row (etaf-research-shelf--selected model)))
                (etaf-research-shelf--status-label (plist-get row :status))
              "○ No selection")))
     (text
      (expr :value
-           (if-let ((row (etaf-research-shelf--selected model)))
+           (if-let* ((row (etaf-research-shelf--selected model)))
                (format "Progress  %d%%  ·  Priority %s"
                        (or (plist-get row :progress) 0)
                        (plist-get row :priority))
@@ -584,7 +584,7 @@ user's prior local additions cannot collide with the generated dataset."
     (spacer :height 1)
     (text :color (etaf-theme-token :muted)
      (expr :value
-           (if-let ((row (etaf-research-shelf--selected model)))
+           (if-let* ((row (etaf-research-shelf--selected model)))
                (concat "“" (or (plist-get row :note) "No note yet.") "”")
              "Your notes and actions will appear here.")))
     (spacer :height 1)
