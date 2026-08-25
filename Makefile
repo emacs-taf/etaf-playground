@@ -1,10 +1,15 @@
 EMACS ?= emacs
 LOAD_PATH = -L . -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-sqlite
+EBOX_NATIVE_RELEASE_DIR = $(shell $(EMACS) -Q --batch $(LOAD_PATH) \
+	--eval '(setq load-prefer-newer t)' -l ../ebox/ebox-native-reflow.el \
+	--eval '(princ (expand-file-name (format "../ebox/native/target/%s/release/" (ebox-native-reflow--rust-target))))')
 ENTRY_EXAMPLES := $(wildcard examples/*.el)
 EXAMPLES := $(ENTRY_EXAMPLES)
 EXAMPLE_ELC := $(EXAMPLES:.el=.elc)
+TEST_FILES := $(wildcard tests/*-tests.el)
 
-.PHONY: all compile examples-read test perf check checkdoc load clean
+.PHONY: all compile examples-read test perf perf-evaluator perf-regressions \
+	perf-check check checkdoc load clean
 
 all: check
 
@@ -24,7 +29,7 @@ compile:
 		--eval '(dolist (file (quote ($(foreach file,$(ENTRY_EXAMPLES),"$(file)")))) (load-file file))' \
 		--eval '(dolist (file (quote ($(foreach file,$(EXAMPLES),"$(file)")))) (byte-compile-file file))' \
 		--eval '(byte-compile-file "etaf-playground.el")' \
-		--eval '(byte-compile-file "tests/etaf-playground-tests.el")'
+		--eval '(dolist (file (quote ($(foreach file,$(TEST_FILES),"$(file)")))) (byte-compile-file file))'
 
 examples-read: compile
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
@@ -34,18 +39,40 @@ examples-read: compile
 
 test: examples-read
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
-		-l tests/etaf-playground-tests.el -f ert-run-tests-batch-and-exit
+		$(foreach test,$(TEST_FILES),-l $(test)) -f ert-run-tests-batch-and-exit
 
-perf: compile
+perf: perf-evaluator
+
+perf-evaluator: compile
+	$(MAKE) -C ../ebox native-build EMACS="$(EMACS)" ECSS_DIR=../ecss TP_DIR=../tp
+	EBOX_NATIVE_REFLOW_MODULE_PATH="$(EBOX_NATIVE_RELEASE_DIR)" \
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
-		-l scripts/benchmark-research-shelf.el
+		--eval '(setq ebox-native-reflow-module-path (getenv "EBOX_NATIVE_REFLOW_MODULE_PATH"))' \
+		-l scripts/benchmark-research-shelf.el \
+		-f etaf-performance-evaluator-batch
+
+# Run package regressions in dependency order.  Keeping them in one recipe
+# prevents parallel make from cleaning/recompiling a sibling while another
+# package is loading its artifacts.
+perf-regressions:
+	$(MAKE) -C ../ecss test EMACS="$(EMACS)"
+	$(MAKE) -C ../tp test EMACS="$(EMACS)"
+	$(MAKE) -C ../ebox test EMACS="$(EMACS)" ECSS_DIR=../ecss TP_DIR=../tp
+	$(MAKE) -C ../etaf test EMACS="$(EMACS)"
+	$(MAKE) -C ../etaf-ui test EMACS="$(EMACS)"
+	$(MAKE) -C ../etaf-sqlite test EMACS="$(EMACS)"
+	$(MAKE) test EMACS="$(EMACS)"
+
+perf-check:
+	$(MAKE) perf-regressions EMACS="$(EMACS)"
+	$(MAKE) perf-evaluator EMACS="$(EMACS)"
 
 load: compile
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(require (quote etaf-playground))' \
 		--eval '(princ "etaf-playground load OK\\n")'
 
 checkdoc:
-	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "tests/etaf-playground-tests.el") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
+	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "scripts/benchmark-research-shelf.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
 
 check: checkdoc test
 

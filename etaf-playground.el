@@ -50,6 +50,13 @@
   :type 'directory
   :group 'etaf-playground)
 
+(defcustom etaf-playground-artifact-directory
+  (expand-file-name ".etaf-build"
+                    (file-name-directory (or load-file-name buffer-file-name)))
+  "Directory containing manually compiled `.etafc' App artifacts."
+  :type 'directory
+  :group 'etaf-playground)
+
 (defcustom etaf-playground-source-extensions
   '(".etaf" ".el" ".ecss")
   "Source extensions shown in a Playground workspace, in tab order."
@@ -201,6 +208,15 @@ the root factory."
          (specs (mapcar (lambda (name)
                           (etaf-playground--example-spec name directory))
                         (sort (delete-dups names) #'string<))))
+    (dolist (spec specs)
+      (etaf-register-app
+       (plist-get spec :pair)
+       :source (plist-get spec :el-file)
+       :static (plist-get spec :etaf-file)
+       :style (plist-get spec :ecss-file)
+       :artifact
+       (expand-file-name (concat (plist-get spec :pair) ".etafc")
+                         etaf-playground-artifact-directory)))
     (setq etaf-playground-scenario-manifest specs
           etaf-playground-example-names (mapcar (lambda (spec)
                                                   (plist-get spec :pair))
@@ -436,6 +452,11 @@ One-argument roots remain supported for small existing examples."
       (wrong-number-of-arguments
        (funcall root static-form)))))
 
+(defun etaf-playground--compiled-artifact (spec session)
+  "Return SPEC's validated compiled artifact, unless SESSION owns sources."
+  (unless session
+    (etaf-app-load-artifact-or-warn (plist-get spec :pair))))
+
 (defun etaf-playground-read-pair (name &optional session)
   "Load NAME's companion and return its root View value.
 
@@ -443,8 +464,13 @@ When SESSION is supplied, its current source buffers are authoritative.  The
 `.etaf' and `.ecss' files are read as inert data.  The `.el' companion is the
 only file evaluated by the framework."
   (let* ((spec (etaf-playground-scenario name))
-         (static-form (etaf-playground-read-static name session))
-         (ecss-form (etaf-playground-read-ecss name session)))
+         (artifact (etaf-playground--compiled-artifact spec session))
+         (static-form (if artifact
+                          (plist-get artifact :static-form)
+                        (etaf-playground-read-static name session)))
+         (ecss-form (if artifact
+                        (or (plist-get artifact :style-form) '(styles))
+                      (etaf-playground-read-ecss name session))))
     (etaf-playground--load-companion spec session)
     (etaf-playground--call-root
      (etaf-playground--root-factory spec)
@@ -466,11 +492,13 @@ only file evaluated by the framework."
     (setq-local truncate-lines nil))
   buffer)
 
-(defun etaf-playground-mount-example (buffer-name name &optional session)
+(defun etaf-playground-mount-example
+    (buffer-name name &optional session mount-options)
   "Mount example NAME into BUFFER-NAME and return its buffer.
 
 This is the low-level consumer API.  `etaf-playground-open-example' adds the
-source editors and side-by-side workspace around it."
+source editors and side-by-side workspace around it.  MOUNT-OPTIONS is
+forwarded to `etaf-mount', including an optional initial viewport."
   (let ((buffer (get-buffer-create buffer-name)))
     (when-let ((runtime (etaf-runtime-for-buffer buffer)))
       (with-current-buffer buffer
@@ -480,7 +508,8 @@ source editors and side-by-side workspace around it."
     ;; buffer-local display API cannot accidentally style the source editor
     ;; which invoked `etaf-playground-refresh'.
     (with-current-buffer buffer
-      (etaf-mount buffer (etaf-playground-read-pair name session)))
+      (etaf-mount buffer (etaf-playground-read-pair name session)
+                  mount-options))
     (with-current-buffer buffer
       (setq-local etaf-playground-current-example name))
     buffer))
@@ -630,7 +659,70 @@ the preview instead of destroying the source workspace."
                'help-echo (format "Switch to %s" extension)))))
         etaf-playground-source-extensions
         " | ")
+       "  "
+       (let* ((name (etaf-playground-session-name session))
+              (dirty
+               (cl-some (lambda (entry)
+                          (and (buffer-live-p (cdr entry))
+                               (buffer-modified-p (cdr entry))))
+                        (etaf-playground-session-source-buffers session)))
+              (status (unless dirty (etaf-app-compile-status name)))
+              (state (if dirty 'dirty (plist-get status :status))))
+         (concat
+          (make-text-button
+           " Compile App " nil
+           'action #'etaf-playground-compile-current-app
+           'follow-link t
+           'button-data name
+           'help-echo "Save sources and compile this App with ETAF")
+          " | "
+          (make-text-button
+           (format " %s " state) nil
+           'action #'etaf-playground-show-current-app-compile-status
+           'follow-link t
+           'button-data name
+           'help-echo "Show the generic ETAF App compilation status")))
        "  C-c C-c refresh"))))
+
+(defun etaf-playground--button-app-name (button)
+  "Return App name carried by header BUTTON."
+  (or (and (stringp button)
+           (get-text-property 0 'button-data button))
+      (and (fboundp 'button-get)
+           (ignore-errors (button-get button 'button-data)))
+      etaf-playground-current-example
+      (and (etaf-playground-session-p etaf-playground-session)
+           (etaf-playground-session-name etaf-playground-session))))
+
+;;;###autoload
+(defun etaf-playground-compile-current-app (&optional button)
+  "Compile BUTTON's App, or the current App, through generic ETAF APIs."
+  (interactive)
+  (let* ((name (etaf-playground--button-app-name button))
+         (session (and name (gethash name etaf-playground--sessions))))
+    (unless name (user-error "No ETAF App is associated with this buffer"))
+    (when (and session
+               (cl-some (lambda (entry)
+                          (and (buffer-live-p (cdr entry))
+                               (buffer-modified-p (cdr entry))))
+                        (etaf-playground-session-source-buffers session)))
+      (user-error "Save %s source buffers before compiling the App" name))
+    (let ((status (etaf-compile-app name)))
+      (when session (etaf-playground--refresh-source-headers session))
+      (message "Compiled ETAF App %s: %s"
+               name (plist-get status :file))
+      status)))
+
+;;;###autoload
+(defun etaf-playground-show-current-app-compile-status (&optional button)
+  "Show generic compile status for BUTTON's App or the current App."
+  (interactive)
+  (let* ((name (etaf-playground--button-app-name button))
+         (status (and name (etaf-app-compile-status name))))
+    (unless status (user-error "No ETAF App is associated with this buffer"))
+    (message "ETAF App %s: %s (%s)" name
+             (plist-get status :status) (plist-get status :file))
+    status))
 
 (defun etaf-playground--activate-source-tab (button)
   "Activate source tab BUTTON from a header-line text button."
@@ -893,7 +985,8 @@ batch tests and callers which do not need editor windows."
                          nil t)))
   (if buffer-name
       (etaf-playground--mount-for-display buffer-name name)
-    (let ((session (etaf-playground--make-session name)))
+    (let ((_artifact-status (etaf-app-load-artifact-or-warn name))
+          (session (etaf-playground--make-session name)))
       (etaf-playground--show-session session)
       (etaf-playground-refresh session)
       (etaf-playground--refresh-source-headers session)

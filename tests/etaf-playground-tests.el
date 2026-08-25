@@ -113,6 +113,23 @@ database and mounts a test buffer before running BODY."
                           "$(MAKE) -C ../etaf-sqlite compile"))
       (should (string-match-p (regexp-quote dependency) makefile)))))
 
+(ert-deftest etaf-playground-registers-app-for-interactive-compilation ()
+  "Discovered examples use the generic ETAF App compile/status commands."
+  (let ((directory (make-temp-file "etaf-playground-artifacts-" t)))
+    (unwind-protect
+        (let ((etaf-playground-artifact-directory directory))
+          (etaf-playground-refresh-examples)
+          (should (eq (plist-get (etaf-app-compile-status "research-shelf")
+                                 :status)
+                      'missing))
+          (let ((compiled (etaf-compile-app "research-shelf")))
+            (should (eq (plist-get compiled :status) 'current))
+            (should (> (plist-get compiled :blueprints) 0))
+            (should (file-readable-p (plist-get compiled :file)))))
+      (etaf-playground-refresh-examples)
+      (when (file-directory-p directory)
+        (delete-directory directory t)))))
+
 (ert-deftest etaf-playground-static-reader-is-inert-and-strict ()
   "Read pair structure as inert data and reject executable AST nodes."
   (let* ((form (etaf-playground-read-static "research-shelf"))
@@ -195,7 +212,8 @@ database and mounts a test buffer before running BODY."
                   (etaf-playground-session-preview-buffer
                    etaf-playground-session))))
         (let* ((header (etaf-playground--source-header))
-               (position (string-match " EL" header)))
+               (position (string-match " EL" header))
+               (compile-position (string-match "Compile App" header)))
           (should position)
           (should (get-text-property position 'button header))
           (should (equal ".el"
@@ -204,7 +222,12 @@ database and mounts a test buffer before running BODY."
            (propertize " EL " 'etaf-playground-extension ".el"))
           (should (equal ".el"
                          (etaf-playground-session-active-extension
-                          etaf-playground-session))))))))
+                          etaf-playground-session)))
+          (should compile-position)
+          (should (get-text-property compile-position 'button header))
+          (should (equal "research-shelf"
+                         (get-text-property compile-position
+                                            'button-data header))))))))
 
 (ert-deftest etaf-playground-direct-etaf-c-c-c-opens-workspace ()
   "The source render command opens a workspace for a directly opened `.etaf'."
@@ -277,6 +300,23 @@ database and mounts a test buffer before running BODY."
         (should (etaf-runtime-p
                  (etaf-runtime-for-buffer
                   (etaf-playground-session-preview-buffer session))))))))
+
+(ert-deftest etaf-playground-root-uses-compiled-blueprint ()
+  "The real root must instantiate a mixed static/dynamic blueprint."
+  (etaf-playground-test--with-app (buffer database)
+    (etaf-compiler-clear-cache)
+    (let* ((before (etaf-compiler-statistics))
+           (instantiations (plist-get before :instantiations))
+           (fallbacks (plist-get before :fallbacks))
+           (cache-entries (plist-get before :static-cache-entries)))
+      (etaf-playground-open buffer)
+      (let* ((after (etaf-compiler-statistics))
+             (blueprint (plist-get after :last-blueprint)))
+        (should (> (plist-get after :instantiations) instantiations))
+        (should (= (plist-get after :fallbacks) fallbacks))
+        (should (> (plist-get after :static-cache-entries) cache-entries))
+        (should (> (plist-get blueprint :dynamic-nodes) 0))
+        (should (> (plist-get blueprint :hole-count) 0))))))
 
 (ert-deftest etaf-playground-pair-mounts-sqlite-backed-surface ()
   "Mounting the pair initializes SQLite and renders the real app shell."
@@ -448,14 +488,32 @@ database and mounts a test buffer before running BODY."
     (etaf-playground-open buffer)
     (let ((runtime (etaf-runtime-for-buffer buffer)))
       (etaf-dispatch-event runtime 'research-shelf-row-1 'press)
-      (dotimes (_ 4)
-        (etaf-dispatch-event runtime 'research-shelf-theme-toggle 'press))
+      (let (dark-output light-output)
+        (dotimes (cycle 2)
+          (etaf-dispatch-event runtime 'research-shelf-theme-toggle 'press)
+          (with-current-buffer buffer
+            (let ((output (buffer-substring (point-min) (point-max))))
+              (if (zerop cycle)
+                  (setq dark-output output)
+                (should (equal-including-properties output dark-output)))))
+        (etaf-dispatch-event runtime 'research-shelf-theme-toggle 'press)
+          (with-current-buffer buffer
+            (let ((output (buffer-substring (point-min) (point-max))))
+              (if (zerop cycle)
+                  (setq light-output output)
+                (should (equal-including-properties output light-output)))))))
       (should (string-match-p "The Shape of Tools"
                               (etaf-playground-test--text buffer)))
       (should (or (string-match-p "☑ Dark"
                                   (etaf-playground-test--text buffer))
                   (string-match-p "☐ Dark"
-                                  (etaf-playground-test--text buffer)))))
+                                  (etaf-playground-test--text buffer))))
+      ;; Theme-only Host reconstruction must preserve nested Component
+      ;; backend anchors for the next unrelated interaction.
+      (let ((generation (etaf-runtime-generation runtime)))
+        (etaf-dispatch-event runtime 'research-shelf-filter-reading 'press)
+        (should (= (etaf-runtime-generation runtime) (1+ generation)))
+        (should (eq runtime (etaf-runtime-for-buffer buffer)))))
     (etaf-playground-reset buffer)
     (should (etaf-runtime-p (etaf-runtime-for-buffer buffer))))
   (should-not (get-buffer " *etaf-research-shelf-test*")))

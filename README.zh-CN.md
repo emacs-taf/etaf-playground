@@ -18,6 +18,11 @@ ETAF Playground 是通用的应用构建工作区：左侧编辑同一个应用�
 也会刷新。若 root 或 feature 不遵循命名约定，可在 companion 中调用
 `etaf-playground-register-example` 注册覆盖。
 
+ETAF core 提供通用 App 预编译命令 `M-x etaf-compile-app` 和状态命令
+`M-x etaf-app-compile-status`；完整合同见 [ETAF 文档](../etaf/README.zh-CN.md)。
+Playground 不实现编译，只把发现的 example 注册成 ETAF App，并在 header line
+显示 `Compile App` 快捷按钮和当前状态。默认产物目录是 `.etaf-build/`。
+
 `etaf-playground-mount-example` 仍作为低层 batch/consumer API 保留。业务
 Component、数据库 schema、palette、refs 和 handlers 都应该留在 example companion
 中；Playground 只提供 source/preview 会话、读文件、窗口切换与生命周期。
