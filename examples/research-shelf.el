@@ -456,7 +456,8 @@ constructed.  When omitted, initialize it for direct programmatic callers."
 (defun etaf-research-shelf--filter-view (model)
   "Return the filter rail for MODEL and inherited filter Context."
   (etaf-view
-   (column :class "research-shelf-filter-rail" :width 'stretch :min-width 0
+   (box :layout 'column
+          :class "research-shelf-filter-rail" :width 'stretch :min-width 0
            :flex-grow 1 :flex-shrink 1 :flex-basis '(220)
            :padding '(1 1)
            :border (etaf-theme-token :line)
@@ -477,7 +478,7 @@ constructed.  When omitted, initialize it for direct programmatic callers."
       (etaf-research-shelf-filter-button
        :filter-key 'starred :fallback "★ Starred"
        :ref 'research-shelf-filter-starred)
-      (spacer :height 1)
+      (box :height 1)
       (label :text "STORAGE" :color (etaf-theme-token :muted))
       (label :text (file-name-nondirectory
                     (plist-get model :database-file)))
@@ -491,13 +492,16 @@ constructed.  When omitted, initialize it for direct programmatic callers."
   "Return the reading list for MODEL and static MAIN FORM."
   (let ((controller (etaf-research-shelf--controller model)))
     (etaf-view
-     (column :class "research-shelf-list" :width 'stretch :min-width 0
+     (box :layout 'column
+             :class "research-shelf-list" :width 'stretch :min-width 0
              :flex-grow 4 :flex-shrink 1 :flex-basis '(620)
              :padding '(1 2)
              :border (etaf-theme-token :line)
              :bgcolor (etaf-theme-token :panel)
-      (flex :width 'stretch :flex-wrap 'wrap :align-items 'center :gap '(1 (8))
-       (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
+      (box :layout 'flex
+             :width 'stretch :flex-wrap 'wrap :align-items 'center :gap '(1 (8))
+       (box :layout 'column
+              :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
         (label :text (etaf-playground-static-value
                       form :title "Reading queue") :face 'bold)
         (label :text (format "%d items · SQLite-backed"
@@ -535,7 +539,8 @@ constructed.  When omitted, initialize it for direct programmatic callers."
 (defun etaf-research-shelf--detail-view (model form)
   "Return the selected record inspector for MODEL and static FORM."
   (etaf-view
-   (column :class "research-shelf-detail" :width 'stretch :min-width 0
+   (box :layout 'column
+          :class "research-shelf-detail" :width 'stretch :min-width 0
            :flex-grow 2 :flex-shrink 1 :flex-basis '(340)
            :padding '(2 2)
            :border (etaf-theme-token :line)
@@ -554,7 +559,7 @@ constructed.  When omitted, initialize it for direct programmatic callers."
                (format "%s · %s" (plist-get row :author)
                        (plist-get row :kind))
              "Select one row to inspect it.")))
-    (spacer :height 1)
+    (box :height 1)
     (text :face 'bold
      (expr :value
            (if-let* ((row (etaf-research-shelf--selected model)))
@@ -574,13 +579,13 @@ constructed.  When omitted, initialize it for direct programmatic callers."
                   (filled (max 0 (min 10 (/ progress 10)))))
              (format "%s %s" (make-string filled ?█)
                      (make-string (- 10 filled) ?░)))))
-    (spacer :height 1)
+    (box :height 1)
     (text :color (etaf-theme-token :muted)
      (expr :value
            (if-let* ((row (etaf-research-shelf--selected model)))
                (concat "“" (or (plist-get row :note) "No note yet.") "”")
              "Your notes and actions will appear here.")))
-    (spacer :height 1)
+    (box :height 1)
     (etaf-research-shelf-detail-actions))))
 
 (etaf-define-component etaf-research-shelf-detail-actions ()
@@ -593,7 +598,8 @@ constructed.  When omitted, initialize it for direct programmatic callers."
              (finished (and row (equal (plist-get row :status) "finished")))
              (archived (and row (equal (plist-get row :status) "archived"))))
         (etaf-view
-         (flex :width 'stretch :flex-wrap 'wrap :gap '(1 (6))
+         (box :layout 'flex
+                :width 'stretch :flex-wrap 'wrap :gap '(1 (6))
           (button :label "+ 10%" :ref 'research-shelf-progress
                   :variant 'secondary
                   :disabled (or (null row) archived (>= progress 100))
@@ -643,9 +649,11 @@ constructed.  When omitted, initialize it for direct programmatic callers."
         (header-spec (etaf-inject 'research-shelf-header-spec nil t)))
     (lambda ()
       (etaf-view
-       (flex :class "research-shelf-header" :width 'stretch :min-width 0
+       (box :layout 'flex
+               :class "research-shelf-header" :width 'stretch :min-width 0
              :flex-wrap 'wrap :align-items 'center :gap '(1 (10))
-        (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
+        (box :layout 'column
+               :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
          (label :text (etaf-playground-static-value
                        header-spec :eyebrow "Research Shelf")
                 :color (etaf-theme-token :accent))
@@ -655,7 +663,7 @@ constructed.  When omitted, initialize it for direct programmatic callers."
                        root-spec :subtitle
                        "A quiet place for unfinished ideas")
                 :color (etaf-theme-token :muted)))
-        (column :width 'max-content :min-width 0
+        (box :layout 'column :width 'max-content :min-width 0
                 :flex-grow 0 :flex-shrink 0
          (checkbox :label "Dark" :ref 'research-shelf-theme-toggle
                    :checked (plist-get model :dark)
@@ -671,9 +679,11 @@ constructed.  When omitted, initialize it for direct programmatic callers."
         (footer-spec (etaf-inject 'research-shelf-footer-spec nil t)))
     (lambda ()
       (etaf-view
-        (flex :class "research-shelf-footer" :width 'stretch
+       (box :layout 'flex
+              :class "research-shelf-footer" :width 'stretch
              :flex-wrap 'wrap :gap '(1 (8))
-        (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
+        (box :layout 'column
+               :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
          (label :text (plist-get model :toast))
          (label :text (etaf-playground-static-value
                        footer-spec :label "SQLite · saved locally")
@@ -687,13 +697,15 @@ constructed.  When omitted, initialize it for direct programmatic callers."
 The App supplies `header', `filters', `library', `detail', and `footer'; each
 slot has a reusable built-in fallback for direct composition."
   :view
-  (column :class "research-shelf-shell" :width '(viewport)
+  (box :layout 'column
+         :class "research-shelf-shell" :width '(viewport)
           :height 'auto :min-height '(viewport-height)
           :color (etaf-theme-token :ink)
           :bgcolor (etaf-theme-token :paper)
    (slot :name 'header
          (etaf-research-shelf-header))
-   (flex :class "research-shelf-workspace" :width 'stretch
+   (box :layout 'flex
+          :class "research-shelf-workspace" :width 'stretch
          :flex-wrap 'wrap :align-items 'stretch :align-content 'start
          :gap '(1 (6))
     (slot :name 'filters
