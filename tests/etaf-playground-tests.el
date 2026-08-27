@@ -21,6 +21,21 @@
   (with-current-buffer buffer
     (substring-no-properties (buffer-string))))
 
+(defun etaf-playground-test--row-refs (runtime)
+  "Return RUNTIME's visible Research Shelf row refs in stable order."
+  (sort
+   (delq nil
+         (mapcar
+          (lambda (entry)
+            (let ((ref (car entry)))
+              (and (symbolp ref)
+                   (string-prefix-p "research-shelf-row-"
+                                    (symbol-name ref))
+                   ref)))
+          (etaf-runtime-handler-entries runtime)))
+   (lambda (left right)
+     (string< (symbol-name left) (symbol-name right)))))
+
 (defun etaf-playground-test--close (buffer)
   "Close BUFFER when it exists."
   (when (gethash "research-shelf" etaf-playground--sessions)
@@ -510,7 +525,14 @@ database and mounts a test buffer before running BODY."
   (etaf-playground-test--with-app (buffer database)
     (etaf-playground-open buffer)
     (let ((runtime (etaf-runtime-for-buffer buffer)))
+      ;; Move the selected identity through the old page first.  The following
+      ;; filter reorders keyed Range items; generated cell Host addresses must
+      ;; remain scoped by item key rather than inheriting their new position.
+      (dolist (ref (etaf-playground-test--row-refs runtime))
+        (etaf-dispatch-event runtime ref 'press))
       (etaf-dispatch-event runtime 'research-shelf-filter-reading 'press)
+      (dolist (ref (etaf-playground-test--row-refs runtime))
+        (etaf-dispatch-event runtime ref 'press))
       (let ((text (etaf-playground-test--text buffer)))
         (should (string-match-p "Showing Reading" text))
         (should (string-match-p "Designing for Calm" text))
