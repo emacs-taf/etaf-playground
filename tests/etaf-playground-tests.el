@@ -9,6 +9,7 @@
 (require 'cl-lib)
 (require 'ert)
 (require 'etaf-playground)
+(require 'etaf-performance)
 
 (defun etaf-playground-test--ensure-app-loaded ()
   "Load the same-basename Research Shelf companion for test setup."
@@ -167,13 +168,15 @@ database and mounts a test buffer before running BODY."
                      (buffer-string)))
          (target (string-match "^perf-check:" makefile))
          (evaluator (and target
-                         (string-match "perf-evaluator" makefile target)))
+                         (string-match "$(MAKE) perf " makefile target)))
          (regressions (and target
                            (string-match "perf-regressions" makefile target))))
     (should target)
     (should evaluator)
     (should regressions)
-    (should (< evaluator regressions))))
+    (should (< evaluator regressions))
+    (should (string-match-p "^perf-prepare: compile" makefile))
+    (should (string-match-p "^perf-evaluator:" makefile))))
 
 (ert-deftest etaf-playground-static-reader-is-inert-and-strict ()
   "Read pair structure as inert data and reject executable AST nodes."
@@ -519,6 +522,58 @@ database and mounts a test buffer before running BODY."
             (or (plist-get (etaf-runtime-host-props-for runtime other)
                            :class)
                 ""))))))))
+
+(ert-deftest etaf-playground-row-observer-on-off-is-exact ()
+  "Observation preserves one real row mutation and its retained identity."
+  (etaf-playground-test--with-app (buffer database)
+    (etaf-playground-open buffer)
+    (let* ((runtime (etaf-runtime-for-buffer buffer))
+           (surface
+            (lambda ()
+              (with-current-buffer buffer
+                (buffer-substring (point-min) (point-max))))))
+      ;; Materialize the same lazy TP paint contribution before either side of
+      ;; the equivalence comparison.  The observer remains detached here.
+      (etaf-dispatch-event runtime 'research-shelf-row-2 'press)
+      (etaf-dispatch-event runtime 'research-shelf-row-1 'press)
+      (let* ((generation-before (etaf-runtime-generation runtime))
+           (result-off
+            (etaf-dispatch-event runtime 'research-shelf-row-2 'press))
+           (generation-off (etaf-runtime-generation runtime))
+           (output-off (funcall surface)))
+        (should (= 1 (- generation-off generation-before)))
+        (should (string-match-p
+                 "selected"
+                 (or (plist-get
+                      (etaf-runtime-host-props-for
+                       runtime 'research-shelf-row-2)
+                      :class)
+                     "")))
+        (etaf-dispatch-event runtime 'research-shelf-row-1 'press)
+        (etaf-performance-clear)
+        (etaf-performance-start runtime)
+        (let* ((generation-before-on (etaf-runtime-generation runtime))
+               (result-on
+                (etaf-dispatch-event runtime 'research-shelf-row-2 'press))
+               (generation-on (etaf-runtime-generation runtime))
+               (output-on (funcall surface))
+               (operation (car (etaf-performance-records)))
+               (providers
+                (mapcar #'etaf-performance-stage-provider
+                        (etaf-performance-operation-stages operation))))
+          (should (equal result-off result-on))
+          (should (= (- generation-off generation-before)
+                     (- generation-on generation-before-on)))
+          (should (equal-including-properties output-off output-on))
+          (should (equal providers '(tp ebox etaf)))
+          (should (string-match-p
+                   "selected"
+                   (or (plist-get
+                        (etaf-runtime-host-props-for
+                         runtime 'research-shelf-row-2)
+                        :class)
+                       ""))))
+        (etaf-performance-stop runtime)))))
 
 (ert-deftest etaf-playground-filters-and-pagination-reload-data ()
   "Filter and pager refs drive the SQLite-backed Data Controller."

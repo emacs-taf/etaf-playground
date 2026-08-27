@@ -19,12 +19,9 @@
 (declare-function etaf-research-shelf--ensure-database
                   "../examples/research-shelf")
 
-(defconst etaf-performance-evaluator-sample-count 20)
+(defconst etaf-performance-evaluator-warmup-count 5)
+(defconst etaf-performance-evaluator-sample-count 30)
 (defconst etaf-performance-evaluator-latency-budget-ms 50.0)
-(defconst etaf-performance-evaluator-scenario-budgets-ms
-  '(("theme-toggle" :p95 90.0 :max 110.0)
-    ("post-resize-theme-toggle" :p95 90.0 :max 110.0))
-  "User-approved scenario budgets overriding the default latency budget.")
 (defconst etaf-performance-evaluator-overhead-budget-ms 2.0)
 (defconst etaf-performance-evaluator-fixture-size 256)
 (defconst etaf-performance-evaluator-page-size 12)
@@ -61,18 +58,22 @@
 
 (cl-defun etaf-performance-evaluator--measure
     (label action verify &key setup cleanup
+           (warmups etaf-performance-evaluator-warmup-count)
            (samples etaf-performance-evaluator-sample-count))
   "Warm, then measure ACTION under LABEL and verify every result.
-ACTION, VERIFY, SETUP, and CLEANUP receive an index.  Warmup uses -1 and is
-never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
+ACTION, VERIFY, SETUP, and CLEANUP receive an index.  WARMUPS use negative
+indices and are never included in SAMPLES.  ACTION's result is passed to
+VERIFY and CLEANUP."
   (let (durations)
-    (when setup (funcall setup -1))
     ;; Batch Emacs does not run the interactive 0.2s deferred-GC timer between
     ;; synthetic inputs.  Settle that idle work before, never inside, samples.
     (garbage-collect)
-    (let ((result (funcall action -1)))
-      (funcall verify result -1)
-      (when cleanup (funcall cleanup result -1)))
+    (dotimes (offset warmups)
+      (let ((index (- offset warmups)))
+        (when setup (funcall setup index))
+        (let ((result (funcall action index)))
+          (funcall verify result index)
+          (when cleanup (funcall cleanup result index)))))
     (dotimes (index samples)
       (when setup (funcall setup index))
       (garbage-collect)
@@ -153,13 +154,18 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
   (let* ((power (plist-get environment :power-state))
          (source (or (plist-get power :source) 'unknown))
          (low-power (or (plist-get power :low-power-mode) 'unknown))
+         (native-jit (plist-get environment :native-comp-jit-compilation))
          (load (plist-get environment :load-average)))
-    (princ (format "perf-environment power-source=%s low-power-mode=%s load=%S\n"
-                   source low-power load))
+    (princ
+     (format
+      "perf-environment power-source=%s low-power-mode=%s native-jit=%S load=%S\n"
+      source low-power native-jit load))
     (when (eq low-power 'on)
       (error (concat "Performance evaluator requires low-power mode off; "
                      "current source=%s")
-             source)))
+             source))
+    (when native-jit
+      (error "Performance evaluator requires native-comp JIT disabled")))
   environment)
 
 (defun etaf-performance-evaluator--mount (buffer)
@@ -199,7 +205,7 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
       (unless (eq (etaf-performance-stage-status stage) 'success)
         (error "Trace stage %s/%s finished with status %s"
                (etaf-performance-stage-category stage)
-               (etaf-performance-stage-function stage)
+               (etaf-performance-stage-name stage)
                (etaf-performance-stage-status stage)))))
   (let ((categories (etaf-performance-evaluator--trace-categories records)))
     (dolist (required '(runtime ebox tp sqlite))
@@ -238,53 +244,56 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
                (lambda (left right)
                  (> (etaf-performance-operation-elapsed left)
                     (etaf-performance-operation-elapsed right)))))
-    (let* ((gc-count
-            (- (etaf-performance-operation-gc-count-after operation)
-               (etaf-performance-operation-gc-count-before operation)))
-           (gc-ms
-            (* 1000.0
-               (- (etaf-performance-operation-gc-elapsed-after operation)
-                  (etaf-performance-operation-gc-elapsed-before operation))))
+    (let* ((gc-count (etaf-performance-operation-gc-count operation))
+           (gc-ms (etaf-performance-operation-gc-elapsed operation))
            (stages
             (mapcar
              (lambda (entry)
                (cons (plist-get entry :category)
-                     (plist-get entry :exclusive-ms)))
-             (etaf-performance-operation-stage-summary operation)))
-           (ebox
-            (plist-get (etaf-performance-operation-metadata operation) :ebox)))
+                     (plist-get entry :duration-ms)))
+             (etaf-performance-operation-stage-summary operation))))
       (princ
        (format (concat "perf-slowest id=%d kind=%s label=%S elapsed=%.3fms "
-                       "gc=%d/%.3fms stages=%S ebox=%S\n")
+                       "gc=%d/%.3fms stages=%S\n")
                (etaf-performance-operation-id operation)
                (etaf-performance-operation-kind operation)
                (etaf-performance-operation-label operation)
                (etaf-performance-operation-elapsed operation)
-               gc-count gc-ms stages ebox))))))
+               gc-count gc-ms stages))))))
 
 (defun etaf-performance-evaluator--select-ref (runtime ref)
   "Select workload row REF through RUNTIME's public event path."
   (etaf-dispatch-event runtime ref 'press)
   ref)
 
-(defun etaf-performance-evaluator--measure-overhead (runtime buffer)
-  "Measure trace overhead for RUNTIME with visible state in BUFFER."
-  (let (signed-deltas absolute-deltas traced-samples plain-samples)
+(defun etaf-performance-evaluator--measure-overhead
+    (runtime buffer &optional reset-ref)
+  "Measure trace overhead for RUNTIME with visible state in BUFFER.
+RESET-REF defaults to the first Research Shelf row."
+  (let ((reset-ref (or reset-ref 'research-shelf-row-1))
+        signed-deltas absolute-deltas traced-samples plain-samples)
     (dotimes (index etaf-performance-evaluator-sample-count)
       (let ((order (if (zerop (% index 2)) '(nil t) '(t nil))) plain traced)
         (dolist (trace-p order)
-          (etaf-performance-mode (if trace-p 1 -1))
+          (if trace-p
+              (etaf-performance-start runtime)
+            (etaf-performance-stop runtime))
           ;; Restore equivalent state outside the timed region; AB/BA order
           ;; cancels drift without retries or skipped real work.
           (garbage-collect)
-          (etaf-focus runtime 'research-shelf-row-1)
+          (etaf-focus runtime reset-ref)
           (when trace-p (etaf-performance-clear))
           (let ((before (etaf-focused-host-ref runtime))
                 (elapsed
                  (let ((gc-cons-threshold most-positive-fixnum)
                        (gc-cons-percentage 1.0))
                    (car (etaf-performance-evaluator--timed-call
-                         (lambda () (etaf-focus-next runtime)))))))
+                         (if trace-p
+                             (lambda ()
+                               (etaf-performance-call-operation
+                                runtime 'overhead "focus navigation"
+                                (lambda () (etaf-focus-next runtime))))
+                           (lambda () (etaf-focus-next runtime))))))))
             (unless (and (buffer-live-p (get-buffer buffer))
                          (not (equal before
                                      (etaf-focused-host-ref runtime))))
@@ -298,7 +307,7 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
         (push traced traced-samples)
         (push (- traced plain) signed-deltas)
         (push (abs (- traced plain)) absolute-deltas)))
-    (etaf-performance-mode -1)
+    (etaf-performance-stop runtime)
     (let ((signed
            (etaf-performance-evaluator--statistics (nreverse signed-deltas)))
           (jitter
@@ -319,29 +328,48 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
 (defun etaf-performance-evaluator--latency-failures (results)
   "Return hard latency budget failures from scenario RESULTS."
   (cl-loop for (label . statistics) in results append
-           (let* ((scenario
-                   (cdr (assoc label
-                               etaf-performance-evaluator-scenario-budgets-ms)))
-                  (p95-budget
-                   (or (plist-get scenario :p95)
-                       etaf-performance-evaluator-latency-budget-ms))
-                  (max-budget
-                   (or (plist-get scenario :max)
-                       etaf-performance-evaluator-latency-budget-ms))
-                 failures)
+           (let (failures)
              (when (> (plist-get statistics :p95)
-                      p95-budget)
+                      etaf-performance-evaluator-latency-budget-ms)
                (push (format "%s p95 %.3fms > %.3fms" label
                              (plist-get statistics :p95)
-                             p95-budget)
+                             etaf-performance-evaluator-latency-budget-ms)
                      failures))
              (when (> (plist-get statistics :max)
-                      max-budget)
+                      etaf-performance-evaluator-latency-budget-ms)
                (push (format "%s max %.3fms > %.3fms" label
                              (plist-get statistics :max)
-                             max-budget)
+                             etaf-performance-evaluator-latency-budget-ms)
                      failures))
              (nreverse failures))))
+
+(defun etaf-performance-evaluator--trace-scenario
+    (runtime label function &optional verify)
+  "Run FUNCTION and return the one new operation for LABEL.
+RUNTIME owns the observation boundary.  When VERIFY is non-nil, call it with
+FUNCTION's exact result."
+  (let* ((before (etaf-performance-records))
+         (before-count (length before))
+         (before-id (and before
+                         (etaf-performance-operation-id (car before))))
+         (result
+          (etaf-performance-call-operation
+           runtime 'trace label function))
+         (after (etaf-performance-records))
+         (operation (car after)))
+    (unless (and operation
+                 (= (length after) (1+ before-count))
+                 (not (equal before-id
+                             (etaf-performance-operation-id operation)))
+                 (eq 'trace (etaf-performance-operation-kind operation))
+                 (equal label
+                        (etaf-performance-operation-label operation))
+                 (eq (etaf-performance-operation-status operation) 'success))
+      (error "Trace scenario %s did not produce one successful operation"
+             label))
+    (when verify
+      (funcall verify result))
+    (list label operation result)))
 
 (defun etaf-performance-evaluator--visible-item-count (buffer)
   "Return the item count rendered in BUFFER, or nil."
@@ -360,7 +388,7 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
     (label runtime buffer action verify &key setup)
   "Measure one public event ACTION under LABEL and run VERIFY.
 ACTION and VERIFY receive the sample index.  Every sample must advance the
-ETAF generation and preserve the mounted surface invariant."
+ETAF generation and preserve RUNTIME's mounted surface in BUFFER."
   (etaf-performance-evaluator--measure
    label
    (lambda (index)
@@ -379,7 +407,7 @@ ETAF generation and preserve the mounted surface invariant."
 
 (defun etaf-performance-evaluator--measure-add
     (label runtime buffer)
-  "Measure the public Add action under LABEL."
+  "Measure RUNTIME's public Add action under LABEL in BUFFER."
   (let (before-count)
     (etaf-performance-evaluator--measure-event
      label runtime buffer
@@ -397,7 +425,7 @@ ETAF generation and preserve the mounted surface invariant."
 
 (defun etaf-performance-evaluator--measure-reload
     (label runtime buffer)
-  "Measure the public Reload action under LABEL."
+  "Measure RUNTIME's public Reload action under LABEL in BUFFER."
   (etaf-performance-evaluator--measure-event
    label runtime buffer
    (lambda (_index)
@@ -409,7 +437,7 @@ ETAF generation and preserve the mounted surface invariant."
 
 (defun etaf-performance-evaluator--measure-viewport-resize
     (runtime buffer)
-  "Measure alternating wide/compact viewport publications for BUFFER."
+  "Measure RUNTIME's alternating viewport publications for BUFFER."
   (let ((target-buffer (get-buffer buffer)))
     (unless (buffer-live-p target-buffer)
       (error "Viewport-resize: target buffer is not live"))
@@ -434,7 +462,7 @@ ETAF generation and preserve the mounted surface invariant."
 
 (defun etaf-performance-evaluator--measure-post-resize-events
     (runtime buffer)
-  "Return post-resize row/theme/filter/page/Add/Reload measurements."
+  "Return RUNTIME's post-resize interaction measurements for BUFFER."
   (let (results)
     (push
      (etaf-performance-evaluator--measure-event
@@ -524,14 +552,13 @@ ETAF generation and preserve the mounted surface invariant."
           etaf-performance-evaluator-fixture-size)
          (etaf-research-shelf-page-size etaf-performance-evaluator-page-size)
          (etaf-performance-max-records 10000)
-         results runtime trace-records overhead failures)
+         results runtime trace-records trace-scenarios overhead failures)
     (unwind-protect
         (progn
           (etaf-performance-evaluator--prepare-database database)
           (etaf-performance-evaluator--verify-runtime-accelerator)
           ;; Latency samples measure the product path without observer work.
           ;; Trace behavior and overhead have separate, explicit gates below.
-          (etaf-performance-mode -1)
           (etaf-performance-clear)
           (push
            (etaf-performance-evaluator--measure
@@ -691,29 +718,101 @@ ETAF generation and preserve the mounted surface invariant."
           ;; Capture one representative cross-package trace after the latency
           ;; samples.  This validates coverage without folding observer work
           ;; into the product latency distribution.
-          (etaf-performance-mode 1)
+          (etaf-performance-start runtime)
           (etaf-performance-clear)
-          (etaf-performance-evaluator--select-ref
-           runtime 'research-shelf-row-1)
-          (etaf-performance-evaluator--select-ref
-           runtime 'research-shelf-row-2)
-          (etaf-dispatch-event runtime 'research-shelf-theme-toggle 'press)
-          (etaf-dispatch-event runtime 'research-shelf-theme-toggle 'press)
-          (etaf-dispatch-event runtime 'research-shelf-filter-reading 'press)
-          (etaf-dispatch-event runtime 'research-shelf-filter-all 'press)
-          (etaf-dispatch-event runtime 'research-shelf-page-next 'press)
-          (etaf-dispatch-event runtime 'research-shelf-page-previous 'press)
-          (etaf-dispatch-event runtime 'research-shelf-add 'press)
-          (etaf-dispatch-event runtime 'research-shelf-reload 'press)
-          (etaf-performance-evaluator--select-ref
-           runtime 'research-shelf-row-2)
-          (etaf-dispatch-event runtime 'research-shelf-progress 'press)
-          (etaf-focus-next runtime)
+          (push
+           (etaf-performance-evaluator--trace-scenario
+            runtime "row-selection"
+            (lambda ()
+              (etaf-performance-evaluator--select-ref
+               runtime 'research-shelf-row-2))
+            (lambda (ref)
+              (unless (string-match-p
+                       "selected"
+                       (or (plist-get
+                            (etaf-runtime-host-props-for runtime ref) :class)
+                           ""))
+                (error "Trace row-selection product invariant failed"))))
+           trace-scenarios)
+          (push
+           (etaf-performance-evaluator--trace-scenario
+            runtime "theme-toggle"
+            (lambda ()
+              (etaf-dispatch-event
+               runtime 'research-shelf-theme-toggle 'press))
+            (lambda (_result)
+              (unless (etaf-performance-evaluator--visible-match-p
+                       buffer "\\(Dark theme\\|Light theme\\)")
+                (error "Trace theme-toggle product invariant failed"))))
+           trace-scenarios)
+          (push
+           (etaf-performance-evaluator--trace-scenario
+            runtime "reload"
+            (lambda ()
+              (etaf-dispatch-event runtime 'research-shelf-reload 'press))
+            (lambda (_result)
+              (unless (etaf-performance-evaluator--visible-match-p
+                       buffer "Library reloaded")
+                (error "Trace reload product invariant failed"))))
+           trace-scenarios)
+          (let* ((previous (ebox-buffer-update-report (get-buffer buffer)))
+                 (target
+                  (if (= (or (plist-get previous :target-viewport-width) 720)
+                         720)
+                      1413
+                    720)))
+            (push
+             (etaf-performance-evaluator--trace-scenario
+              runtime "viewport-resize"
+              (lambda ()
+                (list target
+                      (ebox-rerender-buffer-with-context
+                       (get-buffer buffer) target 62)))
+              (lambda (result)
+                (let ((report (cadr result)))
+                  (unless (and (= (plist-get report :target-viewport-width)
+                                  (car result))
+                               (plist-get report :runtime-published))
+                    (error
+                     "Trace viewport-resize product invariant failed")))))
+             trace-scenarios))
+          (push
+           (etaf-performance-evaluator--trace-scenario
+            runtime "post-resize-row-selection"
+            (lambda ()
+              (etaf-performance-evaluator--select-ref
+               runtime 'research-shelf-row-1))
+            (lambda (ref)
+              (unless (string-match-p
+                       "selected"
+                       (or (plist-get
+                            (etaf-runtime-host-props-for runtime ref) :class)
+                           ""))
+                (error "Trace post-resize action invariant failed"))))
+           trace-scenarios)
+          (dolist (scenario trace-scenarios)
+            (unless (etaf-performance-operation-p (cadr scenario))
+              (error "Trace scenario %s lacks a retained operation"
+                     (car scenario))))
+          (let* ((row-operation
+                  (cadr (assoc "row-selection" trace-scenarios)))
+                 (reload-operation
+                  (cadr (assoc "reload" trace-scenarios)))
+                 (row-providers
+                  (mapcar #'etaf-performance-stage-provider
+                          (etaf-performance-operation-stages row-operation)))
+                 (reload-providers
+                  (mapcar #'etaf-performance-stage-provider
+                          (etaf-performance-operation-stages reload-operation))))
+            (unless (equal row-providers '(tp ebox etaf))
+              (error "Trace row-selection providers are %S" row-providers))
+            (unless (memq 'sqlite reload-providers)
+              (error "Trace reload lacks SQLite attribution")))
           (setq results (nreverse results)
                 trace-records (etaf-performance-records))
           (etaf-performance-evaluator--verify-trace-records trace-records)
           (etaf-performance-evaluator--print-slowest-records trace-records)
-          (etaf-performance-mode -1)
+          (etaf-performance-stop runtime)
           (setq overhead
                 (etaf-performance-evaluator--measure-overhead runtime buffer)
                 failures (etaf-performance-evaluator--latency-failures results))
@@ -731,7 +830,8 @@ ETAF generation and preserve the mounted surface invariant."
                 (error "Cross-package performance gate failed (%d conditions)"
                        failure-count))
             (princ "etaf-cross-package-perf PASS\n") t))
-      (etaf-performance-mode -1)
+      (when runtime
+        (etaf-performance-stop runtime))
       (etaf-performance-evaluator--close-buffer mount-buffer)
       (etaf-performance-evaluator--close-buffer buffer)
       (when (file-exists-p database) (delete-file database)))))

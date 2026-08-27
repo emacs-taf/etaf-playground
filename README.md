@@ -61,7 +61,12 @@ The companion registers `:reload-on-refresh t`, so saving the `.el`, `.etaf`, or
 mount.
 
 Run `make check EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs`.
-Run `make perf` for the 1413×62 warm row-selection/theme latency gate.
+Run `make perf` for the fixed 1413×62 latency gate. Every scenario performs
+five unmeasured warmups followed by 30 measured samples; both p95 and max must
+remain at or below 50ms, including Theme and post-resize interactions.
+For repeated absolute-latency runs, use `make perf-prepare` once after source
+changes, let compilation activity settle, then run `make perf-evaluator` without
+rebuilding the dependency graph.
 
 The bundled Research Shelf example installs a deterministic 256-record SQLite
 fixture with 12 records per page. Bind `etaf-research-shelf-fixture-size` and

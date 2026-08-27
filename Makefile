@@ -8,7 +8,7 @@ EXAMPLES := $(ENTRY_EXAMPLES)
 EXAMPLE_ELC := $(EXAMPLES:.el=.elc)
 TEST_FILES := $(wildcard tests/*-tests.el)
 
-.PHONY: all compile examples-read test perf perf-evaluator perf-regressions \
+.PHONY: all compile examples-read test perf perf-prepare perf-evaluator perf-regressions \
 	perf-check check checkdoc load clean
 
 all: check
@@ -41,12 +41,19 @@ test: examples-read
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
 		$(foreach test,$(TEST_FILES),-l $(test)) -f ert-run-tests-batch-and-exit
 
-perf: perf-evaluator
+perf:
+	$(MAKE) perf-prepare EMACS="$(EMACS)"
+	$(MAKE) perf-evaluator EMACS="$(EMACS)"
 
-perf-evaluator: compile
+perf-prepare: compile
 	$(MAKE) -C ../ebox native-build EMACS="$(EMACS)" ECSS_DIR=../ecss TP_DIR=../tp
+
+# Run only the already-built product.  This separate target lets an absolute
+# max-latency sample start after compilation CPU activity has settled.
+perf-evaluator:
 	EBOX_NATIVE_REFLOW_MODULE_PATH="$(EBOX_NATIVE_RELEASE_DIR)" \
-	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
+	$(EMACS) -Q --batch $(LOAD_PATH) \
+		--eval '(setq load-prefer-newer t native-comp-jit-compilation nil)' \
 		--eval '(setq ebox-native-reflow-module-path (getenv "EBOX_NATIVE_REFLOW_MODULE_PATH"))' \
 		-l scripts/benchmark-research-shelf.el \
 		-f etaf-performance-evaluator-batch
@@ -66,7 +73,7 @@ perf-regressions:
 # Measure absolute latency before the CPU-heavy regression graph.  Regressions
 # still gate the same target, but cannot thermally contaminate product samples.
 perf-check:
-	$(MAKE) perf-evaluator EMACS="$(EMACS)"
+	$(MAKE) perf EMACS="$(EMACS)"
 	$(MAKE) perf-regressions EMACS="$(EMACS)"
 
 load: compile
