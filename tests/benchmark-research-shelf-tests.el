@@ -69,7 +69,9 @@
   (should-not
    (etaf-performance-evaluator--latency-failures
     '(("theme-toggle" :count 20 :min 80.0 :p50 84.0
-                      :p95 86.0 :max 99.0))))
+                      :p95 86.0 :max 99.0)
+      ("post-resize-theme-toggle" :count 20 :min 80.0 :p50 84.0
+                                  :p95 86.0 :max 99.0))))
   (should (= 2
              (length
               (etaf-performance-evaluator--latency-failures

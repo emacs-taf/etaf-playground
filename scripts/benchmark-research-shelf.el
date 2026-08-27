@@ -22,7 +22,8 @@
 (defconst etaf-performance-evaluator-sample-count 20)
 (defconst etaf-performance-evaluator-latency-budget-ms 50.0)
 (defconst etaf-performance-evaluator-scenario-budgets-ms
-  '(("theme-toggle" :p95 90.0 :max 110.0))
+  '(("theme-toggle" :p95 90.0 :max 110.0)
+    ("post-resize-theme-toggle" :p95 90.0 :max 110.0))
   "User-approved scenario budgets overriding the default latency budget.")
 (defconst etaf-performance-evaluator-overhead-budget-ms 2.0)
 (defconst etaf-performance-evaluator-fixture-size 256)
@@ -342,6 +343,174 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
                      failures))
              (nreverse failures))))
 
+(defun etaf-performance-evaluator--visible-item-count (buffer)
+  "Return the item count rendered in BUFFER, or nil."
+  (let ((text (etaf-performance-evaluator--text buffer)))
+    (when (string-match "\\([0-9]+\\) items" text)
+      (string-to-number (match-string 1 text)))))
+
+(defun etaf-performance-evaluator--visible-page (buffer)
+  "Return BUFFER's rendered `(CURRENT . TOTAL)' page pair, or nil."
+  (let ((text (etaf-performance-evaluator--text buffer)))
+    (when (string-match "Page \\([0-9]+\\) / \\([0-9]+\\)" text)
+      (cons (string-to-number (match-string 1 text))
+            (string-to-number (match-string 2 text))))))
+
+(cl-defun etaf-performance-evaluator--measure-event
+    (label runtime buffer action verify &key setup)
+  "Measure one public event ACTION under LABEL and run VERIFY.
+ACTION and VERIFY receive the sample index.  Every sample must advance the
+ETAF generation and preserve the mounted surface invariant."
+  (etaf-performance-evaluator--measure
+   label
+   (lambda (index)
+     (let ((before (etaf-runtime-generation runtime)))
+       (list before
+             (progn (funcall action index)
+                    (etaf-runtime-generation runtime)))))
+   (lambda (result index)
+     (unless (> (car result) -1)
+       (error "%s: invalid source generation" label))
+     (unless (> (cadr result) (car result))
+       (error "%s: event did not advance the generation" label))
+     (funcall verify index)
+     (etaf-performance-evaluator--surface-invariant runtime buffer label))
+   :setup setup))
+
+(defun etaf-performance-evaluator--measure-add
+    (label runtime buffer)
+  "Measure the public Add action under LABEL."
+  (let (before-count)
+    (etaf-performance-evaluator--measure-event
+     label runtime buffer
+     (lambda (_index)
+       (setq before-count
+             (etaf-performance-evaluator--visible-item-count buffer))
+       (etaf-dispatch-event runtime 'research-shelf-add 'press))
+     (lambda (_index)
+       (unless (and before-count
+                    (= (1+ before-count)
+                       (etaf-performance-evaluator--visible-item-count buffer))
+                    (etaf-performance-evaluator--visible-match-p
+                     buffer "Added to your shelf"))
+         (error "%s: insertion/count/toast invariant failed" label))))))
+
+(defun etaf-performance-evaluator--measure-reload
+    (label runtime buffer)
+  "Measure the public Reload action under LABEL."
+  (etaf-performance-evaluator--measure-event
+   label runtime buffer
+   (lambda (_index)
+     (etaf-dispatch-event runtime 'research-shelf-reload 'press))
+   (lambda (_index)
+     (unless (etaf-performance-evaluator--visible-match-p
+              buffer "Library reloaded")
+       (error "%s: reload toast invariant failed" label)))))
+
+(defun etaf-performance-evaluator--measure-viewport-resize
+    (runtime buffer)
+  "Measure alternating wide/compact viewport publications for BUFFER."
+  (let ((target-buffer (get-buffer buffer)))
+    (unless (buffer-live-p target-buffer)
+      (error "Viewport-resize: target buffer is not live"))
+    (etaf-performance-evaluator--measure
+     "viewport-resize"
+     (lambda (index)
+       (let* ((target (if (zerop (% (1+ index) 2)) 720 1413))
+              (report
+               (ebox-rerender-buffer-with-context target-buffer target 62)))
+         (list target report)))
+     (lambda (result _index)
+       (let* ((target (car result))
+              (report (cadr result)))
+         (unless (and (= (plist-get report :target-viewport-width) target)
+                      (eq (plist-get report :projection-kind) 'native-frame)
+                      (plist-get report :runtime-published)
+                      (not (plist-get report :tp-full-root))
+                      (not (plist-get report :tp-scope-fallback)))
+           (error "Viewport-resize: retained native publication failed"))
+         (etaf-performance-evaluator--surface-invariant
+          runtime buffer "viewport-resize"))))))
+
+(defun etaf-performance-evaluator--measure-post-resize-events
+    (runtime buffer)
+  "Return post-resize row/theme/filter/page/Add/Reload measurements."
+  (let (results)
+    (push
+     (etaf-performance-evaluator--measure-event
+      "post-resize-row-selection" runtime buffer
+      (lambda (index)
+        (etaf-performance-evaluator--select-ref
+         runtime (if (zerop (% (1+ index) 2))
+                     'research-shelf-row-1
+                   'research-shelf-row-2)))
+      (lambda (index)
+        (let ((ref (if (zerop (% (1+ index) 2))
+                       'research-shelf-row-1
+                     'research-shelf-row-2)))
+          (unless (string-match-p
+                   "selected"
+                   (or (plist-get
+                        (etaf-runtime-host-props-for runtime ref) :class)
+                       ""))
+            (error "Post-resize row selection invariant failed")))))
+     results)
+    (push
+     (etaf-performance-evaluator--measure-event
+      "post-resize-theme-toggle" runtime buffer
+      (lambda (_index)
+        (etaf-dispatch-event runtime 'research-shelf-theme-toggle 'press))
+      (lambda (_index)
+        (unless (etaf-performance-evaluator--visible-match-p
+                 buffer "\\(Dark theme\\|Light theme\\)")
+          (error "Post-resize theme invariant failed"))))
+     results)
+    (push
+     (etaf-performance-evaluator--measure-event
+      "post-resize-filter-query" runtime buffer
+      (lambda (index)
+        (etaf-dispatch-event
+         runtime
+         (if (zerop (% (1+ index) 2))
+             'research-shelf-filter-reading
+           'research-shelf-filter-all)
+         'press))
+      (lambda (index)
+        (unless (etaf-performance-evaluator--visible-match-p
+                 buffer
+                 (if (zerop (% (1+ index) 2))
+                     "Showing Reading"
+                   "Showing All"))
+          (error "Post-resize filter invariant failed"))))
+     results)
+    (etaf-dispatch-event runtime 'research-shelf-filter-all 'press)
+    (push
+     (etaf-performance-evaluator--measure-event
+      "post-resize-pagination" runtime buffer
+      (lambda (_index)
+        (pcase-let ((`(,current . ,_total)
+                     (etaf-performance-evaluator--visible-page buffer)))
+          (etaf-dispatch-event
+           runtime
+           (if (= current 1)
+               'research-shelf-page-next
+             'research-shelf-page-previous)
+           'press)))
+      (lambda (_index)
+        (unless (etaf-performance-evaluator--visible-page buffer)
+          (error "Post-resize pagination invariant failed"))))
+     results)
+    (when-let* ((page (etaf-performance-evaluator--visible-page buffer)))
+      (unless (= (car page) 1)
+        (etaf-dispatch-event runtime 'research-shelf-page-previous 'press)))
+    (push (etaf-performance-evaluator--measure-add
+           "post-resize-add-reading" runtime buffer)
+          results)
+    (push (etaf-performance-evaluator--measure-reload
+           "post-resize-reload" runtime buffer)
+          results)
+    (nreverse results)))
+
 (defun etaf-performance-evaluator-run ()
   "Run the fixed cross-package evaluator and return non-nil on success."
   (etaf-performance-evaluator--load-workload)
@@ -502,6 +671,23 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
                runtime buffer "focus-navigation")))
            results)
 
+          (push
+           (etaf-performance-evaluator--measure-add
+            "add-reading" runtime buffer)
+           results)
+          (push
+           (etaf-performance-evaluator--measure-reload
+            "reload" runtime buffer)
+           results)
+          (push
+           (etaf-performance-evaluator--measure-viewport-resize
+            runtime buffer)
+           results)
+          (dolist (result
+                   (etaf-performance-evaluator--measure-post-resize-events
+                    runtime buffer))
+            (push result results))
+
           ;; Capture one representative cross-package trace after the latency
           ;; samples.  This validates coverage without folding observer work
           ;; into the product latency distribution.
@@ -517,6 +703,8 @@ never included in SAMPLES.  ACTION's result is passed to VERIFY and CLEANUP."
           (etaf-dispatch-event runtime 'research-shelf-filter-all 'press)
           (etaf-dispatch-event runtime 'research-shelf-page-next 'press)
           (etaf-dispatch-event runtime 'research-shelf-page-previous 'press)
+          (etaf-dispatch-event runtime 'research-shelf-add 'press)
+          (etaf-dispatch-event runtime 'research-shelf-reload 'press)
           (etaf-performance-evaluator--select-ref
            runtime 'research-shelf-row-2)
           (etaf-dispatch-event runtime 'research-shelf-progress 'press)
