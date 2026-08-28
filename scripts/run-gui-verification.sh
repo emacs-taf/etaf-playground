@@ -55,18 +55,8 @@ prepare_fixture() {
         research-shelf)
             SCENARIO_FIXTURE=""
             ;;
-        grid-reference)
-            SCENARIO_FIXTURE="$REPOS_DIR/ebox-playground/examples/grid-reference.ebox"
-            ;;
-        flex-reference)
-            SCENARIO_FIXTURE_ROOT="$SCENARIO_RUN_DIR/fixture"
-            mkdir -p "$SCENARIO_FIXTURE_ROOT"
-            git -C "$REPOS_DIR/ebox-playground" archive \
-                --format=tar --output="$SCENARIO_RUN_DIR/flex-fixture.tar" \
-                HEAD examples/flex-reference.ebox
-            tar -xf "$SCENARIO_RUN_DIR/flex-fixture.tar" \
-                -C "$SCENARIO_FIXTURE_ROOT"
-            SCENARIO_FIXTURE="$SCENARIO_FIXTURE_ROOT/examples/flex-reference.ebox"
+        flex-reference|grid-reference)
+            SCENARIO_FIXTURE="$REPOS_DIR/ebox-playground/examples/$SCENARIO_NAME.ebox"
             ;;
         *) usage ;;
     esac

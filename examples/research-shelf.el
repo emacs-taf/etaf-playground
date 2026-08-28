@@ -699,7 +699,7 @@ slot has a reusable built-in fallback for direct composition."
   :view
   (column
          :class "research-shelf-shell" :width '(viewport)
-          :height 'auto :min-height '(viewport-height)
+          :height '(viewport-height)
           :color (etaf-theme-token :ink)
           :bgcolor (etaf-theme-token :paper)
    (slot :name 'header

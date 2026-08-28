@@ -464,8 +464,8 @@ database and mounts a test buffer before running BODY."
      '(:viewport-width 900 :viewport-height 40))
     (let* ((state (ebox--buffer-render-state (get-buffer buffer)))
            (root (plist-get state :root-node)))
-      (should (eq (plist-get root :height) 'auto))
-      (should (equal (plist-get root :min-height) '(viewport-height)))
+      (should (equal (plist-get root :height) '(viewport-height)))
+      (should (= (plist-get root :min-height) 0))
       (should-not (plist-get state :scroll-region-ids)))))
 
 (ert-deftest etaf-playground-fixture-supports-realistic-page-counts ()

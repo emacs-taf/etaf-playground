@@ -85,9 +85,10 @@ Each scenario creates a unique named daemon, disables native-comp JIT, loads
 the sibling repositories explicitly, creates one GUI frame, activates Emacs
 from the controlling shell, records through a PTY-backed macOS screen recorder,
 runs mount/resize/scroll/interaction checkpoints, writes screenshots and a
-manifest, then shuts down every process it created. Flex is always extracted
-from the committed `ebox-playground` HEAD, so a user's dirty fixture is never
-read, overwritten, staged, or restored.
+manifest, then shuts down every process it created. Flex and Grid are read from
+their current `ebox-playground` working files so the gate verifies the exact
+code a user is testing. The runner never writes, stages, restores, or otherwise
+mutates either fixture.
 
 A fresh capture intentionally reports `INCOMPLETE` until a human or agent has
 inspected `report.md`, `contact-sheet.png`, and its selected endpoint images.

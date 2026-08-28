@@ -81,8 +81,9 @@ scenario factory 的两个输入。增加新应用时不会复制第二套 daemo
 每个场景都会创建唯一命名 daemon，关闭 native-comp JIT，显式加载 sibling 仓库，
 创建单一 GUI frame，由外层 shell 激活 Emacs，通过保留 PTY 的 macOS recorder 录屏，
 依次执行 mount/resize/scroll/interaction checkpoint，生成 screenshot 与 manifest，最后
-清理自己创建的全部进程。Flex 始终从已提交的 `ebox-playground` HEAD 解包，绝不读取、
-覆盖、暂存或 restore 用户的脏 fixture。
+清理自己创建的全部进程。Flex 与 Grid 直接读取 `ebox-playground` 当前工作文件，确保
+门禁验证的就是用户正在测试的代码；runner 绝不写入、暂存、恢复或以其他方式修改
+这两个 fixture。
 
 新采集有意保持 `INCOMPLETE`，直到人或 agent 检查 `report.md`、
 `contact-sheet.png` 和报告选出的首尾图。完成时序审查后，对同一个 run directory
