@@ -259,7 +259,16 @@ VERIFY and CLEANUP."
                (etaf-performance-operation-kind operation)
                (etaf-performance-operation-label operation)
                (etaf-performance-operation-elapsed operation)
-               gc-count gc-ms stages))))))
+               gc-count gc-ms stages))
+      (dolist (stage (etaf-performance-operation-stages operation))
+        (princ
+         (format
+          "perf-stage id=%d provider=%s name=%s duration=%.3fms metadata=%S\n"
+          (etaf-performance-operation-id operation)
+          (etaf-performance-stage-provider stage)
+          (etaf-performance-stage-name stage)
+          (etaf-performance-stage-duration stage)
+          (etaf-performance-stage-metadata stage))))))))
 
 (defun etaf-performance-evaluator--select-ref (runtime ref)
   "Select workload row REF through RUNTIME's public event path."
@@ -790,6 +799,40 @@ ETAF generation and preserve RUNTIME's mounted surface in BUFFER."
                            ""))
                 (error "Trace post-resize action invariant failed"))))
            trace-scenarios)
+          (push
+           (etaf-performance-evaluator--trace-scenario
+            runtime "progress-mutation"
+            (lambda ()
+              (etaf-dispatch-event
+               runtime 'research-shelf-progress 'press))
+            (lambda (_result)
+              (unless (etaf-performance-evaluator--visible-match-p
+                       buffer "Progress saved")
+                (error "Trace progress mutation invariant failed"))))
+           trace-scenarios)
+          (push
+           (etaf-performance-evaluator--trace-scenario
+            runtime "filter-query"
+            (lambda ()
+              (etaf-dispatch-event
+               runtime 'research-shelf-filter-reading 'press))
+            (lambda (_result)
+              (unless (etaf-performance-evaluator--visible-match-p
+                       buffer "Showing Reading")
+                (error "Trace filter query invariant failed"))))
+           trace-scenarios)
+          (push
+           (etaf-performance-evaluator--trace-scenario
+            runtime "pagination"
+            (lambda ()
+              (etaf-dispatch-event
+               runtime 'research-shelf-page-next 'press))
+            (lambda (_result)
+              (unless (equal (car (etaf-performance-evaluator--visible-page
+                                   buffer))
+                             2)
+                (error "Trace pagination invariant failed"))))
+           trace-scenarios)
           (dolist (scenario trace-scenarios)
             (unless (etaf-performance-operation-p (cadr scenario))
               (error "Trace scenario %s lacks a retained operation"
@@ -813,6 +856,12 @@ ETAF generation and preserve RUNTIME's mounted surface in BUFFER."
           (etaf-performance-evaluator--verify-trace-records trace-records)
           (etaf-performance-evaluator--print-slowest-records trace-records)
           (etaf-performance-stop runtime)
+          (etaf-dispatch-event
+           runtime 'research-shelf-filter-all 'press)
+          (when-let* ((page (etaf-performance-evaluator--visible-page buffer)))
+            (unless (= (car page) 1)
+              (etaf-dispatch-event
+               runtime 'research-shelf-page-previous 'press)))
           (setq overhead
                 (etaf-performance-evaluator--measure-overhead runtime buffer)
                 failures (etaf-performance-evaluator--latency-failures results))
