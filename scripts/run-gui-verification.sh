@@ -1,0 +1,122 @@
+#!/bin/sh
+
+set -eu
+
+PLAYGROUND_SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
+PLAYGROUND_DIR=$(dirname "$PLAYGROUND_SCRIPT_DIR")
+REPOS_DIR=$(dirname "$PLAYGROUND_DIR")
+GENERIC_RUNNER="$REPOS_DIR/etaf/scripts/run-emacs-gui-verification.sh"
+SCENARIO_ADAPTER="$PLAYGROUND_SCRIPT_DIR/playground-gui-scenarios.el"
+SCENARIO_ENTRY=etaf-playground-gui-scenarios-run-from-environment
+
+usage() {
+    echo "usage:" >&2
+    echo "  $0 doctor" >&2
+    echo "  $0 review RUN_DIR" >&2
+    echo "  $0 all [--run-dir DIRECTORY]" >&2
+    echo "  $0 research-shelf|flex-reference|grid-reference [--run-dir DIRECTORY]" >&2
+    exit 2
+}
+
+doctor() {
+    [ -x "$GENERIC_RUNNER" ] || {
+        echo "generic GUI runner is unavailable: $GENERIC_RUNNER" >&2
+        exit 1
+    }
+    [ -f "$SCENARIO_ADAPTER" ] || {
+        echo "Playground scenario adapter is unavailable: $SCENARIO_ADAPTER" >&2
+        exit 1
+    }
+    "$GENERIC_RUNNER" doctor
+    echo "PLAYGROUND-GUI-ADAPTER DOCTOR PASS"
+}
+
+parse_run_dir() {
+    SCENARIO_RUN_DIR=""
+    while [ "$#" -gt 0 ]; do
+        case $1 in
+            --run-dir)
+                [ "$#" -ge 2 ] || usage
+                SCENARIO_RUN_DIR=$2
+                shift 2
+                ;;
+            *) usage ;;
+        esac
+    done
+    if [ -z "$SCENARIO_RUN_DIR" ]; then
+        SCENARIO_RUN_DIR=$(mktemp -d /private/tmp/etaf-playground-gui.XXXXXX)
+    else
+        mkdir -p "$SCENARIO_RUN_DIR"
+    fi
+}
+
+prepare_fixture() {
+    case $SCENARIO_NAME in
+        research-shelf)
+            SCENARIO_FIXTURE=""
+            ;;
+        grid-reference)
+            SCENARIO_FIXTURE="$REPOS_DIR/ebox-playground/examples/grid-reference.ebox"
+            ;;
+        flex-reference)
+            SCENARIO_FIXTURE_ROOT="$SCENARIO_RUN_DIR/fixture"
+            mkdir -p "$SCENARIO_FIXTURE_ROOT"
+            git -C "$REPOS_DIR/ebox-playground" archive \
+                --format=tar --output="$SCENARIO_RUN_DIR/flex-fixture.tar" \
+                HEAD examples/flex-reference.ebox
+            tar -xf "$SCENARIO_RUN_DIR/flex-fixture.tar" \
+                -C "$SCENARIO_FIXTURE_ROOT"
+            SCENARIO_FIXTURE="$SCENARIO_FIXTURE_ROOT/examples/flex-reference.ebox"
+            ;;
+        *) usage ;;
+    esac
+}
+
+run_scenario() {
+    doctor >/dev/null
+    prepare_fixture
+    export ETAF_GUI_SCENARIO="$SCENARIO_NAME"
+    export ETAF_GUI_FIXTURE="$SCENARIO_FIXTURE"
+    "$GENERIC_RUNNER" run "$SCENARIO_ADAPTER" "$SCENARIO_ENTRY" \
+        --run-dir "$SCENARIO_RUN_DIR" \
+        --load-path "$REPOS_DIR/tp" \
+        --load-path "$REPOS_DIR/ecss" \
+        --load-path "$REPOS_DIR/ebox" \
+        --load-path "$REPOS_DIR/etaf" \
+        --load-path "$REPOS_DIR/etaf-ui" \
+        --load-path "$REPOS_DIR/etaf-sqlite" \
+        --load-path "$REPOS_DIR/ebox-playground" \
+        --load-path "$REPOS_DIR/ebox-playground/scripts" \
+        --load-path "$PLAYGROUND_DIR" \
+        --load-path "$PLAYGROUND_SCRIPT_DIR" \
+        --load-path "$PLAYGROUND_DIR/examples"
+}
+
+[ "$#" -ge 1 ] || usage
+COMMAND=$1
+shift
+
+case $COMMAND in
+    doctor)
+        [ "$#" -eq 0 ] || usage
+        doctor
+        ;;
+    review)
+        [ "$#" -eq 1 ] || usage
+        "$GENERIC_RUNNER" review "$1"
+        ;;
+    all)
+        parse_run_dir "$@"
+        ALL_RUN_ROOT=$SCENARIO_RUN_DIR
+        for SCENARIO_ITEM in research-shelf flex-reference grid-reference; do
+            "$0" "$SCENARIO_ITEM" --run-dir "$ALL_RUN_ROOT/$SCENARIO_ITEM"
+        done
+        echo "PLAYGROUND-GUI ALL CAPTURED root=$ALL_RUN_ROOT"
+        ;;
+    research-shelf|flex-reference|grid-reference)
+        SCENARIO_NAME=$COMMAND
+        parse_run_dir "$@"
+        run_scenario
+        ;;
+    *) usage ;;
+esac

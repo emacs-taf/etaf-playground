@@ -60,6 +60,47 @@ The companion registers `:reload-on-refresh t`, so saving the `.el`, `.etaf`, or
 `.ecss` source and refreshing reloads the complete consumer before the next
 mount.
 
+## Repeatable Emacs 31.1 GUI verification
+
+The repository owns one stable real-GUI runner instead of relying on ad-hoc
+`emacsclient`, focus, and recording commands:
+
+```sh
+make gui-doctor
+make gui-research
+make gui-flex
+make gui-grid
+# Or capture all three sequentially:
+make gui-all
+```
+
+The reusable engine and process runner live in `../etaf/scripts/`. They know
+only Scenario, Action, Context, checkpoint, recording, and evidence contracts.
+`scripts/playground-gui-scenarios.el` is a thin adapter layer: Research Shelf
+defines its application actions, while Flex and Grid are two inputs to the same
+Ebox reference scenario factory. Adding another application does not create a
+second daemon/recording/checkpoint implementation.
+
+Each scenario creates a unique named daemon, disables native-comp JIT, loads
+the sibling repositories explicitly, creates one GUI frame, activates Emacs
+from the controlling shell, records through a PTY-backed macOS screen recorder,
+runs mount/resize/scroll/interaction checkpoints, writes screenshots and a
+manifest, then shuts down every process it created. Flex is always extracted
+from the committed `ebox-playground` HEAD, so a user's dirty fixture is never
+read, overwritten, staged, or restored.
+
+A fresh capture intentionally reports `INCOMPLETE` until a human or agent has
+inspected `report.md`, `contact-sheet.png`, and its selected endpoint images.
+After that temporal review, finalize the exact run directory:
+
+```sh
+scripts/run-gui-verification.sh review /private/tmp/etaf-playground-gui.XXXXXX
+```
+
+Only `VERDICT=PASS` is valid GUI evidence. Assertion failure, a black segment,
+missing recording, wrong buffer, split window, stale frame, or missing temporal
+review remains fail-closed.
+
 Run `make check EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs`.
 Run `make perf` for the fixed 1413×62 latency gate. Every scenario performs
 five unmeasured warmups followed by 30 measured samples; both p95 and max must

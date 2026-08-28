@@ -1,5 +1,5 @@
 EMACS ?= emacs
-LOAD_PATH = -L . -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-sqlite
+LOAD_PATH = -L . -L scripts -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-sqlite
 EBOX_NATIVE_RELEASE_DIR = $(shell $(EMACS) -Q --batch $(LOAD_PATH) \
 	--eval '(setq load-prefer-newer t)' -l ../ebox/ebox-native-reflow.el \
 	--eval '(princ (expand-file-name (format "../ebox/native/target/%s/release/" (ebox-native-reflow--rust-target))))')
@@ -9,7 +9,8 @@ EXAMPLE_ELC := $(EXAMPLES:.el=.elc)
 TEST_FILES := $(wildcard tests/*-tests.el)
 
 .PHONY: all compile examples-read test perf perf-prepare perf-evaluator perf-regressions \
-	perf-check check checkdoc load clean
+	perf-check gui-doctor gui-research gui-flex gui-grid gui-all \
+	check checkdoc load clean
 
 all: check
 
@@ -23,12 +24,14 @@ compile:
 	$(MAKE) -C ../etaf compile EMACS="$(EMACS)"
 	$(MAKE) -C ../etaf-ui compile EMACS="$(EMACS)"
 	$(MAKE) -C ../etaf-sqlite compile EMACS="$(EMACS)"
-	rm -f *.elc tests/*.elc $(EXAMPLE_ELC)
-	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
+	rm -f *.elc scripts/*.elc tests/*.elc $(EXAMPLE_ELC)
+	$(EMACS) -Q --batch $(LOAD_PATH) -L ../etaf/scripts -L ../ebox-playground \
+		--eval "(setq load-prefer-newer t byte-compile-error-on-warn t byte-compile-warnings '(not obsolete))" \
 		--eval '(load-file "etaf-playground.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(ENTRY_EXAMPLES),"$(file)")))) (load-file file))' \
 		--eval '(dolist (file (quote ($(foreach file,$(EXAMPLES),"$(file)")))) (byte-compile-file file))' \
 		--eval '(byte-compile-file "etaf-playground.el")' \
+		--eval '(byte-compile-file "scripts/playground-gui-scenarios.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(TEST_FILES),"$(file)")))) (byte-compile-file file))'
 
 examples-read: compile
@@ -76,14 +79,29 @@ perf-check:
 	$(MAKE) perf EMACS="$(EMACS)"
 	$(MAKE) perf-regressions EMACS="$(EMACS)"
 
+gui-doctor:
+	scripts/run-gui-verification.sh doctor
+
+gui-research:
+	scripts/run-gui-verification.sh research-shelf
+
+gui-flex:
+	scripts/run-gui-verification.sh flex-reference
+
+gui-grid:
+	scripts/run-gui-verification.sh grid-reference
+
+gui-all:
+	scripts/run-gui-verification.sh all
+
 load: compile
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(require (quote etaf-playground))' \
 		--eval '(princ "etaf-playground load OK\\n")'
 
 checkdoc:
-	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "scripts/benchmark-research-shelf.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
+	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "scripts/benchmark-research-shelf.el" "scripts/playground-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
 
 check: checkdoc test
 
 clean:
-	rm -f *.elc tests/*.elc $(EXAMPLE_ELC)
+	rm -f *.elc scripts/*.elc tests/*.elc $(EXAMPLE_ELC)
