@@ -14,6 +14,10 @@
 (require 'benchmark-research-shelf)
 (require 'ebox-native-reflow)
 
+(defvar etaf-research-shelf-database-file)
+(defvar etaf-research-shelf-fixture-size)
+(defvar etaf-research-shelf-page-size)
+
 (defun etaf-playground-gui-scenarios--report (context)
   "Return CONTEXT target's public Ebox report, or nil before mount."
   (let ((buffer (etaf-gui-verifier-context-target-buffer context)))
@@ -261,8 +265,10 @@
        "scroll-reset" (= (window-start) (point-min)))))))
 
 (defun etaf-playground-gui-scenarios--research-event-action
-    (id reference postcondition &optional screenshot)
-  "Return Research action ID for REFERENCE, POSTCONDITION, and SCREENSHOT."
+    (id reference postcondition &optional screenshot assertion-name)
+  "Return Research action ID for REFERENCE and POSTCONDITION.
+When non-nil, SCREENSHOT requests visual evidence and ASSERTION-NAME names the
+product-specific postcondition in the evidence stream."
   (etaf-gui-verifier-action-create
    :id id
    :execute
@@ -304,7 +310,7 @@
          "activated-host-focused"
          (equal reference (etaf-focused-host-ref runtime)))
         (etaf-gui-verifier-assert
-         "product-postcondition"
+         (or assertion-name "product-postcondition")
          (funcall postcondition context)))))
    :screenshot screenshot))
 
@@ -357,6 +363,22 @@
           "John Berger · Book"
           (etaf-playground-gui-scenarios--buffer-text context))))
       (etaf-playground-gui-scenarios--research-event-action
+       "data-mutation" 'research-shelf-progress
+       (lambda (context)
+         (let ((text
+                (etaf-playground-gui-scenarios--buffer-text context)))
+           (and (string-match-p "Progress saved" text)
+                (string-match-p "10%" text))))
+       t "progress-persisted")
+      (etaf-playground-gui-scenarios--research-event-action
+       "filter-reading" 'research-shelf-filter-reading
+       (lambda (context)
+         (let ((text
+                (etaf-playground-gui-scenarios--buffer-text context)))
+           (and (string-match-p "Showing Reading" text)
+                (string-match-p "Ways of Seeing" text))))
+       t "reading-filter-applied")
+      (etaf-playground-gui-scenarios--research-event-action
        "theme-toggle" 'research-shelf-theme-toggle
        (lambda (context)
          (string-match-p
@@ -374,7 +396,7 @@
       (etaf-playground-gui-scenarios--maximize-action))
      :completion
      (lambda (context)
-       (= (etaf-gui-verifier-context-action-count context) 10))))
+       (= (etaf-gui-verifier-context-action-count context) 12))))
 
 (defun etaf-playground-gui-scenarios-ebox (scenario fixture)
   "Return one Ebox SCENARIO adapter for FIXTURE."
@@ -431,6 +453,14 @@
          (run-directory (or (getenv "ETAF_GUI_RUN_DIR")
                             (error "ETAF_GUI_RUN_DIR is not configured")))
          (fixture (getenv "ETAF_GUI_FIXTURE"))
+         (_research-fixture
+          (when (equal scenario "research-shelf")
+            (setq etaf-research-shelf-database-file
+                  (expand-file-name "research-shelf.sqlite" run-directory)
+                  etaf-research-shelf-fixture-size 256
+                  etaf-research-shelf-page-size 12)
+            (when (file-exists-p etaf-research-shelf-database-file)
+              (delete-file etaf-research-shelf-database-file))))
          (adapter
           (pcase scenario
             ("research-shelf"

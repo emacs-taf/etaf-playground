@@ -226,17 +226,17 @@ user's prior local additions cannot collide with the generated dataset."
       :ui-disabled-border line
       :ui-button-primary-fg paper :ui-button-primary-bg accent
       :ui-button-primary-border accent
-      :ui-button-secondary-fg ink :ui-button-secondary-bg mint
+      :ui-button-secondary-fg ink :ui-button-secondary-bg mint-bg
       :ui-button-secondary-border mint
       :ui-button-ghost-fg ink :ui-button-ghost-bg panel
       :ui-button-ghost-border line
-      :ui-checkbox-enabled-fg ink :ui-checkbox-enabled-bg mint
+      :ui-checkbox-enabled-fg ink :ui-checkbox-enabled-bg mint-bg
       :ui-checkbox-enabled-border mint
       :ui-checkbox-disabled-fg muted :ui-checkbox-disabled-bg soft
       :ui-checkbox-disabled-border line
-      :ui-grid-border line :ui-grid-selected-fg mint
-      :ui-grid-selected-bg mint-bg
-      :ui-grid-error-fg coral :ui-pagination-muted-fg muted
+      :ui-table-border line :ui-table-selected-fg mint
+      :ui-table-selected-bg mint-bg
+      :ui-data-grid-error-fg coral :ui-pagination-muted-fg muted
       :ui-panel-fg ink :ui-panel-bg panel :ui-panel-border line))))
 
 ;;; ---------------------------------------------------------------------------
@@ -433,264 +433,302 @@ constructed.  When omitted, initialize it for direct programmatic callers."
           (or (and entry (plist-get (cdr entry) :label)) fallback)))))
 
 (etaf-define-component etaf-research-shelf-filter-button
-    (&key filter-key fallback ref)
+    (&key filter-key fallback)
   "Render one filter Button from inherited model and static filter Context."
   :setup
-  (let ((model (etaf-inject 'research-shelf-model nil t))
-        (form (etaf-inject 'research-shelf-filters nil t))
-        (filter-key (etaf-current-prop :filter-key))
-        (fallback (etaf-current-prop :fallback))
-        (ref (etaf-current-prop :ref)))
-    (lambda ()
-      (let ((active (eq filter-key (etaf-value (plist-get model :filter)))))
-        (etaf-view
-         (button :label
-                 (let ((label (etaf-research-shelf--filter-label
-                               form filter-key fallback)))
-                   (if active (concat "● " label) label))
-                 :ref ref :variant (if active 'secondary 'ghost)
-                 :on-press (lambda ()
-                             (etaf-dispatch 'etaf-research-shelf-filter
-                                            model filter-key))))))))
-
-(defun etaf-research-shelf--filter-view (model)
-  "Return the filter rail for MODEL and inherited filter Context."
-  (etaf-view
-   (column
-          :class "research-shelf-filter-rail" :width 'stretch :min-width 0
-           :flex-grow 1 :flex-shrink 1 :flex-basis '(220)
-           :padding '(1 1)
-           :border (etaf-theme-token :line)
-           :color (etaf-theme-token :ink)
-           :bgcolor (etaf-theme-token :panel)
-      (label :text "Library" :font-weight 'bold)
-      (label :text "VIEWS" :color (etaf-theme-token :muted))
-      (etaf-research-shelf-filter-button
-       :filter-key 'all :fallback "All" :ref 'research-shelf-filter-all)
-      (etaf-research-shelf-filter-button
-       :filter-key 'reading :fallback "In progress"
-       :ref 'research-shelf-filter-reading)
-      (etaf-research-shelf-filter-button
-       :filter-key 'unread :fallback "Unread" :ref 'research-shelf-filter-unread)
-      (etaf-research-shelf-filter-button
-       :filter-key 'finished :fallback "Finished"
-       :ref 'research-shelf-filter-finished)
-      (etaf-research-shelf-filter-button
-       :filter-key 'starred :fallback "★ Starred"
-       :ref 'research-shelf-filter-starred)
-      (box :height 1)
-      (label :text "STORAGE" :color (etaf-theme-token :muted))
-      (label :text (file-name-nondirectory
-                    (plist-get model :database-file)))
-      (button :label "↻ Reload library" :ref 'research-shelf-reload
-              :variant 'ghost
-              :on-press (lambda ()
-                          (etaf-dispatch 'etaf-research-shelf-reload
-                                         model))))))
-
-(defun etaf-research-shelf--reading-list-view (model form)
-  "Return the reading list for MODEL and static MAIN FORM."
-  (let ((controller (etaf-research-shelf--controller model)))
-    (etaf-view
-     (column
-             :class "research-shelf-list" :width 'stretch :min-width 0
-             :flex-grow 4 :flex-shrink 1 :flex-basis '(620)
-             :padding '(1 2)
-             :border (etaf-theme-token :line)
-             :bgcolor (etaf-theme-token :panel)
-      (flex
-             :width 'stretch :flex-wrap 'wrap :align-items 'center :gap '(1 (8))
-       (column
-              :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
-        (label :text (etaf-playground-static-value
-                      form :title "Reading queue") :font-weight 'bold)
-        (label :text (format "%d items · SQLite-backed"
-                            (or (etaf-value (etaf-data-total controller)) 0))
-               :color (etaf-theme-token :muted)))
-       (number-input :label "Rows"
-                     :value (etaf-value (etaf-data-page-size controller))
-                     :ref 'research-shelf-page-size :min 1 :max 100
-                     :on-change
-                     (lambda (next)
-                       (etaf-dispatch 'etaf-research-shelf-page-size
-                                      model next)))
-       (button :label "＋ Add reading" :ref 'research-shelf-add
-               :variant 'secondary
-               :on-press (lambda ()
-                           (etaf-dispatch 'etaf-research-shelf-add model))))
-      (data-grid
-       :controller controller
-       :columns etaf-research-shelf--grid-columns
-       :row-key #'etaf-research-shelf--item-id
-       :row-ref (lambda (row)
-                  (intern (format "research-shelf-row-%s"
-                                  (etaf-research-shelf--item-id row))))
-       :on-row-press
-       (lambda (row)
-         (etaf-data-select-one controller
-                               (etaf-research-shelf--item-id row)))
-       :loading-label "◷ Loading library…"
-       :error-label "⚠ Could not read the shelf. Use Reload.")
-      (etaf-pagination :controller controller
-       :previous-ref 'research-shelf-page-previous
-       :next-ref 'research-shelf-page-next
-       :color (etaf-theme-token :ink))))))
-
-(defun etaf-research-shelf--detail-view (model form)
-  "Return the selected record inspector for MODEL and static FORM."
-  (etaf-view
-   (column
-          :class "research-shelf-detail" :width 'stretch :min-width 0
-           :flex-grow 2 :flex-shrink 1 :flex-basis '(340)
-           :padding '(2 2)
-           :border (etaf-theme-token :line)
-           :bgcolor (etaf-theme-token :panel)
-    (label :text (etaf-playground-static-value form :title
-                                                     "Selected item")
-           :color (etaf-theme-token :accent))
-    (text :font-weight 'bold
-     (expr :value
-           (if-let* ((row (etaf-research-shelf--selected model)))
-               (plist-get row :title)
-             "Choose a record")))
-    (text :color (etaf-theme-token :muted)
-     (expr :value
-           (if-let* ((row (etaf-research-shelf--selected model)))
-               (format "%s · %s" (plist-get row :author)
-                       (plist-get row :kind))
-             "Select one row to inspect it.")))
-    (box :height 1)
-    (text :font-weight 'bold
-     (expr :value
-           (if-let* ((row (etaf-research-shelf--selected model)))
-               (etaf-research-shelf--status-label (plist-get row :status))
-             "○ No selection")))
-    (text
-     (expr :value
-           (if-let* ((row (etaf-research-shelf--selected model)))
-               (format "Progress  %d%%  ·  Priority %s"
-                       (or (plist-get row :progress) 0)
-                       (plist-get row :priority))
-             "Progress  —  ·  Priority —")))
-    (text :color (etaf-theme-token :accent)
-     (expr :value
-           (let* ((row (etaf-research-shelf--selected model))
-                  (progress (or (and row (plist-get row :progress)) 0))
-                  (filled (max 0 (min 10 (/ progress 10)))))
-             (format "%s %s" (make-string filled ?█)
-                     (make-string (- 10 filled) ?░)))))
-    (box :height 1)
-    (text :color (etaf-theme-token :muted)
-     (expr :value
-           (if-let* ((row (etaf-research-shelf--selected model)))
-               (concat "“" (or (plist-get row :note) "No note yet.") "”")
-             "Your notes and actions will appear here.")))
-    (box :height 1)
-    (etaf-research-shelf-detail-actions))))
-
-(etaf-define-component etaf-research-shelf-detail-actions ()
-  "Render selected-record actions from the inherited Research Shelf model."
-  :setup
-  (let ((model (etaf-inject 'research-shelf-model nil t)))
-    (lambda ()
-      (let* ((row (etaf-research-shelf--selected model))
-             (progress (or (and row (plist-get row :progress)) 0))
-             (finished (and row (equal (plist-get row :status) "finished")))
-             (archived (and row (equal (plist-get row :status) "archived"))))
-        (etaf-view
-         (flex
-                :width 'stretch :flex-wrap 'wrap :gap '(1 (6))
-          (button :label "+ 10%" :ref 'research-shelf-progress
-                  :variant 'secondary
-                  :disabled (or (null row) archived (>= progress 100))
-                  :on-press (lambda ()
-                              (etaf-dispatch 'etaf-research-shelf-progress
-                                             model)))
-          (button :label "✓ Finish" :ref 'research-shelf-finish
-                  :variant 'secondary :disabled (or (null row) finished archived)
-                  :on-press (lambda ()
-                              (etaf-dispatch 'etaf-research-shelf-finish
-                                             model)))
-          (button :label "★ Star" :ref 'research-shelf-star
-                  :variant 'ghost :disabled (null row)
-                  :on-press (lambda ()
-                              (etaf-dispatch 'etaf-research-shelf-star model)))
-          (button :label "Archive" :ref 'research-shelf-archive
-                  :variant 'ghost :disabled (or (null row) archived)
-                  :on-press (lambda ()
-                              (etaf-dispatch 'etaf-research-shelf-archive
-                                             model)))))))))
+  (list :model (etaf-inject 'research-shelf-model nil t)
+        :form (etaf-inject 'research-shelf-filters nil t))
+  :view
+  (etaf-button
+   :label
+   (let* ((model (plist-get (etaf-state) :model))
+          (form (plist-get (etaf-state) :form))
+          (label (etaf-research-shelf--filter-label
+                  form filter-key fallback)))
+     (if (eq filter-key (etaf-value (plist-get model :filter)))
+         (concat "● " label)
+       label))
+   :variant
+   (if (eq filter-key
+           (etaf-value
+            (plist-get (plist-get (etaf-state) :model) :filter)))
+       'secondary
+     'ghost)
+   :on-press
+   (let ((model (plist-get (etaf-state) :model))
+         (key filter-key))
+     (lambda ()
+       (etaf-dispatch 'etaf-research-shelf-filter model key)))))
 
 (etaf-define-component etaf-research-shelf-filter-rail ()
   "Render the Research Shelf filter rail from inherited Context."
   :setup
-  (let ((model (etaf-inject 'research-shelf-model nil t)))
-    (lambda () (etaf-research-shelf--filter-view model))))
+  (etaf-inject 'research-shelf-model nil t)
+  :view
+  (column :class "research-shelf-filter-rail"
+          :width 'stretch :min-width 0
+          :flex-grow 1 :flex-shrink 1 :flex-basis '(220)
+          :padding '(1 1)
+          :border (etaf-theme-token :line)
+          :color (etaf-theme-token :ink)
+          :bgcolor (etaf-theme-token :panel)
+   (text :font-weight 'bold "Library")
+   (text :color (etaf-theme-token :muted) "VIEWS")
+   (etaf-research-shelf-filter-button
+    :filter-key 'all :fallback "All" :ref 'research-shelf-filter-all)
+   (etaf-research-shelf-filter-button
+    :filter-key 'reading :fallback "In progress"
+    :ref 'research-shelf-filter-reading)
+   (etaf-research-shelf-filter-button
+    :filter-key 'unread :fallback "Unread"
+    :ref 'research-shelf-filter-unread)
+   (etaf-research-shelf-filter-button
+    :filter-key 'finished :fallback "Finished"
+    :ref 'research-shelf-filter-finished)
+   (etaf-research-shelf-filter-button
+    :filter-key 'starred :fallback "★ Starred"
+    :ref 'research-shelf-filter-starred)
+   (box :height 1)
+   (text :color (etaf-theme-token :muted) "STORAGE")
+   (text
+    (expr (file-name-nondirectory (plist-get (etaf-state) :database-file))))
+   (etaf-button
+    :label "↻ Reload library" :ref 'research-shelf-reload :variant 'ghost
+    :on-press
+    (let ((model (etaf-state)))
+      (lambda ()
+        (etaf-dispatch 'etaf-research-shelf-reload model))))))
 
 (etaf-define-component etaf-research-shelf-reading-list ()
   "Render the Research Shelf reading list from inherited Context."
   :setup
-  (let ((model (etaf-inject 'research-shelf-model nil t))
-        (form (etaf-inject 'research-shelf-library nil t)))
-    (lambda () (etaf-research-shelf--reading-list-view model form))))
+  (list :model (etaf-inject 'research-shelf-model nil t)
+        :form (etaf-inject 'research-shelf-library nil t))
+  :view
+  (column :class "research-shelf-list" :width 'stretch :min-width 0
+          :flex-grow 4 :flex-shrink 1 :flex-basis '(620)
+          :padding '(1 2)
+          :border (etaf-theme-token :line)
+          :bgcolor (etaf-theme-token :panel)
+   (flex :width 'stretch :flex-wrap 'wrap
+         :align-items 'center :gap '(1 (8))
+    (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
+     (text :font-weight 'bold
+      (expr (etaf-playground-static-value
+             (plist-get (etaf-state) :form) :title "Reading queue")))
+     (text :color (etaf-theme-token :muted)
+      (expr
+       (format
+        "%d items · SQLite-backed"
+        (or (etaf-value
+             (etaf-data-total
+              (etaf-research-shelf--controller
+               (plist-get (etaf-state) :model))))
+            0)))))
+    (etaf-number-input
+     :label "Rows"
+     :value
+     (etaf-value
+      (etaf-data-page-size
+       (etaf-research-shelf--controller
+        (plist-get (etaf-state) :model))))
+     :ref 'research-shelf-page-size :min 1 :max 100
+     :on-change
+     (let ((model (plist-get (etaf-state) :model)))
+       (lambda (next)
+         (etaf-dispatch 'etaf-research-shelf-page-size model next))))
+    (etaf-button
+     :label "＋ Add reading" :ref 'research-shelf-add :variant 'secondary
+     :on-press
+     (let ((model (plist-get (etaf-state) :model)))
+       (lambda ()
+         (etaf-dispatch 'etaf-research-shelf-add model)))))
+   (etaf-data-grid
+    :controller
+    (etaf-research-shelf--controller (plist-get (etaf-state) :model))
+    :columns etaf-research-shelf--grid-columns
+    :row-key #'etaf-research-shelf--item-id
+    :row-ref
+    (lambda (row)
+      (intern (format "research-shelf-row-%s"
+                      (etaf-research-shelf--item-id row))))
+    :on-row-press
+    (let ((controller
+           (etaf-research-shelf--controller
+            (plist-get (etaf-state) :model))))
+      (lambda (row)
+        (etaf-data-select-one controller
+                              (etaf-research-shelf--item-id row))))
+    :loading-label "◷ Loading library…"
+    :error-label "⚠ Could not read the shelf. Use Reload.")
+   (etaf-pagination
+    :controller
+    (etaf-research-shelf--controller (plist-get (etaf-state) :model))
+    :previous-ref 'research-shelf-page-previous
+    :next-ref 'research-shelf-page-next
+    :color (etaf-theme-token :ink))))
 
 (etaf-define-component etaf-research-shelf-detail-inspector ()
   "Render the Research Shelf detail inspector from inherited Context."
   :setup
-  (let ((model (etaf-inject 'research-shelf-model nil t))
-        (form (etaf-inject 'research-shelf-detail nil t)))
-    (lambda () (etaf-research-shelf--detail-view model form))))
+  (list :model (etaf-inject 'research-shelf-model nil t)
+        :form (etaf-inject 'research-shelf-detail nil t))
+  :view
+  (column :class "research-shelf-detail" :width 'stretch :min-width 0
+          :flex-grow 2 :flex-shrink 1 :flex-basis '(340)
+          :padding '(2 2)
+          :border (etaf-theme-token :line)
+          :bgcolor (etaf-theme-token :panel)
+   (text :color (etaf-theme-token :accent)
+    (expr (etaf-playground-static-value
+           (plist-get (etaf-state) :form) :title "Selected item")))
+   (text :font-weight 'bold
+    (expr
+     (if-let* ((row
+                (etaf-research-shelf--selected
+                 (plist-get (etaf-state) :model))))
+         (plist-get row :title)
+       "Choose a record")))
+   (text :color (etaf-theme-token :muted)
+    (expr
+     (if-let* ((row
+                (etaf-research-shelf--selected
+                 (plist-get (etaf-state) :model))))
+         (format "%s · %s" (plist-get row :author) (plist-get row :kind))
+       "Select one row to inspect it.")))
+   (box :height 1)
+   (text :font-weight 'bold
+    (expr
+     (if-let* ((row
+                (etaf-research-shelf--selected
+                 (plist-get (etaf-state) :model))))
+         (etaf-research-shelf--status-label (plist-get row :status))
+       "○ No selection")))
+   (text
+    (expr
+     (if-let* ((row
+                (etaf-research-shelf--selected
+                 (plist-get (etaf-state) :model))))
+         (format "Progress  %d%%  ·  Priority %s"
+                 (or (plist-get row :progress) 0)
+                 (plist-get row :priority))
+       "Progress  —  ·  Priority —")))
+   (text :color (etaf-theme-token :accent)
+    (expr
+     (let* ((row
+             (etaf-research-shelf--selected
+              (plist-get (etaf-state) :model)))
+            (progress (or (and row (plist-get row :progress)) 0))
+            (filled (max 0 (min 10 (/ progress 10)))))
+       (format "%s %s" (make-string filled ?█)
+               (make-string (- 10 filled) ?░)))))
+   (box :height 1)
+   (text :color (etaf-theme-token :muted)
+    (expr
+     (if-let* ((row
+                (etaf-research-shelf--selected
+                 (plist-get (etaf-state) :model))))
+         (concat "“" (or (plist-get row :note) "No note yet.") "”")
+       "Your notes and actions will appear here.")))
+   (box :height 1)
+   (etaf-research-shelf-detail-actions)))
+
+(etaf-define-component etaf-research-shelf-detail-actions ()
+  "Render selected-record actions from the inherited Research Shelf model."
+  :setup
+  (etaf-inject 'research-shelf-model nil t)
+  :view
+  (flex :width 'stretch :flex-wrap 'wrap :gap '(1 (6))
+   (etaf-button
+    :label "+ 10%" :ref 'research-shelf-progress :variant 'secondary
+    :disabled
+    (let* ((row (etaf-research-shelf--selected (etaf-state)))
+           (progress (or (and row (plist-get row :progress)) 0)))
+      (or (null row) (equal (plist-get row :status) "archived")
+          (>= progress 100)))
+    :on-press
+    (let ((model (etaf-state)))
+      (lambda ()
+        (etaf-dispatch 'etaf-research-shelf-progress model))))
+   (etaf-button
+    :label "✓ Finish" :ref 'research-shelf-finish :variant 'secondary
+    :disabled
+    (let ((row (etaf-research-shelf--selected (etaf-state))))
+      (or (null row)
+          (not (null (member (plist-get row :status)
+                             '("finished" "archived"))))))
+    :on-press
+    (let ((model (etaf-state)))
+      (lambda ()
+        (etaf-dispatch 'etaf-research-shelf-finish model))))
+   (etaf-button
+    :label "★ Star" :ref 'research-shelf-star :variant 'ghost
+    :disabled (null (etaf-research-shelf--selected (etaf-state)))
+    :on-press
+    (let ((model (etaf-state)))
+      (lambda ()
+        (etaf-dispatch 'etaf-research-shelf-star model))))
+   (etaf-button
+    :label "Archive" :ref 'research-shelf-archive :variant 'ghost
+    :disabled
+    (let ((row (etaf-research-shelf--selected (etaf-state))))
+      (or (null row) (equal (plist-get row :status) "archived")))
+    :on-press
+    (let ((model (etaf-state)))
+      (lambda ()
+        (etaf-dispatch 'etaf-research-shelf-archive model))))))
 
 (etaf-define-component etaf-research-shelf-header ()
   "Render the default `header' slot from App Context."
   :setup
-  (let ((model (etaf-inject 'research-shelf-model nil t))
-        (root-spec (etaf-inject 'research-shelf-root-spec nil t))
-        (header-spec (etaf-inject 'research-shelf-header-spec nil t)))
-    (lambda ()
-      (etaf-view
-       (flex
-               :class "research-shelf-header" :width 'stretch :min-width 0
-             :flex-wrap 'wrap :align-items 'center :gap '(1 (10))
-        (column
-               :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
-         (label :text (etaf-playground-static-value
-                       header-spec :eyebrow "Research Shelf")
-                :color (etaf-theme-token :accent))
-         (label :text (etaf-playground-static-value
-                       root-spec :title "Research Shelf") :font-weight 'bold)
-         (label :text (etaf-playground-static-value
-                       root-spec :subtitle
-                       "A quiet place for unfinished ideas")
-                :color (etaf-theme-token :muted)))
-        (column :width 'max-content :min-width 0
-                :flex-grow 0 :flex-shrink 0
-         (checkbox :label "Dark" :ref 'research-shelf-theme-toggle
-                   :checked (plist-get model :dark)
-                   :on-change (lambda (value)
-                                (setf (etaf-value (plist-get model :dark)) value)
-                                (setf (etaf-value (plist-get model :toast))
-                                      (if value "Dark theme" "Light theme"))))))))))
+  (list :model (etaf-inject 'research-shelf-model nil t)
+        :root (etaf-inject 'research-shelf-root-spec nil t)
+        :header (etaf-inject 'research-shelf-header-spec nil t))
+  :view
+  (flex :class "research-shelf-header" :width 'stretch :min-width 0
+        :flex-wrap 'wrap :align-items 'center :gap '(1 (10))
+   (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
+    (text :color (etaf-theme-token :accent)
+     (expr (etaf-playground-static-value
+            (plist-get (etaf-state) :header) :eyebrow "Research Shelf")))
+    (text :font-weight 'bold
+     (expr (etaf-playground-static-value
+            (plist-get (etaf-state) :root) :title "Research Shelf")))
+    (text :color (etaf-theme-token :muted)
+     (expr (etaf-playground-static-value
+            (plist-get (etaf-state) :root) :subtitle
+            "A quiet place for unfinished ideas"))))
+   (column :width 'max-content :min-width 0
+           :flex-grow 0 :flex-shrink 0
+    (etaf-checkbox
+     :label "Dark" :ref 'research-shelf-theme-toggle
+     :checked (plist-get (plist-get (etaf-state) :model) :dark)
+     :on-change
+     (let ((model (plist-get (etaf-state) :model)))
+       (lambda (value)
+         (setf (etaf-value (plist-get model :dark)) value)
+         (setf (etaf-value (plist-get model :toast))
+               (if value "Dark theme" "Light theme"))))))))
 
 (etaf-define-component etaf-research-shelf-footer ()
   "Render the default `footer' slot from App Context."
   :setup
-  (let ((model (etaf-inject 'research-shelf-model nil t))
-        (footer-spec (etaf-inject 'research-shelf-footer-spec nil t)))
-    (lambda ()
-      (etaf-view
-       (flex
-              :class "research-shelf-footer" :width 'stretch
-             :flex-wrap 'wrap :gap '(1 (8))
-        (column
-               :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
-         (label :text (plist-get model :toast))
-         (label :text (etaf-playground-static-value
-                       footer-spec :label "SQLite · saved locally")
-                :color (etaf-theme-token :muted)))
-        (label :text (file-name-nondirectory
-                      (plist-get model :database-file))
-               :color (etaf-theme-token :muted)))))))
+  (list :model (etaf-inject 'research-shelf-model nil t)
+        :footer (etaf-inject 'research-shelf-footer-spec nil t))
+  :view
+  (flex :class "research-shelf-footer" :width 'stretch
+        :flex-wrap 'wrap :gap '(1 (8))
+   (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
+    (text
+     (expr
+      (etaf-value (plist-get (plist-get (etaf-state) :model) :toast))))
+    (text :color (etaf-theme-token :muted)
+     (expr (etaf-playground-static-value
+            (plist-get (etaf-state) :footer)
+            :label "SQLite · saved locally"))))
+   (text :color (etaf-theme-token :muted)
+    (expr (file-name-nondirectory
+           (plist-get (plist-get (etaf-state) :model) :database-file))))))
 
 (etaf-define-component etaf-research-shelf-shell ()
   "Pure responsive layout shell with named content slots.
@@ -759,21 +797,16 @@ slot has a reusable built-in fallback for direct composition."
     (etaf-provide 'research-shelf-footer-spec
                   (etaf-playground-static-child
                    static-form 'research-shelf-footer-spec))
-    (lambda ()
-      (etaf-view
-       ;; These are real ETAF named slot inputs; the `.etaf' manifest remains
-       ;; inert configuration and never pretends to be View syntax.
-       (etaf-research-shelf-shell
-        (slot :name 'header
-              (etaf-research-shelf-header))
-        (slot :name 'filters
-              (etaf-research-shelf-filter-rail))
-        (slot :name 'library
-              (etaf-research-shelf-reading-list))
-        (slot :name 'detail
-              (etaf-research-shelf-detail-inspector))
-        (slot :name 'footer
-              (etaf-research-shelf-footer)))))))
+    nil)
+  :view
+  ;; These are real ETAF named slot inputs; the `.etaf' manifest remains inert
+  ;; configuration and never pretends to be View syntax.
+  (etaf-research-shelf-shell
+   (slot :name 'header (etaf-research-shelf-header))
+   (slot :name 'filters (etaf-research-shelf-filter-rail))
+   (slot :name 'library (etaf-research-shelf-reading-list))
+   (slot :name 'detail (etaf-research-shelf-detail-inspector))
+   (slot :name 'footer (etaf-research-shelf-footer))))
 
 ;;; ---------------------------------------------------------------------------
 ;;; ROOT / PLAYGROUND REGISTRATION

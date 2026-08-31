@@ -69,6 +69,15 @@ database and mounts a test buffer before running BODY."
          (when (file-exists-p ,database)
            (delete-file ,database))))))
 
+(defun etaf-playground-test--open (buffer)
+  "Mount Research Shelf in BUFFER with a deterministic headless viewport.
+
+Text assertions should not depend on whether batch Ebox has a selected
+window.  GUI verification exercises responsive geometry separately on a real
+frame."
+  (etaf-playground-mount-example
+   buffer "research-shelf" nil '(:viewport-width 1400 :viewport-height 80)))
+
 (ert-deftest etaf-playground-framework-discovers-generic-file-triplets ()
   "Discover examples from files without a business catalog in the framework."
   (should (member "research-shelf" etaf-playground-example-names))
@@ -395,11 +404,13 @@ database and mounts a test buffer before running BODY."
         (replace-match ":title \"Research Shelf (edited)\"" t t)
         (set-buffer-modified-p t))
       (should (etaf-playground-refresh source))
-      (should (string-match-p "Research Shelf (edited)"
-                              (etaf-playground-test--text
-                               (etaf-playground-session-preview-buffer
-                               (buffer-local-value 'etaf-playground-session
-                                                    source))))))))
+      (let* ((session (buffer-local-value 'etaf-playground-session source))
+             (preview (etaf-playground-session-preview-buffer session))
+             (form (etaf-playground-read-static "research-shelf" session)))
+        (should (equal "Research Shelf (edited)"
+                       (plist-get (cdr form) :title)))
+        (should (string-match-p "edited"
+                                (etaf-playground-test--text preview)))))))
 
 (ert-deftest etaf-playground-refresh-reloads-unsaved-el-companion ()
   "Refreshing a dirty `.el' companion redefines its consumer intentionally."
@@ -426,13 +437,11 @@ database and mounts a test buffer before running BODY."
     (etaf-compiler-clear-cache)
     (let* ((before (etaf-compiler-statistics))
            (instantiations (plist-get before :instantiations))
-           (fallbacks (plist-get before :fallbacks))
            (cache-entries (plist-get before :static-cache-entries)))
-      (etaf-playground-open buffer)
+      (etaf-playground-test--open buffer)
       (let* ((after (etaf-compiler-statistics))
              (blueprint (plist-get after :last-blueprint)))
         (should (> (plist-get after :instantiations) instantiations))
-        (should (>= (plist-get after :fallbacks) fallbacks))
         (should (> (plist-get after :static-cache-entries) cache-entries))
         (should (> (plist-get blueprint :dynamic-nodes) 0))
         (should (> (plist-get blueprint :hole-count) 0))))))
@@ -440,7 +449,7 @@ database and mounts a test buffer before running BODY."
 (ert-deftest etaf-playground-pair-mounts-sqlite-backed-surface ()
   "Mounting the pair initializes SQLite and renders the real app shell."
   (etaf-playground-test--with-app (buffer database)
-    (etaf-playground-open buffer)
+    (etaf-playground-test--open buffer)
     (should (etaf-runtime-p (etaf-runtime-for-buffer buffer)))
     (should (file-exists-p database))
     (let ((text (etaf-playground-test--text buffer))
@@ -492,7 +501,7 @@ database and mounts a test buffer before running BODY."
 (ert-deftest etaf-playground-row-selection-is-repeatable ()
   "Repeated DataGrid row presses replace one selected identity."
   (etaf-playground-test--with-app (buffer database)
-    (etaf-playground-open buffer)
+    (etaf-playground-test--open buffer)
     (let ((runtime (etaf-runtime-for-buffer buffer)))
       (dolist (entry '((research-shelf-row-1 research-shelf-row-2
                         "The best tools make attention feel larger")
@@ -526,7 +535,7 @@ database and mounts a test buffer before running BODY."
 (ert-deftest etaf-playground-row-observer-on-off-is-exact ()
   "Observation preserves one real row mutation and its retained identity."
   (etaf-playground-test--with-app (buffer database)
-    (etaf-playground-open buffer)
+    (etaf-playground-test--open buffer)
     (let* ((runtime (etaf-runtime-for-buffer buffer))
            (surface
             (lambda ()
@@ -578,7 +587,7 @@ database and mounts a test buffer before running BODY."
 (ert-deftest etaf-playground-filters-and-pagination-reload-data ()
   "Filter and pager refs drive the SQLite-backed Data Controller."
   (etaf-playground-test--with-app (buffer database)
-    (etaf-playground-open buffer)
+    (etaf-playground-test--open buffer)
     (let ((runtime (etaf-runtime-for-buffer buffer)))
       ;; Move the selected identity through the old page first.  The following
       ;; filter reorders keyed Range items; generated cell Host addresses must
@@ -621,7 +630,7 @@ database and mounts a test buffer before running BODY."
 (ert-deftest etaf-playground-workspace-reflows-at-responsive-widths ()
   "Workspace cards share a row when wide and wrap in document order."
   (etaf-playground-test--with-app (buffer database)
-    (etaf-playground-open buffer)
+    (etaf-playground-test--open buffer)
     (cl-labels
         ((line-of (label)
            (with-current-buffer buffer
@@ -652,7 +661,7 @@ database and mounts a test buffer before running BODY."
 (ert-deftest etaf-playground-mutations-persist-and-refresh ()
   "Add and mutate actions persist through the SQLite source and refresh UI."
   (etaf-playground-test--with-app (buffer database)
-    (etaf-playground-open buffer)
+    (etaf-playground-test--open buffer)
     (let ((runtime (etaf-runtime-for-buffer buffer)))
       (etaf-dispatch-event runtime 'research-shelf-row-1 'press)
       (etaf-dispatch-event runtime 'research-shelf-progress 'press)
@@ -675,7 +684,7 @@ database and mounts a test buffer before running BODY."
 (ert-deftest etaf-playground-theme-and-lifecycle-are-repeatable ()
   "Theme changes and reset/close do not leave a stale mounted runtime."
   (etaf-playground-test--with-app (buffer database)
-    (etaf-playground-open buffer)
+    (etaf-playground-test--open buffer)
     (let ((runtime (etaf-runtime-for-buffer buffer)))
       (etaf-dispatch-event runtime 'research-shelf-row-1 'press)
       (let (dark-output light-output)

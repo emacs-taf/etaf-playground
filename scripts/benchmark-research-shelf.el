@@ -670,9 +670,13 @@ ETAF generation and preserve RUNTIME's mounted surface in BUFFER."
           (unless (etaf-performance-evaluator--visible-match-p
                    buffer "Page 1 / 22")
             (etaf-dispatch-event runtime 'research-shelf-page-previous 'press))
-          (let ((refs '(research-shelf-row-2 research-shelf-row-4
-                        research-shelf-row-5 research-shelf-row-8
-                        research-shelf-row-9 research-shelf-row-10)))
+          ;; Use one actionable reading per sample.  Reusing a visible row
+          ;; eventually reaches 100% during the five warmups and would make a
+          ;; real disabled button look like a failed mutation.  Moving to the
+          ;; target page is setup work and remains outside the timed action.
+          (let ((ids '(1 4 6 9 12 13 16 17 20 21 24 25 28 29 32 33
+                       36 37 40 41 44 45 48 49 52 53 56 57 60 61 64
+                       65 68 69 72)))
             (push
              (etaf-performance-evaluator--measure
               "progress-mutation"
@@ -688,9 +692,39 @@ ETAF generation and preserve RUNTIME's mounted surface in BUFFER."
                 (etaf-performance-evaluator--surface-invariant
                  runtime buffer "progress-mutation"))
               :setup (lambda (index)
-                       (etaf-performance-evaluator--select-ref
-                        runtime (nth (% (1+ index) (length refs)) refs))))
+                       (let* ((id (nth
+                                   (mod (+ index
+                                          etaf-performance-evaluator-warmup-count)
+                                        (length ids))
+                                   ids))
+                              (target-page
+                               (1+ (/ (1- id)
+                                      etaf-performance-evaluator-page-size)))
+                              (current-page
+                               (or (car
+                                    (etaf-performance-evaluator--visible-page
+                                     buffer))
+                                   1)))
+                         (while (< current-page target-page)
+                           (etaf-dispatch-event
+                            runtime 'research-shelf-page-next 'press)
+                           (setq current-page (1+ current-page)))
+                         (while (> current-page target-page)
+                           (etaf-dispatch-event
+                            runtime 'research-shelf-page-previous 'press)
+                           (setq current-page (1- current-page)))
+                         (etaf-performance-evaluator--select-ref
+                          runtime (intern (format "research-shelf-row-%d" id))))))
              results))
+          ;; Progress setup traverses several pages to keep each action
+          ;; enabled.  Return to the first page before the shared focus and
+          ;; add/reload scenarios, whose refs intentionally target page one.
+          (when-let* ((page (etaf-performance-evaluator--visible-page buffer)))
+            (while (> (car page) 1)
+              (etaf-dispatch-event
+               runtime 'research-shelf-page-previous 'press)
+              (setq page
+                    (etaf-performance-evaluator--visible-page buffer))))
 
           (push
            (etaf-performance-evaluator--measure
