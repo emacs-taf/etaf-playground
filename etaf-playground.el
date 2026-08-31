@@ -3,8 +3,8 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Author: ETAF contributors
-;; Version: 0.2.0
-;; Package-Requires: ((emacs "29.1") (etaf "0.1.0"))
+;; Version: 0.2.1
+;; Package-Requires: ((emacs "29.1") (etaf "0.1.1") (etaf-sqlite "0.1.0") (etaf-ui "0.1.0"))
 ;; Keywords: tools, convenience, ui
 
 ;;; Commentary:
@@ -32,7 +32,21 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'button)
-(require 'etaf)
+
+(define-error 'etaf-playground-dependency-error
+  "ETAF Playground requires TP 1.0.1 or newer with tp-transaction")
+
+(defun etaf-playground--ensure-runtime ()
+  "Load ETAF runtime dependencies or report an actionable TP mismatch."
+  (condition-case condition
+      (require 'etaf)
+    (file-missing
+     (if (member "tp-transaction" condition)
+         (signal 'etaf-playground-dependency-error
+                 (list :required-package '(tp "1.0.1")
+                       :missing-feature 'tp-transaction
+                       :original-condition condition))
+       (signal (car condition) (cdr condition))))))
 
 (defgroup etaf-playground nil
   "Authoring workspaces for ETAF applications."
@@ -86,6 +100,11 @@ frame."
 
 (declare-function ebox-call-with-render-burst
                   "ebox-buffer-backend" (function &rest arguments))
+(declare-function etaf-action-redefine-run "etaf-actions" (function))
+(declare-function etaf-component-redefine-run "etaf-component" (function))
+(declare-function etaf-mount "etaf-runtime" (buffer view &optional options))
+(declare-function etaf-runtime-for-buffer "etaf-runtime" (buffer))
+(declare-function etaf-unmount "etaf-runtime" (runtime))
 
 (cl-defstruct (etaf-playground-session
                (:constructor etaf-playground--session-create))
@@ -510,6 +529,7 @@ source editors and side-by-side workspace around it.  MOUNT-OPTIONS is
 forwarded to `etaf-mount', including an optional initial viewport.  Source
 loading, root construction, ETAF publication, and Ebox rendering share one
 public framework render burst so GC cannot split an interactive mount."
+  (etaf-playground--ensure-runtime)
   (ebox-call-with-render-burst
    #'etaf-playground--mount-example-now
    buffer-name name session mount-options))
@@ -534,6 +554,7 @@ public framework render burst so GC cannot split an interactive mount."
   (let ((preview (etaf-playground-session-preview-buffer session)))
     (condition-case err
         (progn
+          (etaf-playground--ensure-runtime)
           (when-let* ((runtime (etaf-runtime-for-buffer preview)))
             (with-current-buffer preview
               (etaf-unmount runtime)))
@@ -620,10 +641,12 @@ the preview instead of destroying the source workspace."
     (remove-hook 'after-change-functions
                  #'etaf-playground--after-source-change t)))
 
+;;;###autoload
 (define-derived-mode etaf-playground-etaf-mode emacs-lisp-mode "ETAF"
   "Major mode for inert ETAF structural source files."
   (etaf-playground-source-mode 1))
 
+;;;###autoload
 (define-derived-mode etaf-playground-ecss-mode emacs-lisp-mode "ECSS"
   "Major mode for inert ETAF ECSS style source files."
   (etaf-playground-source-mode 1))
@@ -634,7 +657,9 @@ the preview instead of destroying the source workspace."
   (setq-local buffer-read-only nil)
   (setq-local mode-line-process nil))
 
+;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.etaf\\'" . etaf-playground-etaf-mode))
+;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.ecss\\'" . etaf-playground-ecss-mode))
 
 (defun etaf-playground--source-header ()
@@ -984,8 +1009,10 @@ default example there."
                    (window-frame preview-window)))
              (configuration
               (etaf-playground-session-previous-window-configuration session)))
-        (when-let* ((runtime (and (buffer-live-p preview)
-                                 (etaf-runtime-for-buffer preview))))
+        (when-let* ((runtime
+                     (and (fboundp 'etaf-runtime-for-buffer)
+                          (buffer-live-p preview)
+                          (etaf-runtime-for-buffer preview))))
           (with-current-buffer preview
             (etaf-unmount runtime)))
         (remhash (etaf-playground-session-name session)
@@ -1013,7 +1040,8 @@ default example there."
                          ((and (stringp target) (get-buffer target))
                           (get-buffer target))
                          ((null target) (current-buffer))))
-           (runtime (and (buffer-live-p buffer)
+           (runtime (and (fboundp 'etaf-runtime-for-buffer)
+                         (buffer-live-p buffer)
                          (etaf-runtime-for-buffer buffer))))
       (when runtime
         (with-current-buffer buffer

@@ -9,6 +9,7 @@
 ;;; Code:
 (require 'cl-lib)
 (require 'seq)
+(require 'etaf)
 (require 'etaf-playground)
 (require 'etaf-performance)
 (require 'ebox-native-reflow)

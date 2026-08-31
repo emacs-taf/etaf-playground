@@ -8,14 +8,99 @@
 ;;; Code:
 (require 'cl-lib)
 (require 'ert)
+(require 'package)
 (require 'etaf-playground)
 (require 'etaf-performance)
+
+(defconst etaf-playground-test--root
+  (file-name-directory
+   (directory-file-name
+    (file-name-directory (or load-file-name buffer-file-name))))
+  "Absolute ETAF Playground repository path used by subprocess gates.")
+
+(defun etaf-playground-test--package-description (file)
+  "Return the package description parsed from FILE."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (package-buffer-info)))
 
 (defun etaf-playground-test--ensure-app-loaded ()
   "Load the same-basename Research Shelf companion for test setup."
   (unless (featurep 'etaf-research-shelf)
     (load-file (expand-file-name "examples/research-shelf.el"
                                 default-directory))))
+
+(ert-deftest etaf-playground-etaf-source-mode-clean-loads-without-runtime ()
+  "Opening research-shelf.etaf must not eagerly load ETAF or TP."
+  (let ((output (generate-new-buffer " *etaf-source-mode-clean-load*"))
+        (program (expand-file-name invocation-name invocation-directory))
+        (package-file
+         (expand-file-name "etaf-playground.el" etaf-playground-test--root))
+        (source-file
+         (expand-file-name "examples/research-shelf.etaf"
+                           etaf-playground-test--root)))
+    (unwind-protect
+        (let ((status
+               (call-process
+                program nil output nil "-Q" "--batch"
+                "-L" etaf-playground-test--root
+                "-l" package-file
+                "--eval"
+                (format
+                 "(progn (find-file %S) (unless (eq major-mode 'etaf-playground-etaf-mode) (kill-emacs 11)) (when (featurep 'etaf) (kill-emacs 12)) (princ \"ETAF source mode clean-load OK\\n\"))"
+                 source-file))))
+          (unless (zerop status)
+            (ert-fail
+             (with-current-buffer output (buffer-string))))
+          (with-current-buffer output
+            (should (string-match-p "ETAF source mode clean-load OK"
+                                    (buffer-string)))))
+      (when (buffer-live-p output) (kill-buffer output)))))
+
+(ert-deftest etaf-playground-package-closure-requires-transaction-tp ()
+  "Package metadata must reject TP snapshots without tp-transaction.el."
+  (let* ((workspace (file-name-directory
+                     (directory-file-name etaf-playground-test--root)))
+         (tp (etaf-playground-test--package-description
+              (expand-file-name "tp/tp.el" workspace)))
+         (ebox (etaf-playground-test--package-description
+                (expand-file-name "ebox/ebox.el" workspace)))
+         (etaf (etaf-playground-test--package-description
+                (expand-file-name "etaf/etaf.el" workspace)))
+         (playground (etaf-playground-test--package-description
+                      (expand-file-name
+                       "etaf-playground/etaf-playground.el" workspace))))
+    (should (equal (package-desc-version tp) '(1 0 1)))
+    (should (equal (package-desc-version ebox) '(2 0 1)))
+    (should (member '(tp (1 0 1)) (package-desc-reqs ebox)))
+    (should (equal (package-desc-version etaf) '(0 1 1)))
+    (should (member '(ebox (2 0 1)) (package-desc-reqs etaf)))
+    (should (member '(tp (1 0 1)) (package-desc-reqs etaf)))
+    (should (equal (package-desc-version playground) '(0 2 1)))
+    (should (member '(etaf (0 1 1)) (package-desc-reqs playground)))
+    (should (member '(etaf-ui (0 1 0))
+                    (package-desc-reqs playground)))
+    (should (member '(etaf-sqlite (0 1 0))
+                    (package-desc-reqs playground)))))
+
+(ert-deftest etaf-playground-stale-tp-error-is-actionable ()
+  "A stale TP install reports its required package instead of file-missing."
+  (let ((original-require (symbol-function 'require)))
+    (cl-letf (((symbol-function 'require)
+               (lambda (feature &optional filename noerror)
+                 (if (eq feature 'etaf)
+                     (signal 'file-missing
+                             '("Cannot open load file"
+                               "No such file or directory"
+                               "tp-transaction"))
+                   (funcall original-require feature filename noerror)))))
+      (let ((condition
+             (should-error (etaf-playground--ensure-runtime)
+                           :type 'etaf-playground-dependency-error)))
+        (should (equal (plist-get (cdr condition) :required-package)
+                       '(tp "1.0.1")))
+        (should (eq (plist-get (cdr condition) :missing-feature)
+                    'tp-transaction))))))
 
 (defun etaf-playground-test--text (buffer)
   "Return BUFFER's plain rendered text."

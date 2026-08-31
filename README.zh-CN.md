@@ -18,6 +18,9 @@ ETAF Playground 是通用的应用构建工作区：左侧编辑同一个应用�
 也会刷新。若 root 或 feature 不遵循命名约定，可在 companion 中调用
 `etaf-playground-register-example` 注册覆盖。
 
+ETAF Playground 0.2.1 会声明 ETAF 0.1.1、ETAF UI 0.1.0 与 ETAF SQLite
+0.1.0，保证内置 Research Shelf companion 的安装依赖闭包完整。
+
 预览位置使用标准 Emacs `display-buffer` action，由
 `etaf-playground-display-action` 配置。默认在右侧使用一半 frame：
 
@@ -54,6 +57,10 @@ examples/research-shelf.etaf  # inert 结构 source
 examples/research-shelf.ecss  # inert 样式 source
 examples/research-shelf.el    # DATA / THEME / STATE / VIEW / ROOT 分区
 ```
+
+直接打开 inert `.etaf` 或 `.ecss` source 时只加载轻量编辑 mode；刷新或 mount
+preview 时才加载 ETAF/Ebox/TP runtime。运行 preview 需要 TP 1.0.1 或更高版本，
+以保证 `tp-transaction.el` 与 Host final-accept contract 已安装。
 
 该 companion 注册了 `:reload-on-refresh t`；保存 `.el`、`.etaf` 或 `.ecss` 后刷新
 source，会在下一次 mount 前重新加载完整 consumer。
