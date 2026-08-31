@@ -32,6 +32,7 @@ compile:
 		--eval '(dolist (file (quote ($(foreach file,$(EXAMPLES),"$(file)")))) (byte-compile-file file))' \
 		--eval '(byte-compile-file "etaf-playground.el")' \
 		--eval '(byte-compile-file "scripts/playground-gui-scenarios.el")' \
+		--eval '(byte-compile-file "scripts/research-shelf-m0a-evidence.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(TEST_FILES),"$(file)")))) (byte-compile-file file))'
 
 examples-read: compile
@@ -99,7 +100,7 @@ load: compile
 		--eval '(princ "etaf-playground load OK\\n")'
 
 checkdoc:
-	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "scripts/benchmark-research-shelf.el" "scripts/playground-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
+	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "scripts/benchmark-research-shelf.el" "scripts/playground-gui-scenarios.el" "scripts/research-shelf-m0a-evidence.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
 
 check: checkdoc test
 
