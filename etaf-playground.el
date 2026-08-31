@@ -418,7 +418,9 @@ disk."
             (save-restriction
               (widen)
               (etaf-component-redefine-run
-               (lambda () (eval-buffer nil))))
+               (lambda ()
+                 (etaf-action-redefine-run
+                  (lambda () (eval-buffer nil))))))
             (setf (etaf-playground-session-companion-dirty-p session) nil)
             (setq-local etaf-playground-companion-dirty-p nil))
         (unless loaded-p
