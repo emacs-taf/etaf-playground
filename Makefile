@@ -8,7 +8,7 @@ EXAMPLES := $(ENTRY_EXAMPLES)
 EXAMPLE_ELC := $(EXAMPLES:.el=.elc)
 TEST_FILES := $(wildcard tests/*-tests.el)
 
-.PHONY: all compile examples-read test perf perf-prepare perf-evaluator perf-regressions \
+.PHONY: all compile examples-read test perf perf-prepare perf-evaluator perf-repeatability perf-regressions \
 	perf-check gui-doctor gui-research gui-flex gui-grid gui-all \
 	check checkdoc load clean
 
@@ -55,12 +55,20 @@ perf-prepare: compile
 # Run only the already-built product.  This separate target lets an absolute
 # max-latency sample start after compilation CPU activity has settled.
 perf-evaluator:
+	scripts/with-performance-lock.sh env \
 	EBOX_NATIVE_REFLOW_MODULE_PATH="$(EBOX_NATIVE_RELEASE_DIR)" \
-	$(EMACS) -Q --batch $(LOAD_PATH) \
+	"$(EMACS)" -Q --batch $(LOAD_PATH) \
 		--eval '(setq load-prefer-newer t native-comp-jit-compilation nil)' \
 		--eval '(setq ebox-native-reflow-module-path (getenv "EBOX_NATIVE_REFLOW_MODULE_PATH"))' \
 		-l scripts/benchmark-research-shelf.el \
 		-f etaf-performance-evaluator-batch
+
+# A final hard-max claim must survive three complete independent sample sets.
+# The lock above prevents parallel reviewers from benchmarking one another.
+perf-repeatability: perf-prepare
+	$(MAKE) perf-evaluator EMACS="$(EMACS)"
+	$(MAKE) perf-evaluator EMACS="$(EMACS)"
+	$(MAKE) perf-evaluator EMACS="$(EMACS)"
 
 # Run package regressions in dependency order.  Keeping them in one recipe
 # prevents parallel make from cleaning/recompiling a sibling while another
@@ -77,7 +85,7 @@ perf-regressions:
 # Measure absolute latency before the CPU-heavy regression graph.  Regressions
 # still gate the same target, but cannot thermally contaminate product samples.
 perf-check:
-	$(MAKE) perf EMACS="$(EMACS)"
+	$(MAKE) perf-repeatability EMACS="$(EMACS)"
 	$(MAKE) perf-regressions EMACS="$(EMACS)"
 
 gui-doctor:

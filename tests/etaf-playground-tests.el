@@ -171,21 +171,45 @@ frame."
       (should (string-match-p (regexp-quote dependency) makefile)))))
 
 (ert-deftest etaf-playground-performance-gate-runs-before-regressions ()
-  "CPU-heavy regressions must not contaminate absolute latency samples."
+  "Repeatable exclusive latency gates run before CPU-heavy regressions."
   (let* ((makefile (with-temp-buffer
                      (insert-file-contents "Makefile")
                      (buffer-string)))
          (target (string-match "^perf-check:" makefile))
-         (evaluator (and target
-                         (string-match "$(MAKE) perf " makefile target)))
+         (repeatability
+          (and target
+               (string-match "$(MAKE) perf-repeatability " makefile target)))
          (regressions (and target
                            (string-match "perf-regressions" makefile target))))
     (should target)
-    (should evaluator)
+    (should repeatability)
     (should regressions)
-    (should (< evaluator regressions))
+    (should (< repeatability regressions))
     (should (string-match-p "^perf-prepare: compile" makefile))
-    (should (string-match-p "^perf-evaluator:" makefile))))
+    (should (string-match-p "^perf-evaluator:" makefile))
+    (should (string-match-p "^perf-repeatability: perf-prepare" makefile))
+    (should (string-match-p "scripts/with-performance-lock.sh" makefile))
+    (let* ((start (string-match "^perf-repeatability:" makefile))
+           (end (string-match "^# Run package regressions" makefile start))
+           (body (substring makefile start end))
+           (offset 0)
+           (count 0))
+      (while (string-match "$(MAKE) perf-evaluator" body offset)
+        (setq count (1+ count)
+              offset (match-end 0)))
+      (should (= count 3)))))
+
+(ert-deftest etaf-playground-performance-lock-is-exclusive-and-stale-safe ()
+  "The evaluator wrapper serializes runs and clears stale owner locks."
+  (let ((script (with-temp-buffer
+                  (insert-file-contents "scripts/with-performance-lock.sh")
+                  (buffer-string))))
+    (dolist (contract '("mkdir \"$PERF_LOCK_DIR\""
+                        "kill -0 \"$PERF_LOCK_OWNER\""
+                        "rmdir \"$PERF_LOCK_DIR\""
+                        "performance evaluator waiting for exclusive host slot"))
+      (should (string-match-p (regexp-quote contract) script)))
+    (should-not (string-match-p "rm -rf" script))))
 
 (ert-deftest etaf-playground-static-reader-is-inert-and-strict ()
   "Read pair structure as inert data and reject executable AST nodes."
