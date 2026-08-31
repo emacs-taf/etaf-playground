@@ -47,7 +47,7 @@
                 "-l" package-file
                 "--eval"
                 (format
-                 "(progn (find-file %S) (unless (eq major-mode 'etaf-playground-etaf-mode) (kill-emacs 11)) (when (featurep 'etaf) (kill-emacs 12)) (princ \"ETAF source mode clean-load OK\\n\"))"
+                 "(progn (find-file %S) (unless (eq major-mode 'etaf-playground-etaf-mode) (kill-emacs 11)) (when (featurep 'etaf) (kill-emacs 12)) (when (featurep 'tp) (kill-emacs 13)) (when (featurep 'tp-transaction) (kill-emacs 14)) (princ \"ETAF source mode clean-load OK\\n\"))"
                  source-file))))
           (unless (zerop status)
             (ert-fail
@@ -101,6 +101,22 @@
                        '(tp "1.0.1")))
         (should (eq (plist-get (cdr condition) :missing-feature)
                     'tp-transaction))))))
+
+(ert-deftest etaf-playground-unrelated-file-missing-is-preserved ()
+  "Runtime loading must not relabel an unrelated missing dependency as TP."
+  (let ((original-require (symbol-function 'require))
+        (injected
+         '(file-missing "Cannot open load file"
+                        "No such file or directory"
+                        "unrelated-feature")))
+    (cl-letf (((symbol-function 'require)
+               (lambda (feature &optional filename noerror)
+                 (if (eq feature 'etaf)
+                     (signal (car injected) (cdr injected))
+                   (funcall original-require feature filename noerror)))))
+      (should (equal (should-error (etaf-playground--ensure-runtime)
+                                   :type 'file-missing)
+                     injected)))))
 
 (defun etaf-playground-test--text (buffer)
   "Return BUFFER's plain rendered text."
