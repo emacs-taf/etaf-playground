@@ -186,14 +186,29 @@ triplet.
 - Pressure fixture: `etaf-research-shelf-fixture-size` defaults to 256 and
   `etaf-research-shelf-page-size` defaults to 12; existing local rows are
   preserved and missing fixture rows are topped up with fresh IDs.
-- Performance: one Data mutation -> one Runtime generation/publication; normal
-  warm actions remain under the accepted 105ms p50 target.
+- Performance: one Data mutation -> one Runtime generation/publication. The
+  current active latency lane uses 5 unmeasured warmups and 30 measured samples
+  at fixed 1413×62 geometry; every scenario must satisfy p95 and max at or below
+  50ms. The accepted 105ms p50 wording is historical design context, not the
+  current evaluator gate; `DOC-PERF-001` keeps its formal disposition in M0b1.
 - Compatibility: any same-basename `.etaf`/`.el` example is discoverable;
   `.ecss` is optional, and the bundled Research Shelf remains only one
   consumer.
 - Verification: inert reader tests, source-tab/session tests, unsaved source
   refresh tests, SQLite temp-file integration tests, mount/remount tests,
   repeated selection/mutation tests, and clean GUI screenshots.
+
+## Performance evidence lanes
+
+The latency lane, trace lane, and GUI lane share one
+repository/environment/scenario/fixture/build identity but remain separate
+measurements. The latency lane owns the uninstrumented 5/30 p95/max 50ms gate.
+The trace lane owns a representative instrumented invocation with cost class,
+work counters, turns, allocation, and GC. The GUI lane owns the real Emacs
+action sequence, screenshots, recording, and temporal-review verdict. Batch
+verifier duration is not GUI first paint; action-start through forced redisplay
+completion remains an explicitly separate future first-paint gate and an M0a
+observed gap. No one lane may be used to claim another lane passed.
 
 ## Open questions
 

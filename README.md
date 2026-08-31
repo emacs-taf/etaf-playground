@@ -110,6 +110,26 @@ For repeated absolute-latency runs, use `make perf-prepare` once after source
 changes, let compilation activity settle, then run `make perf-evaluator` without
 rebuilding the dependency graph.
 
+## Performance evidence lanes
+
+Performance evidence has three separate lanes correlated by one
+repository/environment/scenario/fixture/build identity:
+
+- The latency lane runs the fixed 1413×62 batch evaluator with 5 unmeasured
+  warmups and 30 measured samples. The current active gate requires both p95
+  and max to be at or below 50ms for every scenario.
+- The trace lane runs a separate instrumented representative invocation. Its
+  cost classes, work counters, turns, allocation, and GC data are not inserted
+  into the timed latency distribution.
+- The GUI lane captures the real Emacs interaction sequence, screenshots, and
+  temporal-review verdict. Batch verifier duration is not GUI first paint;
+  action-start to forced-redisplay-complete first-paint timing remains a
+  separately identified future gate and an observed M0a gap.
+
+Evidence from one lane supports only that lane's conclusion. A
+performance-complete or user-visible-non-regression claim requires the
+applicable gates from all three lanes.
+
 The bundled Research Shelf example installs a deterministic 256-record SQLite
 fixture with 12 records per page. Bind `etaf-research-shelf-fixture-size` and
 `etaf-research-shelf-page-size` for smaller tests or larger pressure runs. Its
