@@ -484,6 +484,23 @@ only file evaluated by the framework."
      (etaf-playground--root-factory spec)
      name static-form ecss-form)))
 
+(defun etaf-playground--apply-preview-display-settings ()
+  "Suppress text-editor redisplay artifacts in the current preview buffer.
+
+An ETAF preview owns its viewport and line layout.  Editor continuation and
+truncation indicators otherwise leak into narrow generated canvases as dark
+blocks at the right edge."
+  (setq-local truncate-lines t
+              auto-hscroll-mode t
+              fringe-indicator-alist
+              (cl-remove-if
+               (lambda (entry)
+                 (memq (car-safe entry) '(truncation continuation)))
+               (copy-tree fringe-indicator-alist))
+              bidi-display-reordering nil
+              bidi-paragraph-direction 'left-to-right
+              bidi-inhibit-bpa t))
+
 (defun etaf-playground--preview-mode-setup (buffer session)
   "Prepare generated preview BUFFER for SESSION."
   (with-current-buffer buffer
@@ -497,7 +514,7 @@ only file evaluated by the framework."
                 (format " ETAF Preview  %s  |  g refresh  q close"
                         (etaf-playground-session-name session)))
     (buffer-disable-undo)
-    (setq-local truncate-lines nil))
+    (etaf-playground--apply-preview-display-settings))
   buffer)
 
 (defun etaf-playground--mount-example-now
@@ -517,7 +534,10 @@ SESSION supplies authoritative source buffers.  MOUNT-OPTIONS is forwarded to
       (etaf-mount buffer (etaf-playground-read-pair name session)
                   mount-options))
     (with-current-buffer buffer
-      (setq-local etaf-playground-current-example name))
+      (setq-local etaf-playground-current-example name)
+      ;; Publication may restore renderer-owned buffer settings.  The generated
+      ;; preview display contract is final and must win after the mount.
+      (etaf-playground--apply-preview-display-settings))
     buffer))
 
 (defun etaf-playground-mount-example
@@ -545,6 +565,7 @@ public framework render burst so GC cannot split an interactive mount."
                           (etaf-playground-session-name session)
                           (error-message-string error-data))))
         (setq-local buffer-read-only t)
+        (etaf-playground--apply-preview-display-settings)
         (setq-local header-line-format
                     (format " ETAF Preview  %s  |  ERROR  |  g retry  q close"
                             (etaf-playground-session-name session)))))))
@@ -653,7 +674,7 @@ the preview instead of destroying the source workspace."
 
 (define-derived-mode etaf-playground-preview-mode special-mode "ETAF-Preview"
   "Read-only major mode for a mounted ETAF Playground preview."
-  (setq-local truncate-lines nil)
+  (etaf-playground--apply-preview-display-settings)
   (setq-local buffer-read-only nil)
   (setq-local mode-line-process nil))
 

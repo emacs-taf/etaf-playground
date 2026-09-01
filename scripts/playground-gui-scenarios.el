@@ -104,6 +104,10 @@
   (let* ((buffer (etaf-gui-verifier-context-target-buffer context))
          (mounted (and (buffer-live-p buffer)
                        (ebox-surface-buffer-mounted-p buffer)))
+         (canvas-settings
+          (and mounted
+               (with-current-buffer buffer
+                 (list truncate-lines fringe-indicator-alist))))
          (text (and mounted
                     (with-current-buffer buffer
                       (buffer-substring-no-properties
@@ -116,6 +120,12 @@
        (etaf-gui-verifier-assert
         "visible-output-nonempty"
         (etaf-playground-gui-scenarios--visible-window-content-p context))
+       (etaf-gui-verifier-assert
+        "generated-canvas-truncates-editor-lines" (car canvas-settings))
+       (etaf-gui-verifier-assert
+        "generated-canvas-hides-editor-edge-indicators"
+        (and (not (assq 'truncation (cadr canvas-settings)))
+             (not (assq 'continuation (cadr canvas-settings)))))
        (etaf-gui-verifier-assert
         "no-render-error"
         (and text
@@ -351,6 +361,8 @@ product-specific postcondition in the evidence stream."
       (etaf-playground-gui-scenarios--windowed-action)
       (etaf-playground-gui-scenarios--resize-action
        "resize-narrow" 900 500)
+      (etaf-playground-gui-scenarios--resize-action
+       "resize-compact" 700 500)
       (etaf-playground-gui-scenarios--scroll-action
        "scroll-down" #'ebox-scroll-page-down)
       (etaf-playground-gui-scenarios--reset-scroll-action)
@@ -396,7 +408,7 @@ product-specific postcondition in the evidence stream."
       (etaf-playground-gui-scenarios--maximize-action))
      :completion
      (lambda (context)
-       (= (etaf-gui-verifier-context-action-count context) 12))))
+       (= (etaf-gui-verifier-context-action-count context) 13))))
 
 (defun etaf-playground-gui-scenarios-ebox (scenario fixture)
   "Return one Ebox SCENARIO adapter for FIXTURE."

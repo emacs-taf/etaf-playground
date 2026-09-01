@@ -118,6 +118,54 @@
                                    :type 'file-missing)
                      injected)))))
 
+(ert-deftest etaf-playground-preview-suppresses-editor-redisplay-artifacts ()
+  "Generated previews hide wrapping indicators that appear as edge blocks."
+  (let ((buffer (generate-new-buffer " *etaf-preview-display-settings*"))
+        (session (etaf-playground--session-create :name "display-settings")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buffer
+            (etaf-playground-preview-mode)
+            ;; Reused preview buffers may have settings changed by a caller;
+            ;; session setup must restore the generated-canvas contract.
+            (setq-local truncate-lines nil
+                        auto-hscroll-mode nil
+                        fringe-indicator-alist
+                        '((truncation left-arrow right-arrow)
+                          (continuation left-curly-arrow right-curly-arrow))
+                        bidi-display-reordering t
+                        bidi-paragraph-direction nil
+                        bidi-inhibit-bpa nil))
+          (etaf-playground--preview-mode-setup buffer session)
+          (cl-letf (((symbol-function 'etaf-runtime-for-buffer)
+                     (lambda (_buffer) nil))
+                    ((symbol-function 'etaf-playground-read-pair)
+                     (lambda (&rest _arguments) 'preview-view))
+                    ((symbol-function 'etaf-mount)
+                     (lambda (&rest _arguments)
+                       ;; Model renderer publication restoring ordinary editor
+                       ;; defaults after the preview mode was initialized.
+                       (setq-local truncate-lines nil
+                                   auto-hscroll-mode nil
+                                   fringe-indicator-alist
+                                   '((truncation left-arrow right-arrow)
+                                     (continuation
+                                      left-curly-arrow right-curly-arrow))
+                                   bidi-display-reordering t
+                                   bidi-paragraph-direction nil
+                                   bidi-inhibit-bpa nil))))
+            (etaf-playground--mount-example-now
+             buffer "display-settings" session nil))
+          (with-current-buffer buffer
+            (should truncate-lines)
+            (should auto-hscroll-mode)
+            (should-not (assq 'truncation fringe-indicator-alist))
+            (should-not (assq 'continuation fringe-indicator-alist))
+            (should-not bidi-display-reordering)
+            (should (eq bidi-paragraph-direction 'left-to-right))
+            (should bidi-inhibit-bpa)))
+      (when (buffer-live-p buffer) (kill-buffer buffer)))))
+
 (defun etaf-playground-test--text (buffer)
   "Return BUFFER's plain rendered text."
   (with-current-buffer buffer

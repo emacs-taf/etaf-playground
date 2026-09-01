@@ -29,9 +29,9 @@
     (should
      (equal
       (mapcar #'etaf-gui-verifier-action-id actions)
-      '("mount" "leave-fullscreen" "resize-narrow" "scroll-down"
-        "reset-scroll" "resize-wide" "row-select" "data-mutation"
-        "filter-reading" "theme-toggle" "pagination"
+      '("mount" "leave-fullscreen" "resize-narrow" "resize-compact"
+        "scroll-down" "reset-scroll" "resize-wide" "row-select"
+        "data-mutation" "filter-reading" "theme-toggle" "pagination"
         "maximize-frame")))
     (should
      (funcall
