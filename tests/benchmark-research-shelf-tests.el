@@ -98,6 +98,11 @@
           '(:signed (:p50 0.4 :p95 2.5)))))
     (should (= 1 (length failures)))
     (should (string-match-p "p95 2.500ms > 2.000ms" (car failures))))
+  (let ((failures
+         (etaf-performance-evaluator--trace-overhead-failures
+          '(:signed (:p50 -2.5 :p95 1.9)))))
+    (should (= 1 (length failures)))
+    (should (string-match-p "|p50| 2.500ms > 2.000ms" (car failures))))
   (should-not
    (etaf-performance-evaluator--trace-overhead-failures
     '(:signed (:p50 0.4 :p95 1.9)))))
