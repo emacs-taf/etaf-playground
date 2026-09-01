@@ -353,6 +353,23 @@ RESET-REF defaults to the first Research Shelf row."
                      failures))
              (nreverse failures))))
 
+(defun etaf-performance-evaluator--trace-overhead-failures (overhead)
+  "Return hard trace budget failures from OVERHEAD statistics."
+  (let* ((signed (plist-get overhead :signed))
+         (p50 (plist-get signed :p50))
+         (p95 (plist-get signed :p95))
+         failures)
+    (when (> (abs p50) etaf-performance-evaluator-overhead-budget-ms)
+      (push (format "trace signed |p50| %.3fms > %.3fms"
+                    (abs p50)
+                    etaf-performance-evaluator-overhead-budget-ms)
+            failures))
+    (when (> p95 etaf-performance-evaluator-overhead-budget-ms)
+      (push (format "trace signed p95 %.3fms > %.3fms"
+                    p95 etaf-performance-evaluator-overhead-budget-ms)
+            failures))
+    (nreverse failures)))
+
 (defun etaf-performance-evaluator--trace-scenario
     (runtime label function &optional verify)
   "Run FUNCTION and return the one new operation for LABEL.
@@ -900,12 +917,10 @@ ETAF generation and preserve RUNTIME's mounted surface in BUFFER."
           (setq overhead
                 (etaf-performance-evaluator--measure-overhead runtime buffer)
                 failures (etaf-performance-evaluator--latency-failures results))
-          (when (> (abs (plist-get (plist-get overhead :signed) :p50))
-                   etaf-performance-evaluator-overhead-budget-ms)
-            (push (format "trace signed |p50| %.3fms > %.3fms"
-                          (abs (plist-get (plist-get overhead :signed) :p50))
-                          etaf-performance-evaluator-overhead-budget-ms)
-                  failures))
+          (setq failures
+                (nconc failures
+                       (etaf-performance-evaluator--trace-overhead-failures
+                        overhead)))
           (if failures
               (let ((failure-count (length failures)))
                 (princ "etaf-cross-package-perf FAIL\n")

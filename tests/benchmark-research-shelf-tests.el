@@ -12,6 +12,8 @@
                   "../scripts/benchmark-research-shelf")
 (declare-function etaf-performance-evaluator--latency-failures
                   "../scripts/benchmark-research-shelf")
+(declare-function etaf-performance-evaluator--trace-overhead-failures
+                  "../scripts/benchmark-research-shelf")
 (declare-function etaf-performance-evaluator--verify-runtime-accelerator
                   "../scripts/benchmark-research-shelf")
 (declare-function etaf-performance-evaluator--verify-environment
@@ -88,6 +90,17 @@
     (should (= 3 (length failures)))
     (dolist (failure failures)
       (should (string-match-p "> 50.000ms" failure)))))
+
+(ert-deftest etaf-performance-evaluator-gates-trace-overhead-p95 ()
+  "Apply the 2ms trace budget to signed p95 as well as median bias."
+  (let ((failures
+         (etaf-performance-evaluator--trace-overhead-failures
+          '(:signed (:p50 0.4 :p95 2.5)))))
+    (should (= 1 (length failures)))
+    (should (string-match-p "p95 2.500ms > 2.000ms" (car failures))))
+  (should-not
+   (etaf-performance-evaluator--trace-overhead-failures
+    '(:signed (:p50 0.4 :p95 1.9)))))
 
 (ert-deftest etaf-performance-evaluator-trace-scenario-retains-one-operation ()
   "The trace driver uses the public Runtime recorder and preserves results."
