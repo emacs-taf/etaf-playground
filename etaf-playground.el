@@ -3,8 +3,8 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; Author: ETAF contributors
-;; Version: 0.2.1
-;; Package-Requires: ((emacs "29.1") (etaf "0.1.1") (etaf-sqlite "0.1.0") (etaf-ui "0.1.0"))
+;; Version: 0.2.2
+;; Package-Requires: ((emacs "29.1") (etaf "0.2.1") (etaf-sqlite "0.1.0") (etaf-ui "0.1.0"))
 ;; Keywords: tools, convenience, ui
 
 ;;; Commentary:
@@ -34,7 +34,7 @@
 (require 'button)
 
 (define-error 'etaf-playground-dependency-error
-  "ETAF Playground requires TP 1.0.1 or newer with tp-transaction")
+  "ETAF Playground requires TP 2.0.0 or newer with tp-transaction")
 
 (defun etaf-playground--ensure-runtime ()
   "Load ETAF runtime dependencies or report an actionable TP mismatch."
@@ -43,7 +43,7 @@
     (file-missing
      (if (member "tp-transaction" condition)
          (signal 'etaf-playground-dependency-error
-                 (list :required-package '(tp "1.0.1")
+                 (list :required-package '(tp "2.0.0")
                        :missing-feature 'tp-transaction
                        :original-condition condition))
        (signal (car condition) (cdr condition))))))

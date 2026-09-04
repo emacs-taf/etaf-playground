@@ -19,7 +19,7 @@ into the right-hand preview. Saving a source file also refreshes by default.
 `etaf-playground-register-example` is available when a companion needs a
 non-conventional root or feature name.
 
-ETAF Playground 0.2.1 declares ETAF 0.1.1, ETAF UI 0.1.0, and ETAF SQLite
+ETAF Playground 0.2.2 declares ETAF 0.2.1, ETAF UI 0.1.0, and ETAF SQLite
 0.1.0 so the bundled Research Shelf companion has a complete install closure.
 
 Preview placement uses the standard Emacs `display-buffer` action stored in
