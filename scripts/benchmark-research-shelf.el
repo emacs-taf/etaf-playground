@@ -8,6 +8,7 @@
 
 ;;; Code:
 (require 'cl-lib)
+(require 'json)
 (require 'seq)
 (require 'etaf)
 (require 'etaf-playground)
@@ -28,6 +29,18 @@
 (defconst etaf-performance-evaluator-page-size 12)
 (defconst etaf-performance-evaluator-viewport-width 1413)
 (defconst etaf-performance-evaluator-viewport-height 62)
+
+(defconst etaf-performance-evaluator--manifest-scenario-labels
+  '("prepared-database-mount" "row-selection" "theme-toggle"
+    "filter-query" "pagination" "progress-mutation" "focus-navigation"
+    "add-reading" "reload" "viewport-resize" "post-resize-row-selection"
+    "post-resize-theme-toggle" "post-resize-filter-query"
+    "post-resize-pagination" "post-resize-add-reading"
+    "post-resize-reload"))
+
+(defvar etaf-performance-evaluator--manifest-output nil)
+(defvar etaf-performance-evaluator--manifest-scenarios nil)
+(defvar etaf-performance-evaluator--manifest-run-id nil)
 
 (defun etaf-performance-evaluator--percentile (samples percentile)
   "Return nearest-rank PERCENTILE from non-empty numeric SAMPLES."
@@ -50,6 +63,70 @@
                  label (plist-get statistics :count)
                  (plist-get statistics :min) (plist-get statistics :p50)
                  (plist-get statistics :p95) (plist-get statistics :max))))
+
+(defun etaf-performance-evaluator--record-manifest-sample (label elapsed)
+  "Record real ELAPSED milliseconds for manifest scenario LABEL.
+Recording occurs after the timed action returns and only when the batch
+manifest environment enabled evidence capture."
+  (when (and etaf-performance-evaluator--manifest-scenarios
+             (member label etaf-performance-evaluator--manifest-scenario-labels))
+    (puthash label
+             (cons elapsed
+                   (gethash label etaf-performance-evaluator--manifest-scenarios))
+             etaf-performance-evaluator--manifest-scenarios)))
+
+(defun etaf-performance-evaluator--manifest-data ()
+  "Return the current raw latency evidence as a JSON-ready object."
+  (let ((scenarios (make-hash-table :test #'equal)))
+    (when etaf-performance-evaluator--manifest-scenarios
+      (maphash
+       (lambda (label reverse-samples)
+         (let* ((samples (nreverse (copy-sequence reverse-samples)))
+                (statistics (etaf-performance-evaluator--statistics samples))
+                (record (make-hash-table :test #'equal)))
+           (puthash "samples_ms" (vconcat samples) record)
+           (puthash "p95_ms" (plist-get statistics :p95) record)
+           (puthash "max_ms" (plist-get statistics :max) record)
+           (puthash label record scenarios)))
+       etaf-performance-evaluator--manifest-scenarios))
+    (let ((manifest (make-hash-table :test #'equal)))
+      (puthash "schema_version" 1 manifest)
+      (puthash "kind" "latency-set" manifest)
+      (puthash "set_index"
+               (string-to-number (or (getenv "INCREMENTAL_SET_INDEX") ""))
+               manifest)
+      (puthash "independent" t manifest)
+      (puthash "run_id" etaf-performance-evaluator--manifest-run-id manifest)
+      (puthash "process_id" (emacs-pid) manifest)
+      (puthash "machine_id" (system-name) manifest)
+      (puthash "warmups" etaf-performance-evaluator-warmup-count manifest)
+      (puthash "source_identity" (getenv "INCREMENTAL_SOURCE_IDENTITY") manifest)
+      (puthash "evaluator_identity" (getenv "INCREMENTAL_EVALUATOR_IDENTITY") manifest)
+      (puthash "scenarios" scenarios manifest)
+      manifest)))
+
+(defun etaf-performance-evaluator--write-manifest ()
+  "Atomically write captured raw samples when manifest output is enabled."
+  (when etaf-performance-evaluator--manifest-output
+    (let* ((target (expand-file-name
+                    etaf-performance-evaluator--manifest-output))
+           (directory (file-name-directory target))
+           temporary)
+      (make-directory directory t)
+      (setq temporary (make-temp-file
+                       (expand-file-name ".incremental-perf-" directory)
+                       nil ".json"))
+      (unwind-protect
+          (progn
+            (with-temp-file temporary
+              (insert (json-serialize
+                       (etaf-performance-evaluator--manifest-data)
+                       :null-object nil :false-object :json-false))
+              (insert "\n"))
+            (rename-file temporary target t)
+            (setq temporary nil))
+        (when (and temporary (file-exists-p temporary))
+          (delete-file temporary))))))
 
 (defun etaf-performance-evaluator--timed-call (function)
   "Call FUNCTION and return `(ELAPSED-MS . RESULT)'."
@@ -90,6 +167,7 @@ VERIFY and CLEANUP."
                 (etaf-performance-evaluator--timed-call
                  (lambda () (funcall action index)))))
         (pcase-let ((`(,elapsed . ,result) timed))
+          (etaf-performance-evaluator--record-manifest-sample label elapsed)
           (funcall verify result index)
           (when cleanup (funcall cleanup result index))
           (push elapsed durations))))
@@ -937,12 +1015,30 @@ ETAF generation and preserve RUNTIME's mounted surface in BUFFER."
 
 (defun etaf-performance-evaluator-batch ()
   "Batch entry point for the cross-package performance evaluator."
-  (condition-case condition
-      (progn (etaf-performance-evaluator-run) (kill-emacs 0))
-    (error
-     (princ (format "PERF-EVALUATOR-ERROR: %s\n"
-                    (error-message-string condition)))
-     (kill-emacs 1))))
+  (let* ((etaf-performance-evaluator--manifest-output
+          (getenv "INCREMENTAL_PERF_MANIFEST"))
+         (etaf-performance-evaluator--manifest-scenarios
+          (and etaf-performance-evaluator--manifest-output
+               (make-hash-table :test #'equal)))
+         (etaf-performance-evaluator--manifest-run-id
+          (and etaf-performance-evaluator--manifest-output
+               (format "%s-%d-%06x" (format-time-string "%Y%m%dT%H%M%S%N%z")
+                       (emacs-pid) (random #x1000000))))
+         (status
+          (condition-case condition
+              (progn (etaf-performance-evaluator-run) 0)
+            (error
+             (princ (format "PERF-EVALUATOR-ERROR: %s\n"
+                            (error-message-string condition)))
+             1))))
+    (when etaf-performance-evaluator--manifest-output
+      (condition-case condition
+          (etaf-performance-evaluator--write-manifest)
+        (error
+         (setq status 1)
+         (princ (format "PERF-MANIFEST-ERROR: %s\n"
+                        (error-message-string condition))))))
+    (kill-emacs status)))
 
 (provide 'benchmark-research-shelf)
 ;;; benchmark-research-shelf.el ends here

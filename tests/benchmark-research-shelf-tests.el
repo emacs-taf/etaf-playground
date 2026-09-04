@@ -22,8 +22,19 @@
                   "../scripts/benchmark-research-shelf")
 (declare-function etaf-performance-evaluator--measure-overhead
                   "../scripts/benchmark-research-shelf")
+(declare-function etaf-performance-evaluator--manifest-data
+                  "../scripts/benchmark-research-shelf")
+(declare-function etaf-performance-evaluator--write-manifest
+                  "../scripts/benchmark-research-shelf")
+(declare-function etaf-performance-evaluator--record-manifest-sample
+                  "../scripts/benchmark-research-shelf")
+(declare-function etaf-performance-evaluator-batch
+                  "../scripts/benchmark-research-shelf")
 (defvar etaf-performance-evaluator-warmup-count)
 (defvar etaf-performance-evaluator-sample-count)
+(defvar etaf-performance-evaluator--manifest-output)
+(defvar etaf-performance-evaluator--manifest-scenarios)
+(defvar etaf-performance-evaluator--manifest-run-id)
 
 (ert-deftest etaf-performance-evaluator-uses-nearest-rank-percentiles ()
   "Return nearest-rank values for evaluator percentiles."
@@ -69,6 +80,109 @@
     (should (equal (car observed) (list most-positive-fixnum 1.0)))
     (should (= gc-cons-threshold 1000))
     (should (= gc-cons-percentage 0.1))))
+
+(ert-deftest etaf-performance-evaluator-manifest-preserves-raw-samples ()
+  "Write exact post-timing samples and statistics to the optional manifest."
+  (let* ((output (make-temp-file "etaf-perf-manifest-" nil ".json"))
+         (etaf-performance-evaluator--manifest-output output)
+         (etaf-performance-evaluator--manifest-scenarios
+          (make-hash-table :test #'equal))
+         (etaf-performance-evaluator--manifest-run-id "unit-run")
+         (process-environment
+          (append '("INCREMENTAL_SET_INDEX=2"
+                    "INCREMENTAL_SOURCE_IDENTITY=source-id"
+                    "INCREMENTAL_EVALUATOR_IDENTITY=evaluator-id")
+                  process-environment))
+         (durations '(1.25 2.5 3.75)))
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'etaf-performance-evaluator--timed-call)
+                     (lambda (function)
+                       (cons (pop durations) (funcall function))))
+                    ((symbol-function 'princ) #'ignore))
+            (etaf-performance-evaluator--measure
+             "row-selection" (lambda (_index) 'ok)
+             (lambda (result _index) (should (eq result 'ok)))
+             :warmups 0 :samples 3))
+          (etaf-performance-evaluator--write-manifest)
+          (let* ((json-object-type 'hash-table)
+                 (json-array-type 'list)
+                 (manifest (json-read-file output))
+                 (scenario (gethash "row-selection"
+                                    (gethash "scenarios" manifest))))
+            (should (equal '(1.25 2.5 3.75)
+                           (gethash "samples_ms" scenario)))
+            (should (= 3.75 (gethash "p95_ms" scenario)))
+            (should (= 3.75 (gethash "max_ms" scenario)))
+            (should (= 2 (gethash "set_index" manifest)))
+            (should (equal "source-id" (gethash "source_identity" manifest)))
+            (should (equal "evaluator-id"
+                           (gethash "evaluator_identity" manifest)))))
+      (when (file-exists-p output) (delete-file output)))))
+
+(ert-deftest etaf-performance-evaluator-manifest-retains-failed-prefix ()
+  "Keep only real samples captured before a scenario verification failure."
+  (let ((etaf-performance-evaluator--manifest-scenarios
+         (make-hash-table :test #'equal))
+        (durations '(4.0 5.0 6.0)))
+    (cl-letf (((symbol-function 'etaf-performance-evaluator--timed-call)
+               (lambda (function)
+                 (cons (pop durations) (funcall function))))
+              ((symbol-function 'princ) #'ignore))
+      (should-error
+       (etaf-performance-evaluator--measure
+        "pagination" (lambda (_index) 'ok)
+        (lambda (_result index)
+          (when (= index 1) (error "Fixture failure")))
+        :warmups 0 :samples 3)))
+    (should (equal '(5.0 4.0)
+                   (gethash "pagination"
+                            etaf-performance-evaluator--manifest-scenarios)))))
+
+(ert-deftest etaf-performance-evaluator-batch-writes-manifest-on-failure ()
+  "Write the actually captured prefix before returning a failing batch status."
+  (let* ((output (make-temp-file "etaf-failed-perf-manifest-" nil ".json"))
+         (process-environment
+          (append (list (concat "INCREMENTAL_PERF_MANIFEST=" output)
+                        "INCREMENTAL_SET_INDEX=1"
+                        "INCREMENTAL_SOURCE_IDENTITY=source-id"
+                        "INCREMENTAL_EVALUATOR_IDENTITY=evaluator-id")
+                  process-environment))
+         exit-status)
+    (unwind-protect
+        (progn
+          (cl-letf (((symbol-function 'etaf-performance-evaluator-run)
+                     (lambda ()
+                       (etaf-performance-evaluator--record-manifest-sample
+                        "filter-query" 8.5)
+                       (error "Fixture failure")))
+                    ((symbol-function 'kill-emacs)
+                     (lambda (status) (setq exit-status status)))
+                    ((symbol-function 'princ) #'ignore))
+            (etaf-performance-evaluator-batch))
+          (let* ((json-object-type 'hash-table)
+                 (json-array-type 'list)
+                 (manifest (json-read-file output))
+                 (scenario (gethash "filter-query"
+                                    (gethash "scenarios" manifest))))
+            (should (= 1 exit-status))
+            (should (equal '(8.5) (gethash "samples_ms" scenario)))
+            (should (= 8.5 (gethash "p95_ms" scenario)))
+            (should (= 8.5 (gethash "max_ms" scenario)))))
+      (when (file-exists-p output) (delete-file output)))))
+
+(ert-deftest etaf-performance-evaluator-no-manifest-env-keeps-normal-path ()
+  "Do not create evidence or change measurement results without the env opt-in."
+  (let ((etaf-performance-evaluator--manifest-output nil)
+        (etaf-performance-evaluator--manifest-scenarios nil))
+    (cl-letf (((symbol-function 'princ) #'ignore))
+      (let ((result
+             (etaf-performance-evaluator--measure
+              "row-selection" (lambda (_index) 'ok)
+              (lambda (value _index) (should (eq value 'ok)))
+              :warmups 0 :samples 1)))
+        (should (= 1 (plist-get (cdr result) :count)))))
+    (should-not (etaf-performance-evaluator--write-manifest))))
 
 (ert-deftest etaf-performance-evaluator-reports-both-hard-budget-failures ()
   "Report p95 and max independently when both exceed the hard budget."
