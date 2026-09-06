@@ -3,9 +3,13 @@
 ## Source of truth
 
 - Status: Active
-- Last refreshed: 2026-08-23
+- Last refreshed: 2026-09-05
 - Primary product surface: generic `etaf-playground.el` workspace plus the
   `examples/research-shelf.etaf` / `.el` / `.ecss` consumer triplet
+- Additional product surface: `examples/task-workbench.el`, a complete
+  composable task app. Its initial layout, interactions, and visual states are
+  checked in real GUI Emacs; current user direction is modern, spacious,
+  consistently aligned controls and a 100-task dataset.
 - Visual reference: `design/research-shelf.html`
 - Evidence reviewed: ETAF public View/Component/Data/Resource APIs, `etaf-ui`
   Button/Checkbox/Panel/DataGrid/Pagination, and `etaf-sqlite`'s typed source
@@ -81,8 +85,8 @@
 
 ## Components
 
-- Existing components to reuse: public `button`, `checkbox`, `label`, `panel`,
-  `data-grid`, and `pagination` from `etaf-ui`.
+- Existing components to reuse: `etaf-button`, `etaf-checkbox`, `etaf-label`,
+  `etaf-panel`, `etaf-data-grid`, and `etaf-pagination` from `etaf-ui`.
 - Companion composition: `research-shelf-shell`, `filter-rail`,
   `reading-list`, and `detail-inspector`; these are ordinary ETAF Components,
   not a second UI kit.
@@ -187,10 +191,11 @@ triplet.
   `etaf-research-shelf-page-size` defaults to 12; existing local rows are
   preserved and missing fixture rows are topped up with fresh IDs.
 - Performance: one Data mutation -> one Runtime generation/publication. The
-  current active latency lane uses 5 unmeasured warmups and 30 measured samples
-  at fixed 1413×62 geometry; every scenario must satisfy p95 and max at or below
-  50ms. The accepted 105ms p50 wording is historical design context, not the
-  current evaluator gate; `DOC-PERF-001` keeps its formal disposition in M0b1.
+  retained Research Shelf batch evaluator uses 5 unmeasured warmups and 30
+  measured samples at fixed 1413×62 geometry, with p95 and max at most 50ms.
+  Current GUI acceptance has the additional requirements below. The accepted
+  105ms p50 wording is historical design context, not the current evaluator
+  gate; `DOC-PERF-001` keeps its formal disposition in M0b1.
 - Compatibility: any same-basename `.etaf`/`.el` example is discoverable;
   `.ecss` is optional, and the bundled Research Shelf remains only one
   consumer.
@@ -200,17 +205,71 @@ triplet.
 
 ## Performance evidence lanes
 
-The latency lane, trace lane, and GUI lane share one
+The batch regression lane, trace lane, and GUI lane share one
 repository/environment/scenario/fixture/build identity but remain separate
-measurements. The latency lane owns the uninstrumented 5/30 p95/max 50ms gate.
+measurements. The retained Research Shelf 1413×62 batch evaluator owns its
+uninstrumented 5/30 p95/max 50ms regression checks.
 The trace lane owns a representative instrumented invocation with cost class,
 work counters, turns, allocation, and GC. The GUI lane owns the real Emacs
-action sequence, screenshots, recording, and temporal-review verdict. Batch
-verifier duration is not GUI first paint; action-start through forced redisplay
-completion remains an explicitly separate future first-paint gate and an M0a
-observed gap. No one lane may be used to claim another lane passed.
+action sequence and reviewed visual evidence. Current GUI acceptance additionally
+requires three independent foreground sample sets with each operation's p95 and
+max at most 50ms from action callback through forced redisplay. This gate remains
+outstanding. Preserve all warmups, GC observations and samples through the
+measurement entry in `../etaf/scripts/README.md`; returning from redisplay does
+not certify compositor presentation. No one lane may be used to claim another
+lane passed.
 
 ## Open questions
 
 - [ ] User may rename the product after reviewing the first HTML/ETAF render;
   architecture and interaction contracts remain unchanged.
+
+## Task Workbench visual contract
+
+- Source: user review of the actual Workbench GUI on 2026-09-05, especially
+  adjacent buttons, cramped rows and excessive detail-panel width. Reuse the
+  existing restrained cobalt emphasis; no separate design-system layer.
+- Hierarchy: a title and quiet workspace subtitle, a grouped toolbar, then
+  filter rail / primary task list / compact detail and service cards. Footer
+  counts and storage scope use muted text. The task list receives extra width.
+- Color: cool gray canvas, white cards, soft slate borders, cobalt primary
+  action; dark mode has a charcoal canvas and lighter slate cards. All official
+  control states use the existing semantic Theme tokens, including disabled,
+  selected, checkbox and pagination colors.
+- Actions: New task is primary. Search and retry are secondary; location,
+  deletion and error simulation are quiet controls. The current filter is
+  derived from the Data query and visibly distinct. Disabled controls retain
+  their official semantics and palette.
+- Rhythm: 10px within a horizontal control group, 16px between workspace
+  columns, one text line between vertical groups, and `(1 2)` card padding.
+  Ebox Row `:item-gap` is pixels; Column `:item-gap` is lines. Flex uses
+  `:gap '(1 (16))` for one line vertically and 16px horizontally. Keep buttons
+  compact with horizontal padding, rather than making every table row tall.
+- Data: 100 deterministic tasks, mixed completion states, 10 rows per page.
+  Test all pages, search, filtering, selection, CRUD, two independent Apps and
+  resource recovery. Do not replace the real dataset with a smaller acceptance
+  fixture. Initial seed titles remain stable for reproducible input checks.
+- Responsive: retain declarative Flex wrapping in source order. Side columns
+  have stable basis sizes; the task list grows. Root padding and viewport scroll
+  are legitimate composition and must work together without example workarounds.
+- Panel alignment: each workspace Flex line stretches its columns to a shared
+  height, keeping the filter panel's bottom aligned with the main content. A
+  wrapped row sizes independently; no viewport-specific height constants.
+- Width distribution: filter/list/inspector grow with weights `1/4/1`, keeping
+  emphasis on the task list while a side column fills its line when wrapped.
+  Filter buttons wrap into a horizontal group when their panel has room.
+  Detail and service cards share a wrapping Flex: stacked in the desktop side
+  column, side by side with equal heights on a wider wrapped row, then stacked
+  again when each card's usable minimum width no longer fits.
+- Table sizing: the task title receives the remaining column width through the
+  existing `(fr 1)` Grid track convention; the action column keeps its compact
+  character width. Header and body consume the same tracks. Resizing changes
+  geometry without replacing custom cell state or semantic identity.
+- Pagination: full previous/next buttons with readable labels and horizontal
+  padding, a quiet centered page/range summary, and clear disabled states.
+  Workbench uses Chinese labels; the shared component retains configurable text.
+- Acceptance: inspect light/dark, selected/disabled, wide/compact and scrolled
+  GUI states after functional checks. Preserve the goal's three real GUI
+  performance sample sets with per-operation p95 and max at most 50ms.
+- Assumption: no new brand was requested; the repository's existing cobalt,
+  neutral surfaces and typography are the design basis.

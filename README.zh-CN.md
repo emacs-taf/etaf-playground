@@ -67,15 +67,42 @@ source，会在下一次 mount 前重新加载完整 consumer。
 
 ## 可重复执行的 Emacs 31.1 GUI 实测
 
-仓库提供一个稳定的真实 GUI runner，不再临时拼接 `emacsclient`、前台激活和录屏
-命令：
+当前 GUI 验收使用用户已经运行的图形 Emacs server：通过 `emacsclient`
+在明确命名的 buffer 中渲染，保留当前应用焦点，只截取已有窗口并检查。
+保留用户字体、编码设置和正常 GC 策略；连接失败时不自动启动 daemon 或另建 frame。
+
+本仓库及 sibling 依赖已在 Emacs 的 load-path 中时：
+
+```sh
+emacsclient --eval '(progn (require (quote task-workbench)) (wb-open "*Workbench review*"))'
+```
+
+维护中的例子位于 `examples/task-workbench.el`；require 前需将 examples
+目录加入 load-path。自动交互验证可在 `emacs-gui-verifier` 引擎及适配器
+依赖已经可用后，加载 `scripts/task-workbench-gui-scenarios.el`，在已有 frame 执行：
+
+```elisp
+(task-workbench-gui-prepare)
+(run-at-time 0.05 nil #'task-workbench-gui-run "/absolute/fresh/evidence-directory")
+```
+
+调用方负责窗口截图及证据检查。适配器要求新的专用验收 buffer，并保留当前
+渲染后端。准备阶段也保留应用焦点；显式调用 `(task-workbench-gui-prepare t)`
+才会切到前台。后台的 Emacs 本地动作可以验证功能，其耗时不能证明前台显示延迟。
+只有显式设置 `EBOX_NATIVE_REFLOW_MODULE_PATH` 时，才要求加载该路径下的兼容
+native 模块。适配器不启动 server。需检查 mounted Runtime、动作断言和实际截图；
+截图本身不能证明延迟上界或无闪烁。现有 server 的截图与录屏细节见
+`../etaf/scripts/README.md`。
+
+以下命令是保留的 **legacy 隔离环境工具**，只用于明确选择独立测试 Emacs 的
+场景，不是当前默认的 existing-server 流程：
 
 ```sh
 make gui-doctor
 make gui-research
 make gui-flex
 make gui-grid
-# 或按顺序采集三个场景：
+# 或在独立测试实例中按顺序采集四个场景：
 make gui-all
 ```
 
@@ -100,11 +127,16 @@ scenario factory 的两个输入。增加新应用时不会复制第二套 daemo
 scripts/run-gui-verification.sh review /private/tmp/etaf-playground-gui.XXXXXX
 ```
 
-只有 `VERDICT=PASS` 才是有效 GUI 证据。assertion 失败、黑帧、录屏缺失、错误 buffer、
+对于这套 legacy 录屏包，只有 `VERDICT=PASS` 才证明其审查完成；这个 verdict
+不是另一条 existing-server 流程的必要条件。assertion 失败、黑帧、录屏缺失、错误 buffer、
 split window、陈旧 frame 或没有完成时序审查都会保持 fail-closed。
 
 验证命令：`make check EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs`。
-性能门禁：`make perf`（1413×62 viewport 的 warm 选行/主题延迟）。
+批处理回归：`make perf`（Research Shelf 的 1413×62 viewport，选行/主题延迟）。
+当前 GUI 验收还要求三组独立的前台实测，每项操作从回调开始到强制 redisplay
+返回的 p95 和 max 均不超过 50ms；该门禁尚未通过。使用
+`../etaf/scripts/README.md` 中的测量入口，保留预热、GC 记录和全部样本。
+redisplay 返回不能证明操作系统已经呈现画面，批处理结果也不能替代 GUI 门禁。
 
 仓库中的 Research Shelf 只是上述通用工作区的一个 consumer。它默认安装确定性的
 256 条 SQLite fixture，每页显示 12 条；测试或压测时可以绑定

@@ -70,15 +70,50 @@ mount.
 
 ## Repeatable Emacs 31.1 GUI verification
 
-The repository owns one stable real-GUI runner instead of relying on ad-hoc
-`emacsclient`, focus, and recording commands:
+Use the user's running graphical Emacs server for current GUI acceptance.
+Connect with `emacsclient`, render into an explicit buffer in the existing
+frame, then inspect a capture of that window without changing application focus.
+Preserve the user's font,
+coding settings and normal GC policy. A missing server is not a reason to
+silently start a daemon or create another frame.
+
+With this checkout and its sibling dependencies already on Emacs's load path:
+
+```sh
+emacsclient --eval '(progn (require (quote task-workbench)) (wb-open "*Workbench review*"))'
+```
+
+The maintained example is `examples/task-workbench.el`; add that directory to
+`load-path` before requiring it. For automated interaction checks, load
+`scripts/task-workbench-gui-scenarios.el` with its `emacs-gui-verifier` engine
+and adapter dependencies available, then use the existing frame:
+
+```elisp
+(task-workbench-gui-prepare)
+(run-at-time 0.05 nil #'task-workbench-gui-run "/absolute/fresh/evidence-directory")
+```
+
+The caller owns window capture and evidence review. The adapter requires fresh
+dedicated acceptance buffers and preserves the current rendering backend.
+Preparation also preserves application focus; `(task-workbench-gui-prepare t)`
+explicitly requests foreground activation. Background Emacs-local actions can
+verify app behavior, but their timing does not certify foreground display latency.
+When `EBOX_NATIVE_REFLOW_MODULE_PATH` is explicitly set, it requires that exact
+compatible module. It does not start a server. Check the mounted Runtime,
+action assertions and the actual
+images. Screenshots alone do not prove a latency bound or absence of flicker.
+See `../etaf/scripts/README.md` for existing-server capture and recording details.
+
+The following commands are **legacy isolated-environment tools**, retained for
+explicit requests to use a separate test Emacs. They are not the default
+existing-server workflow:
 
 ```sh
 make gui-doctor
 make gui-research
 make gui-flex
 make gui-grid
-# Or capture all three sequentially:
+# Or capture all four sequentially in isolated test instances:
 make gui-all
 ```
 
@@ -106,7 +141,9 @@ After that temporal review, finalize the exact run directory:
 scripts/run-gui-verification.sh review /private/tmp/etaf-playground-gui.XXXXXX
 ```
 
-Only `VERDICT=PASS` is valid GUI evidence. Assertion failure, a black segment,
+For this legacy capture bundle, only `VERDICT=PASS` certifies its review.
+This verdict is not required by the separate existing-server workflow.
+Assertion failure, a black segment,
 missing recording, wrong buffer, split window, stale frame, or missing temporal
 review remains fail-closed.
 
@@ -123,16 +160,18 @@ rebuilding the dependency graph.
 Performance evidence has three separate lanes correlated by one
 repository/environment/scenario/fixture/build identity:
 
-- The latency lane runs the fixed 1413×62 batch evaluator with 5 unmeasured
-  warmups and 30 measured samples. The current active gate requires both p95
-  and max to be at or below 50ms for every scenario.
+- The batch regression lane runs the retained Research Shelf 1413×62 evaluator
+  with 5 unmeasured warmups and 30 measured samples. Its p95/max 50ms checks
+  diagnose regressions in that batch fixture.
 - The trace lane runs a separate instrumented representative invocation. Its
   cost classes, work counters, turns, allocation, and GC data are not inserted
   into the timed latency distribution.
-- The GUI lane captures the real Emacs interaction sequence, screenshots, and
-  temporal-review verdict. Batch verifier duration is not GUI first paint;
-  action-start to forced-redisplay-complete first-paint timing remains a
-  separately identified future gate and an observed M0a gap.
+- The GUI lane checks the real Emacs interaction sequence and reviewed images.
+  Current acceptance also requires three independent foreground GUI sample sets
+  with per-operation p95 and max at or below 50ms, from action callback through
+  forced redisplay. This gate remains outstanding. Use the measurement boundary
+  in `../etaf/scripts/README.md`, preserving warmups, GC and all samples. Returning
+  from redisplay does not certify compositor presentation.
 
 Evidence from one lane supports only that lane's conclusion. A
 performance-complete or user-visible-non-regression claim requires the
