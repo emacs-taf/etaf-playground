@@ -336,13 +336,24 @@ constructed.  When omitted, initialize it for direct programmatic callers."
      (append (list :id (plist-get row :id)) fields)
      message)))
 
-;; Named Actions keep product mutations out of View callbacks.  The View layer
-;; only dispatches these stable application commands with the current model.
-(etaf-action-define etaf-research-shelf-filter (runtime model filter)
-  "Apply FILTER to MODEL."
-  (ignore runtime)
-  (etaf-research-shelf--set-filter model filter))
+(defun etaf-research-shelf--advance-item (model item)
+  "Advance ITEM in MODEL by ten percent without changing selection."
+  (let ((next (min 100 (+ 10 (or (plist-get item :progress) 0)))))
+    (etaf-research-shelf--mutate
+     model 'update
+     (list :id (plist-get item :id) :progress next
+           :status (if (= next 100) "finished" "reading") :updated "Just now")
+     "✓ Progress saved")))
 
+(defun etaf-research-shelf--star-item (model item starred)
+  "Set ITEM's STARRED value in MODEL without changing selection."
+  (etaf-research-shelf--mutate
+   model 'update
+   (list :id (plist-get item :id) :starred (if starred 1 0) :updated "Just now")
+   (if starred "★ Starred locally" "Removed star")))
+
+;; Named Actions expose reusable application commands.  Simple local controls
+;; can call ordinary business functions directly, as the filter button does.
 (etaf-action-define etaf-research-shelf-reload (runtime model)
   "Reload MODEL's data source."
   (ignore runtime)
@@ -367,13 +378,8 @@ constructed.  When omitted, initialize it for direct programmatic callers."
 (etaf-action-define etaf-research-shelf-progress (runtime model)
   "Advance the selected reading by ten percent."
   (ignore runtime)
-  (when-let* ((current (etaf-research-shelf--selected model))
-              (value (or (plist-get current :progress) 0)))
-    (etaf-research-shelf--update-selected
-     model (list :progress (min 100 (+ value 10))
-                 :status (if (>= (+ value 10) 100) "finished" "reading")
-                 :updated "Just now")
-     "✓ Progress saved")))
+  (when-let* ((current (etaf-research-shelf--selected model)))
+    (etaf-research-shelf--advance-item model current)))
 
 (etaf-action-define etaf-research-shelf-finish (runtime model)
   "Mark the selected reading finished."
@@ -386,10 +392,8 @@ constructed.  When omitted, initialize it for direct programmatic callers."
   "Toggle the selected reading's star."
   (ignore runtime)
   (when-let* ((current (etaf-research-shelf--selected model)))
-    (let ((starred (= 1 (or (plist-get current :starred) 0))))
-      (etaf-research-shelf--update-selected
-       model (list :starred (if starred 0 1) :updated "Just now")
-       (if starred "Removed star" "★ Starred locally")))))
+    (etaf-research-shelf--star-item
+     model current (not (= 1 (or (plist-get current :starred) 0))))))
 
 (etaf-action-define etaf-research-shelf-archive (runtime model)
   "Archive the selected reading."
@@ -401,12 +405,55 @@ constructed.  When omitted, initialize it for direct programmatic callers."
 ;;; VIEW / COMPONENTS / COMPOSITION
 ;;; ---------------------------------------------------------------------------
 
+(etaf-define-component etaf-research-shelf-item-star (&key item)
+  "Star ITEM through the consuming App's model."
+  :setup
+  (etaf-inject 'research-shelf-model nil t)
+  :render
+  (let ((model (etaf-state))
+        (record item))
+    (etaf-view
+     (etaf-checkbox
+      :label "★" :aria-label "Star reading"
+      :checked (= 1 (or (plist-get record :starred) 0))
+      :on-change
+      (lambda (next)
+        (etaf-research-shelf--star-item model record next))))))
+
+(etaf-define-component etaf-research-shelf-item-advance (&key item)
+  "Advance ITEM through the consuming App's model."
+  :setup
+  (etaf-inject 'research-shelf-model nil t)
+  :render
+  (let ((model (etaf-state))
+        (record item))
+    (etaf-view
+     (etaf-button
+      :label "+10%" :aria-label "Advance reading" :variant 'ghost
+      :disabled
+      (or (not (null (member (plist-get record :status) '("finished" "archived"))))
+          (>= (or (plist-get record :progress) 0) 100))
+      :on-press
+      (lambda () (etaf-research-shelf--advance-item model record))))))
+
+(defun etaf-research-shelf-star-cell (row)
+  "Return ROW's star control at the consuming list's Context."
+  (etaf-view (etaf-research-shelf-item-star :item row)))
+
+(defun etaf-research-shelf-advance-cell (row)
+  "Return ROW's progress control at the consuming list's Context."
+  (etaf-view (etaf-research-shelf-item-advance :item row)))
+
 (defconst etaf-research-shelf--grid-columns
   '((:key :title :label "Title" :width 21)
     (:key :author :label "Author" :width 12)
     (:key :status :label "Status" :width 10)
     (:key :progress :label "Progress" :width 8)
-    (:key :kind :label "Kind" :width 7))
+    (:key :kind :label "Kind" :width 7)
+    (:key :starred :label "Star" :width 6
+     :cell etaf-research-shelf-star-cell)
+    (:key :advance :label "Advance" :width 8
+     :cell etaf-research-shelf-advance-cell))
   "Compact DataGrid columns for the Research Shelf list.")
 
 (defun etaf-research-shelf--status-label (status)
@@ -438,27 +485,20 @@ constructed.  When omitted, initialize it for direct programmatic callers."
   :setup
   (list :model (etaf-inject 'research-shelf-model nil t)
         :form (etaf-inject 'research-shelf-filters nil t))
-  :view
-  (etaf-button
-   :label
-   (let* ((model (plist-get (etaf-state) :model))
-          (form (plist-get (etaf-state) :form))
-          (label (etaf-research-shelf--filter-label
-                  form filter-key fallback)))
-     (if (eq filter-key (etaf-value (plist-get model :filter)))
-         (concat "● " label)
-       label))
-   :variant
-   (if (eq filter-key
-           (etaf-value
-            (plist-get (plist-get (etaf-state) :model) :filter)))
-       'secondary
-     'ghost)
-   :on-press
-   (let ((model (plist-get (etaf-state) :model))
-         (key filter-key))
-     (lambda ()
-       (etaf-dispatch 'etaf-research-shelf-filter model key)))))
+  :render
+  (let* ((state (etaf-state))
+         (model (plist-get state :model))
+         (form (plist-get state :form))
+         (key filter-key)
+         (label (etaf-research-shelf--filter-label form key fallback)))
+    (etaf-view
+     (etaf-button
+      :label (if (eq key (etaf-value (plist-get model :filter)))
+                 (concat "● " label)
+               label)
+      :variant (if (eq key (etaf-value (plist-get model :filter)))
+                   'secondary 'ghost)
+      :on-press (lambda () (etaf-research-shelf--set-filter model key))))))
 
 (etaf-define-component etaf-research-shelf-filter-rail ()
   "Render the Research Shelf filter rail from inherited Context."
