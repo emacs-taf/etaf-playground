@@ -205,10 +205,11 @@ triplet.
 
 ## Performance evidence lanes
 
-The batch regression lane, trace lane, and GUI lane share one
+The batch latency lane, trace lane, and GUI lane share one
 repository/environment/scenario/fixture/build identity but remain separate
 measurements. The retained Research Shelf 1413×62 batch evaluator owns its
-uninstrumented 5/30 p95/max 50ms regression checks.
+uninstrumented 5/30 p95/max 50ms regression checks. Batch verifier duration
+measures batch Lisp work, not GUI first paint.
 The trace lane owns a representative instrumented invocation with cost class,
 work counters, turns, allocation, and GC. The GUI lane owns the real Emacs
 action sequence and reviewed visual evidence. Current GUI acceptance additionally

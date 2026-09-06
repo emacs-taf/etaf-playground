@@ -108,9 +108,10 @@ ETAF 私有 registry 变量；Component setup 中创建的 Controller 自动归�
 - 用 inert reader、source tab/session、未保存 source refresh 和 SQLite 临时文件
   测试 mount/remount、筛选、分页、重复选行、mutation、错误状态和 cleanup；GUI
   用干净 fullscreen 截图验证真实布局。
-- 目标：一次 Data mutation 对应一次 Runtime generation/publication。当前有效的
-  延迟 lane 在固定 1413×62 几何下执行 5 次未计时 warmup 与 30 个计时 sample，
-  每个场景的 p95 和 max 均须不超过 50ms。已接受的 105ms p50 是历史设计上下文，
+- 目标：一次 Data mutation 对应一次 Runtime generation/publication。Research Shelf
+  的批处理延迟 lane 在固定 1413×62 几何下执行 5 次未计时 warmup 与 30 个计时 sample，
+  每个场景的 p95 和 max 均须不超过 50ms；当前 GUI 验收还有下述独立要求。
+  已接受的 105ms p50 是历史设计上下文，
   不是当前 evaluator gate；其正式处置仍由 M0b1 的 `DOC-PERF-001` 负责。
 - 压测入口：`etaf-research-shelf-fixture-size` 默认 256，
   `etaf-research-shelf-page-size` 默认 12；已有本地记录保留，不足部分使用新 ID
@@ -118,13 +119,15 @@ ETAF 私有 registry 变量；Component setup 中创建的 Controller 自动归�
 
 ## 性能 evidence lanes
 
-延迟 lane、追踪 lane 与 GUI lane 共享同一组仓库、环境、场景、fixture 和 build identity，
-但保持为三种独立测量。延迟 lane 负责无 instrumentation 的 5/30、p95/max 50ms
-门禁；追踪 lane 负责一次代表性 instrumented invocation 的 cost class、work counters、
-turns、allocation 与 GC；GUI lane 负责真实 Emacs action sequence、截图、录像与
-temporal-review verdict。Batch verifier duration 不是 GUI first paint；从 action-start
-到 forced redisplay completion 的 first-paint 计时仍是独立 future gate，也是 M0a
-明确记录的 observed gap。任何一条 lane 都不能替另一条 lane 宣称通过。
+批处理延迟 lane、追踪 lane 与 GUI lane 共享同一组仓库、环境、场景、fixture 和 build identity，
+但保持为三种独立测量。批处理延迟 lane 负责 Research Shelf 1413×62 fixture 中
+无 instrumentation 的 5/30、p95/max 50ms 回归检查。Batch verifier duration
+不是 GUI first paint。追踪 lane 负责一次代表性 instrumented invocation 的 cost class、
+work counters、turns、allocation 与 GC；GUI lane 负责真实 Emacs action sequence
+与已审查的画面证据。当前 GUI 验收还要求三组独立的前台实测，每项操作从回调开始
+到强制 redisplay 返回的 p95 和 max 均不超过 50ms；该门禁尚未通过。使用
+`../etaf/scripts/README.md` 中的测量入口，保留预热、GC 记录和全部样本。
+redisplay 返回不能证明操作系统已经呈现画面。任何一条 lane 都不能替另一条 lane 宣称通过。
 
 ## 待 review
 

@@ -148,7 +148,7 @@ missing recording, wrong buffer, split window, stale frame, or missing temporal
 review remains fail-closed.
 
 Run `make check EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs`.
-Run `make perf` for the fixed 1413×62 latency gate. Every scenario performs
+Run `make perf` for the fixed 1413×62 batch latency gate. Every scenario performs
 five unmeasured warmups followed by 30 measured samples; both p95 and max must
 remain at or below 50ms, including Theme and post-resize interactions.
 For repeated absolute-latency runs, use `make perf-prepare` once after source
@@ -160,9 +160,10 @@ rebuilding the dependency graph.
 Performance evidence has three separate lanes correlated by one
 repository/environment/scenario/fixture/build identity:
 
-- The batch regression lane runs the retained Research Shelf 1413×62 evaluator
+- The batch latency lane runs the retained Research Shelf 1413×62 evaluator
   with 5 unmeasured warmups and 30 measured samples. Its p95/max 50ms checks
-  diagnose regressions in that batch fixture.
+  diagnose regressions in that batch fixture. Batch verifier duration measures
+  batch Lisp work, not GUI first paint.
 - The trace lane runs a separate instrumented representative invocation. Its
   cost classes, work counters, turns, allocation, and GC data are not inserted
   into the timed latency distribution.
