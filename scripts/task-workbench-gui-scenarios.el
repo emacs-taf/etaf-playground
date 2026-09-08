@@ -195,6 +195,49 @@ cannot establish that Emacs painted a control on the same visual line."
           (list identity (car bounds) (cdr bounds))))
       (number-sequence 1 10)))))
 
+(defun wb-gui--panel-heights (context)
+  "Observe CONTEXT's four card identities and layout lines in source order."
+  (let ((runtime (wb-gui--runtime context))
+        panels)
+    (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
+      (dolist (entry (etaf-runtime-host-props-entries runtime))
+        (let ((class (plist-get (cdr entry) :class)))
+          (when (member "etaf-panel" (if (stringp class) (split-string class) class))
+            (let* ((bounds (etaf-host-ref-bounds runtime (car entry)))
+                   (start (car bounds))
+                   (end (and bounds (1- (cdr bounds)))))
+              (unless (and start end)
+                (error "Workbench panel has no live bounds"))
+              (push (list :ref (car entry) :start start
+                          :lines (1+ (- (line-number-at-pos end)
+                                        (line-number-at-pos start))))
+                    panels))))))
+    (unless (= (length panels) 4)
+      (error "Expected four Workbench panels, got %d" (length panels)))
+    (sort panels (lambda (left right)
+                   (< (plist-get left :start) (plist-get right :start))))))
+
+(defun wb-gui--help-layout-preserved-p (context expanded-p)
+  "Check CONTEXT's disclosure state and unaffected card heights in layout lines.
+EXPANDED-P also requires the detail card to recover its original height.
+Native Emacs glyph rows may have different pixel heights as content moves."
+  (let* ((before (etaf-gui-verifier-context-get context 'help-panels-before))
+         (after (wb-gui--panel-heights context))
+         (height (lambda (panels index)
+                   (plist-get (nth index panels) :lines))))
+    (etaf-gui-verifier-context-put context 'help-panels-current after)
+    (and before
+         (eq expanded-p (and (wb-gui--text-p context "点击行：选择任务") t))
+         (equal (mapcar (lambda (panel) (plist-get panel :ref)) before)
+                (mapcar (lambda (panel) (plist-get panel :ref)) after))
+         (cl-every (lambda (index)
+                     (= (funcall height before index)
+                        (funcall height after index)))
+                   '(0 1 3))
+         (if expanded-p
+             (= (funcall height before 2) (funcall height after 2))
+           (< (funcall height after 2) (funcall height before 2))))))
+
 (defun wb-gui--capture-theme-baseline (context)
   "Capture CONTEXT's initial geometry once it survives another paint turn."
   (when (etaf-gui-verifier-context-get context 'light-layout)
@@ -507,10 +550,15 @@ cannot establish that Emacs painted a control on the same visual line."
                       (lambda (c) (wb-gui--enter c "每页条数 10 ✎" "2"))
                       (lambda (c) (and (equal (wb-gui--ids c) '(2 3))
                                        (wb-gui--text-p c "Page 1 / 50"))))
-      (wb-gui--action "hide-help" (lambda (c) (wb-gui--press c "显示说明"))
-                      (lambda (c) (not (wb-gui--text-p c "点击行：选择任务"))))
+      (wb-gui--action
+       "hide-help"
+       (lambda (c)
+         (etaf-gui-verifier-context-put
+          c 'help-panels-before (wb-gui--panel-heights c))
+         (wb-gui--press c "显示说明"))
+       (lambda (c) (wb-gui--help-layout-preserved-p c nil)))
       (wb-gui--action "show-help" (lambda (c) (wb-gui--press c "显示说明"))
-                      (lambda (c) (wb-gui--text-p c "点击行：选择任务")))
+                      (lambda (c) (wb-gui--help-layout-preserved-p c t)))
       (wb-gui--action "resource-failure" (lambda (c) (wb-gui--press c "模拟失败"))
                       (lambda (c) (wb-gui--text-p c "模拟加载失败")))
       (wb-gui--action "resource-retry" (lambda (c) (wb-gui--press c "刷新 / 重试"))

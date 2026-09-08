@@ -3,7 +3,7 @@
 ## Source of truth
 
 - Status: Active
-- Last refreshed: 2026-09-05
+- Last refreshed: 2026-09-08
 - Primary product surface: generic `etaf-playground.el` workspace plus the
   `examples/research-shelf.etaf` / `.el` / `.ecss` consumer triplet
 - Additional product surface: `examples/task-workbench.el`, a complete
@@ -253,15 +253,22 @@ lane passed.
 - Responsive: retain declarative Flex wrapping in source order. Side columns
   have stable basis sizes; the task list grows. Root padding and viewport scroll
   are legitimate composition and must work together without example workarounds.
-- Panel alignment: each workspace Flex line stretches its columns to a shared
-  height, keeping the filter panel's bottom aligned with the main content. A
-  wrapped row sizes independently; no viewport-specific height constants.
+- Panel alignment: workspace panels align at the top and keep their own
+  content-driven heights in layout lines. Toggling “显示说明” collapses the
+  detail content without changing the filter, task or service line counts. Following cards
+  and the footer may move naturally in document flow; do not reserve invisible
+  help space or introduce viewport-specific height constants. This follows
+  the user's 2026-09-08 review of disclosure-induced panel resizing.
+- Native text geometry: Emacs shares ascent and descent across each displayed
+  row. Moving content may therefore change a card's pixel height while its
+  layout line count stays fixed. The user explicitly accepts this behavior;
+  preserve layout semantics and interaction instead of forcing uniform rows.
 - Width distribution: filter/list/inspector grow with weights `1/4/1`, keeping
   emphasis on the task list while a side column fills its line when wrapped.
   Filter buttons wrap into a horizontal group when their panel has room.
   Detail and service cards share a wrapping Flex: stacked in the desktop side
-  column, side by side with equal heights on a wider wrapped row, then stacked
-  again when each card's usable minimum width no longer fits.
+  column, side by side with independent heights on a wider wrapped row, then
+  stacked again when each card's usable minimum width no longer fits.
 - Table sizing: the task title receives the remaining column width through the
   existing `(fr 1)` Grid track convention; the action column keeps its compact
   character width. Header and body consume the same tracks. Resizing changes

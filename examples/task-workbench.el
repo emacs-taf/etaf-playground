@@ -129,7 +129,7 @@
           :align-items 'center
      (slot :name 'toolbar)))
    (flex :width 'stretch :flex-wrap 'wrap :gap '(1 (16))
-         :align-items 'stretch
+         :align-items 'flex-start
     (slot))
    (slot :name 'footer (text "准备就绪")))
   :styles
@@ -338,7 +338,7 @@
           (etaf-data-load data))))
 
       (flex :flex-wrap 'wrap :flex-basis 36 :flex-grow 1 :min-width 0
-            :align-content 'space-between :align-items 'stretch :gap '(1 (16))
+            :align-content 'space-between :align-items 'flex-start :gap '(1 (16))
        (wb-detail :flex-basis 28 :flex-grow 1)
        (wb-service :flex-basis 28 :flex-grow 1))
 

@@ -108,15 +108,50 @@
          (line-number-at-pos
           (etaf-host-ref-position runtime (wb-test--control runtime "新增任务")))))))
 
-(cl-defmacro wb-test--with-app ((runtime data) &rest body)
-  "Mount a fresh app bound as RUNTIME and DATA, then execute BODY."
+(defun wb-test--card-layout (runtime control-label)
+  "Return public bounds and line geometry for CONTROL-LABEL's card in RUNTIME."
+  (let* ((control (wb-test--control runtime control-label))
+         (panels
+          (cl-remove-if-not
+           (lambda (entry)
+             (let ((classes (plist-get (cdr entry) :class)))
+               (member "etaf-panel"
+                       (if (stringp classes) (split-string classes) classes))))
+           (etaf-runtime-host-props-entries runtime)))
+         (ancestries (etaf-runtime-host-ancestries
+                      runtime (cons control (mapcar #'car panels))))
+         (matches
+          (cl-remove-if-not
+           (lambda (entry)
+             (memq (car (gethash (car entry) ancestries))
+                   (gethash control ancestries)))
+           panels)))
+    (should (= (length matches) 1))
+    (let* ((host (caar matches))
+           (bounds (etaf-host-ref-bounds runtime host)))
+      (should bounds)
+      (should (< (car bounds) (cdr bounds)))
+      (with-current-buffer (etaf-runtime-buffer runtime)
+        (let ((top (line-number-at-pos (car bounds)))
+              (bottom (line-number-at-pos (1- (cdr bounds)))))
+          (list :host host :bounds (copy-tree bounds)
+                :top top :bottom bottom :height (1+ (- bottom top))
+                :left
+                (save-excursion
+                  (goto-char (car bounds))
+                  (ebox-string-pixel-width
+                   (buffer-substring (line-beginning-position) (point))))))))))
+
+(cl-defmacro wb-test--with-app ((runtime data &optional viewport-width) &rest body)
+  "Mount RUNTIME and DATA at optional VIEWPORT-WIDTH, then execute BODY."
   (declare (indent 1))
   `(with-temp-buffer
      (let (,runtime ,data)
        (unwind-protect
            (progn
              (etaf-mount (current-buffer) (etaf-view (wb-app))
-                         '(:viewport-width 1600 :viewport-height 80))
+                         (list :viewport-width (or ,viewport-width 1600)
+                               :viewport-height 80))
              (setq ,runtime (etaf-runtime-for-buffer (current-buffer))
                    ,data (wb-test--data ,runtime))
              ,@body)
@@ -287,6 +322,92 @@
       (should (equal layout (wb-test--layout-bounds runtime)))
       (should (equal widths (wb-test--line-widths runtime)))
       (should (wb-test--desktop-header-inline-p runtime)))))
+
+(ert-deftest wb-workbench-explanation-toggle-isolates-card-heights ()
+  "Explanation changes only detail height across three rendered layouts."
+  (dolist (viewport '((250 . stacked-sidebar) (500 . side-by-side-sidebar)
+                      (70 . single-column)))
+    (ert-info ((format "Workbench explanation layout: %S" viewport))
+      (wb-test--with-app (runtime data (car viewport))
+        (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
+        (cl-labels
+            ((cards ()
+               (mapcar (lambda (entry)
+                         (cons (car entry) (wb-test--card-layout runtime (cdr entry))))
+                       '((filter . "全部") (tasks . "每页条数 10 ✎")
+                         (detail . "显示说明") (service . "刷新 / 重试")))))
+          (let* ((before (cards))
+                 (text (wb-test--text runtime))
+                 (items (etaf-value (etaf-data-items data)))
+                 (selected (etaf-data-selected-item data))
+                 (detail (wb-test--instance runtime 'wb-detail))
+                 (service (wb-test--instance runtime 'wb-service))
+                 (expanded (plist-get (etaf--component-instance-state detail) :expanded))
+                 (resource (plist-get (etaf--component-instance-state service) :resource))
+                 (rows (mapcar (lambda (id) (wb-test--row runtime id))
+                               (number-sequence 1 10)))
+                 (control (wb-test--control runtime "显示说明"))
+                 (filter (alist-get 'filter before))
+                 (tasks (alist-get 'tasks before))
+                 (detail-layout (alist-get 'detail before))
+                 (service-layout (alist-get 'service before)))
+            ;; Prove the viewport actually exercises the intended wrapping
+            ;; shape from published host bounds, rather than style declarations.
+            (pcase (cdr viewport)
+              ('stacked-sidebar
+               (should (= (plist-get filter :top) (plist-get tasks :top)
+                          (plist-get detail-layout :top)))
+               (should (< (plist-get tasks :left) (plist-get detail-layout :left)))
+               (should (< (plist-get detail-layout :bottom)
+                          (plist-get service-layout :top))))
+              ('side-by-side-sidebar
+               (should (= (plist-get filter :top) (plist-get tasks :top)
+                          (plist-get detail-layout :top) (plist-get service-layout :top)))
+               (should (< (plist-get detail-layout :left)
+                          (plist-get service-layout :left))))
+              ('single-column
+               (should (< (plist-get filter :bottom) (plist-get tasks :top)))
+               (should (< (plist-get tasks :bottom) (plist-get detail-layout :top)))
+               (should (< (plist-get detail-layout :bottom)
+                          (plist-get service-layout :top)))))
+            (should (etaf-value expanded))
+            (should (= (wb-task-id selected) 1))
+            (should (string-match-p "点击行：选择任务" text))
+            (dolist (visible '(nil t))
+              (wb-test--press runtime "显示说明")
+              (let ((current (cards)))
+                (message "Workbench explanation width=%d visible=%S heights=%S -> %S"
+                         (car viewport) visible
+                         (mapcar (lambda (entry) (plist-get (cdr entry) :height)) before)
+                         (mapcar (lambda (entry) (plist-get (cdr entry) :height)) current))
+                (dolist (card '(filter tasks service))
+                  (should (= (plist-get (alist-get card before) :height)
+                             (plist-get (alist-get card current) :height))))
+                (should (funcall (if visible #'= #'<)
+                                 (plist-get (alist-get 'detail current) :height)
+                                 (plist-get detail-layout :height)))
+                (dolist (card '(filter tasks detail service))
+                  (should (equal (plist-get (alist-get card before) :host)
+                                 (plist-get (alist-get card current) :host))))
+                (should (eq visible (etaf-value expanded)))
+                (should (eq detail (wb-test--instance runtime 'wb-detail)))
+                (should (eq service (wb-test--instance runtime 'wb-service)))
+                (should (eq items (etaf-value (etaf-data-items data))))
+                (should (eq selected (etaf-data-selected-item data)))
+                (should (= (etaf-value (etaf-data-total data)) 100))
+                (should (= (etaf-value (etaf-data-page data)) 1))
+                (should (= (etaf-value (etaf-data-page-size data)) 10))
+                (should (eq (etaf-resource-status resource) 'success))
+                (should (equal rows (mapcar (lambda (id) (wb-test--row runtime id))
+                                           (number-sequence 1 10))))
+                (should (equal control (wb-test--control runtime "显示说明")))
+                (should (string-match-p "设计组件接口" (wb-test--text runtime)))
+                (should (string-match-p "服务正常" (wb-test--text runtime)))
+                (should (eq visible
+                            (not (null (string-match-p "点击行：选择任务"
+                                                       (wb-test--text runtime))))))))
+            (should (equal before (cards)))
+            (should (equal text (wb-test--text runtime)))))))))
 
 (ert-deftest wb-workbench-theme-render-failure-retains-published-handlers ()
   "A failed theme render keeps the published UI and usable old callbacks."
