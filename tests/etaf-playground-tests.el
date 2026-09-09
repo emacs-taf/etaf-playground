@@ -316,7 +316,7 @@ frame."
                           "$(MAKE) -C ../ebox compile"
                           "$(MAKE) -C ../etaf compile"
                           "$(MAKE) -C ../etaf-ui compile"
-                          "$(MAKE) -C ../etaf-sqlite compile"))
+                          "$(MAKE) -C ../etaf-db compile"))
       (should (string-match-p (regexp-quote dependency) makefile)))))
 
 (ert-deftest etaf-playground-performance-gate-runs-before-regressions ()

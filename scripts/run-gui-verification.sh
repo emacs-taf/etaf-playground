@@ -89,7 +89,7 @@ run_scenario() {
         --load-path "$REPOS_DIR/ebox" \
         --load-path "$REPOS_DIR/etaf" \
         --load-path "$REPOS_DIR/etaf-ui" \
-        --load-path "$REPOS_DIR/etaf-sqlite" \
+        --load-path "$REPOS_DIR/etaf-db" \
         --load-path "$REPOS_DIR/ebox-playground" \
         --load-path "$REPOS_DIR/ebox-playground/scripts" \
         --load-path "$PLAYGROUND_DIR" \

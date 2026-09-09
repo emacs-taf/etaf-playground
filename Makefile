@@ -1,5 +1,5 @@
 EMACS ?= emacs
-LOAD_PATH = -L . -L scripts -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-sqlite
+LOAD_PATH = -L . -L scripts -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-db
 EBOX_NATIVE_RELEASE_DIR = $(shell $(EMACS) -Q --batch $(LOAD_PATH) \
 	--eval '(setq load-prefer-newer t)' -l ../ebox/ebox-native-reflow.el \
 	--eval '(princ (expand-file-name (format "../ebox/native/target/%s/release/" (ebox-native-reflow--rust-target))))')
@@ -23,7 +23,7 @@ compile:
 	$(MAKE) -C ../ebox compile EMACS="$(EMACS)" ECSS_DIR=../ecss TP_DIR=../tp
 	$(MAKE) -C ../etaf compile EMACS="$(EMACS)"
 	$(MAKE) -C ../etaf-ui compile EMACS="$(EMACS)"
-	$(MAKE) -C ../etaf-sqlite compile EMACS="$(EMACS)"
+	$(MAKE) -C ../etaf-db compile EMACS="$(EMACS)"
 	rm -f *.elc scripts/*.elc tests/*.elc $(EXAMPLE_ELC)
 	$(EMACS) -Q --batch $(LOAD_PATH) -L ../etaf/scripts -L ../ebox-playground \
 		--eval "(setq load-prefer-newer t byte-compile-error-on-warn t byte-compile-warnings '(not obsolete))" \
@@ -80,7 +80,7 @@ perf-regressions:
 	$(MAKE) -C ../ebox test EMACS="$(EMACS)" ECSS_DIR=../ecss TP_DIR=../tp
 	$(MAKE) -C ../etaf test EMACS="$(EMACS)"
 	$(MAKE) -C ../etaf-ui test EMACS="$(EMACS)"
-	$(MAKE) -C ../etaf-sqlite test EMACS="$(EMACS)"
+	$(MAKE) -C ../etaf-db test EMACS="$(EMACS)"
 	$(MAKE) test EMACS="$(EMACS)"
 
 # Measure absolute latency before the CPU-heavy regression graph.  Regressions
