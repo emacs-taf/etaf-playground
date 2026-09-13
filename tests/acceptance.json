@@ -18,6 +18,11 @@
       "name": "etaf-playground-mount-rejects-unknown-example",
       "file": "tests/etaf-playground-tests.el",
       "purpose": "An unknown example fails explicitly without publishing preview content."
+    },
+    {
+      "name": "etaf-playground-mounts-static-rule-companion-in-fresh-emacs",
+      "file": "tests/etaf-playground-tests.el",
+      "purpose": "Research Shelf mounts through the public preview API with its static ECSS companion and isolated database."
     }
   ]
 }

@@ -18,7 +18,7 @@
 ;;
 ;;   examples/NAME.etaf   one inert structural form
 ;;   examples/NAME.el     a companion which defines NAME's root factory
-;;   examples/NAME.ecss   optional `(styles (SELECTOR PROPERTY VALUE ...))'
+;;   examples/NAME.ecss   optional `((SELECTOR PROPERTY VALUE ...))'
 ;;
 ;; The default root convention is `etaf-NAME-root'.  A companion may call
 ;; `etaf-playground-register-example' to provide a different root or feature.
@@ -27,6 +27,7 @@
 
 ;;; Code:
 
+(require 'ecss)
 (require 'cl-lib)
 (require 'subr-x)
 (require 'button)
@@ -369,41 +370,16 @@ When SESSION is supplied, unsaved buffer content is authoritative."
     (etaf-playground--validate-static-node form)
     form))
 
-(defun etaf-playground--validate-ecss-form (form)
-  "Validate a static ETAF/ECSS style FORM and return it."
-  (unless (and (consp form) (eq (car form) 'styles))
-    (error "ETAF Playground `.ecss' must start with (styles ...)"))
-  (dolist (rule (cdr form))
-    (unless (and (consp rule) (stringp (car rule))
-                 (proper-list-p rule))
-      (error "Invalid ETAF Playground ECSS rule: %S" rule))
-    (let ((properties (cdr rule)))
-      (unless (zerop (% (length properties) 2))
-        (error "ECSS rule has an incomplete property pair: %S" rule))
-      (while properties
-        (let ((key (pop properties))
-              (value (pop properties)))
-          (unless (keywordp key)
-            (error "ECSS properties must be keywords: %S" key))
-          (etaf-playground--validate-static-node value)))))
-  form)
-
 (defun etaf-playground-read-ecss (name &optional session)
-  "Read and validate NAME's optional `.ecss' style form.
-
-When SESSION is supplied, its unsaved source is authoritative.  Missing or
-blank style files produce an empty `(styles)' form, so structure and
-behavior-only examples remain valid consumers of the same framework."
+  "Read NAME's optional inert rule list through the shared ECSS reader.
+When SESSION is supplied, its unsaved source is authoritative.  A missing
+companion means no rules.  An existing file must contain one rule list,
+including nil for an explicitly empty sheet.  Components validate declarations."
   (let* ((spec (etaf-playground-scenario name))
          (file (plist-get spec :ecss-file)))
-    (if (not file)
-        '(styles)
-      (let ((content (string-trim
-                      (etaf-playground--file-content file session ".ecss"))))
-        (if (string-empty-p content)
-            '(styles)
-          (etaf-playground--validate-ecss-form
-           (etaf-playground--read-single-form content ".ecss")))))))
+    (when file
+      (ecss-read-rules
+       (etaf-playground--file-content file session ".ecss")))))
 
 ;;; Pair loading and mounting
 

@@ -133,8 +133,7 @@
     (slot))
    (slot :name 'footer (text "准备就绪")))
   :styles
-  (styles
-   ("&" :padding ((lh 1) (ch 3)))
+  (("&" :padding ((lh 1) (ch 3)))
    (".title" :font-weight bold)
    (".etaf-table-body" :item-gap (lh 1))
    (".etaf-table-header" :padding ((lh 0) (ch 1)))))

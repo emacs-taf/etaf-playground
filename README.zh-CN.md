@@ -9,7 +9,7 @@ ETAF Playground 是通用的应用构建工作区：左侧编辑同一个应用�
 - `examples/NAME.etaf`：一个 inert 的静态结构 form；
 - `examples/NAME.el`：Component、状态、effect 和 root factory（默认命名为
   `etaf-NAME-root`）；
-- `examples/NAME.ecss`：可选的 inert `(styles ...)` presentation 规则。
+- `examples/NAME.ecss`：可选的 inert `((SELECTOR PROPERTY VALUE ...) ...)` presentation 规则。
 
 执行 `M-x etaf-playground-open` 打开默认 example。左侧 source 顶部的
 `ETAF`、`EL`、`ECSS` 是可点击按钮；`C-c 1/2/3`（也支持
@@ -18,7 +18,7 @@ ETAF Playground 是通用的应用构建工作区：左侧编辑同一个应用�
 也会刷新。若 root 或 feature 不遵循命名约定，可在 companion 中调用
 `etaf-playground-register-example` 注册覆盖。
 
-ETAF Playground 0.2.2 会声明 ETAF 0.2.1、ETAF UI 0.1.0 与 ETAF SQLite
+ETAF Playground 0.2.2 声明 ECSS 0.1.0、ETAF 0.2.1、ETAF UI 0.1.0 与 ETAF SQLite
 0.1.0，保证内置 Research Shelf companion 的安装依赖闭包完整。
 
 预览位置使用标准 Emacs `display-buffer` action，由
