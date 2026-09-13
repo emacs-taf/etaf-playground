@@ -96,7 +96,12 @@ and adapter dependencies available, then use the existing frame:
 (run-at-time 0.05 nil #'task-workbench-gui-run "/absolute/fresh/evidence-directory")
 ```
 
-The caller owns window capture and evidence review. The adapter requires fresh
+The engine writes window screenshots, `manifest.jsonl`, and an atomic
+`result.json` into the evidence directory. A passed result certifies the action
+assertions; inspect the screenshots separately for appearance. The adapter reads
+public Host/selector queries and displayed values. Counts clipped out of the
+viewport are recorded as null in checkpoint metadata; CRUD and filtering actions
+still require their expected counts to be displayed. The adapter requires fresh
 dedicated acceptance buffers and preserves the current rendering backend.
 Preparation also preserves application focus; `(task-workbench-gui-prepare t)`
 explicitly requests foreground activation. Background Emacs-local actions can

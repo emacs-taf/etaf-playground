@@ -86,7 +86,10 @@ emacsclient --eval '(progn (require (quote task-workbench)) (wb-open "*Workbench
 (run-at-time 0.05 nil #'task-workbench-gui-run "/absolute/fresh/evidence-directory")
 ```
 
-调用方负责窗口截图及证据检查。适配器要求新的专用验收 buffer，并保留当前
+引擎将窗口截图、`manifest.jsonl` 和原子写入的 `result.json` 保存到证据目录。
+结果通过只表示动作断言通过，外观仍需检查实际截图。适配器使用公开的 Host、
+selector 查询和已显示的值；被视口裁出的数量在检查点元数据中记录为 null，
+增删和筛选步骤仍严格要求显示预期数量。适配器要求新的专用验收 buffer，并保留当前
 渲染后端。准备阶段也保留应用焦点；显式调用 `(task-workbench-gui-prepare t)`
 才会切到前台。后台的 Emacs 本地动作可以验证功能，其耗时不能证明前台显示延迟。
 只有显式设置 `EBOX_NATIVE_REFLOW_MODULE_PATH` 时，才要求加载该路径下的兼容

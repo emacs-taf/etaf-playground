@@ -87,24 +87,63 @@ Preserve application focus unless FOREGROUND is explicitly non-nil."
   "Return the Runtime mounted in CONTEXT's target buffer."
   (etaf-runtime-for-buffer (etaf-gui-verifier-context-target-buffer context)))
 
-(defun wb-gui--data (context)
-  "Inspect CONTEXT's app-owned Data controller for result assertions."
-  (let ((instance
-         (cl-find-if
-          (lambda (instance)
-            (eq 'wb-app (etaf--component-spec-name
-                         (etaf--component-instance-spec instance))))
-          (hash-table-values (etaf-runtime-instances (wb-gui--runtime context))))))
-    (plist-get (etaf--component-instance-state instance) :data)))
+(defun wb-gui--classes (entry)
+  "Return the class names from public Host ENTRY."
+  (let ((value (plist-get (cdr entry) :class)))
+    (if (stringp value) (split-string value) value)))
+
+(defun wb-gui--rows (context)
+  "Return CONTEXT's rendered semantic rows in display order."
+  (let ((runtime (wb-gui--runtime context)))
+    (sort
+     (cl-remove-if-not
+      (lambda (entry)
+        (and (member "etaf-table-row" (wb-gui--classes entry))
+             (etaf-host-ref-bounds runtime (car entry))))
+      (etaf-runtime-host-props-entries runtime))
+     (lambda (left right)
+       (< (car (etaf-host-ref-bounds runtime (car left)))
+          (car (etaf-host-ref-bounds runtime (car right))))))))
 
 (defun wb-gui--ids (context)
-  "Return the currently loaded task identities in CONTEXT."
-  (mapcar #'wb-task-id (etaf-value (etaf-data-items (wb-gui--data context)))))
+  "Return CONTEXT's displayed stable task identities."
+  (mapcar (lambda (entry) (plist-get (cdr entry) :key)) (wb-gui--rows context)))
 
 (defun wb-gui--selected-id (context)
   "Return CONTEXT's selected task identity, or nil."
-  (when-let* ((item (etaf-data-selected-item (wb-gui--data context))))
-    (wb-task-id item)))
+  (when-let* ((entry (cl-find-if
+                     (lambda (entry)
+                       (member "selected" (wb-gui--classes entry)))
+                     (wb-gui--rows context))))
+    (plist-get (cdr entry) :key)))
+
+(defun wb-gui--displayed-number (context pattern &optional optional)
+  "Read the first captured number in CONTEXT's displayed PATTERN.
+With OPTIONAL, report nil when the viewport does not display the number."
+  (let ((text (etaf-playground-gui-scenarios--buffer-text context)))
+    (if (string-match pattern text)
+        (string-to-number (match-string 1 text))
+      (unless optional
+        (error "Workbench is missing its displayed count: %s" pattern)))))
+
+(defun wb-gui--total (context &optional optional)
+  "Return CONTEXT's displayed total, allowing absence only with OPTIONAL."
+  (wb-gui--displayed-number context "共 \\([0-9]+\\) 条" optional))
+
+(defun wb-gui--checked-p (context row-id)
+  "Return whether ROW-ID's committed checkbox visibly shows a check."
+  (let* ((runtime (wb-gui--runtime context))
+         (bounds (etaf-host-ref-bounds runtime (wb-gui--control context "完成" row-id))))
+    (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
+      (string-match-p "☑" (buffer-substring-no-properties (car bounds) (cdr bounds))))))
+
+(defun wb-gui--scroll-regions (context)
+  "Return CONTEXT's displayed scroll owners in document order."
+  (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
+    (cl-remove-if-not
+     #'ebox-scroll-state
+     (mapcar (lambda (handle) (plist-get handle :region-id))
+             (ebox-select-all (current-buffer) "*")))))
 
 (defun wb-gui--text-p (context text)
   "Return non-nil when CONTEXT's rendered output contains TEXT."
@@ -120,8 +159,7 @@ Preserve application focus unless FOREGROUND is explicitly non-nil."
                     (lambda (entry)
                       (and (equal (plist-get (cdr entry) :key) row-id)
                            (member "etaf-table-row"
-                                   (split-string
-                                    (or (plist-get (cdr entry) :class) "")))))
+                                   (wb-gui--classes entry))))
                     entries)))
          (matches (cl-remove-if-not
                    (lambda (entry)
@@ -188,7 +226,7 @@ cannot establish that Emacs painted a control on the same visual line."
                  (lambda (entry)
                    (and (equal identity (plist-get (cdr entry) :key))
                         (member "etaf-table-row"
-                                (split-string (or (plist-get (cdr entry) :class) "")))))
+                                (wb-gui--classes entry))))
                  entries))
                (bounds (and entry (etaf-host-ref-bounds runtime (car entry)))))
           (unless bounds (error "Theme geometry row has no live bounds: %s" identity))
@@ -375,29 +413,31 @@ Native Emacs glyph rows may have different pixel heights as content moves."
     '((theme_pixels_before . light-layout)
       (theme_pixels_after . theme-layout-current)))
    (when (wb-gui--runtime context)
-     (let ((data (wb-gui--data context)))
-       (list (cons 'total (etaf-value (etaf-data-total data)))
-             (cons 'page (etaf-value (etaf-data-page data)))
-             (cons 'page_size (etaf-value (etaf-data-page-size data)))
-             (cons 'visited_tasks
-                   (etaf-gui-verifier-context-get context 'visited-tasks 0))
-             (cons 'visible_rows (length (wb-gui--ids context)))
-             (cons 'selected_task (or (wb-gui--selected-id context) 0)))))))
+     (list (cons 'total (wb-gui--total context t))
+           (cons 'page (wb-gui--displayed-number context "Page \\([0-9]+\\) /" t))
+           (cons 'page_size
+                 (wb-gui--displayed-number context "每页条数 \\([0-9]+\\)" t))
+           (cons 'visited_tasks
+                 (etaf-gui-verifier-context-get context 'visited-tasks 0))
+           (cons 'visible_rows (length (wb-gui--ids context)))
+           (cons 'selected_task (or (wb-gui--selected-id context) 0))))))
 
 (defun wb-gui--nested-scroll (context)
   "Scroll CONTEXT's help box and retain both inner and outer observations."
   (goto-char (wb-gui--find-text "点击行：选择任务"))
-  (let* ((regions (cl-remove-if-not #'ebox-scroll-state
-                                    (ebox--scroll-region-ids-at-point)))
-         (inner (car regions)))
-    (unless inner (error "Help text has no active scroll container"))
+  (let* ((regions (wb-gui--scroll-regions context))
+         (inner (car (last regions))))
+    ;; A viewport whose content fits has no active scroll state.  The help
+    ;; box must still own one; an overflowing outer viewport precedes it.
+    (unless (<= 1 (length regions) 2)
+      (error "Workbench requires its help scroll owner and at most one outer owner"))
     (etaf-gui-verifier-context-put context 'inner-region inner)
     (etaf-gui-verifier-context-put
      context 'inner-offset (plist-get (ebox-scroll-state inner) :scroll-offset))
     (etaf-gui-verifier-context-put
      context 'outer-offsets
      (mapcar (lambda (id) (cons id (plist-get (ebox-scroll-state id) :scroll-offset)))
-             (cdr regions)))
+             (butlast regions)))
     (etaf-gui-verifier-context-put context 'outer-window-start (window-start))
     (ebox-scroll-down 1)))
 
@@ -422,15 +462,14 @@ Native Emacs glyph rows may have different pixel heights as content moves."
   (goto-char (point-min))
   (set-window-start (selected-window) (point-min)))
 
-(defun wb-gui--outer-reset-p (_context)
+(defun wb-gui--outer-reset-p (context)
   "Return non-nil when both the outer Ebox viewport and window are at top."
-  (and (= (window-start) (point-min))
-       (save-excursion
-         (goto-char (point-min))
-         (cl-every
-          (lambda (id)
-            (zerop (or (plist-get (ebox-scroll-state id) :scroll-offset) 0)))
-          (ebox--scroll-region-ids-at-point)))))
+  (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
+    (let* ((root (car (ebox-select-all (current-buffer) "*")))
+           (state (and root (ebox-scroll-state (plist-get root :region-id)))))
+      (and root
+           (= (window-start) (point-min))
+           (or (null state) (zerop (plist-get state :scroll-offset)))))))
 
 ;;;###autoload
 (defun task-workbench-gui-scenario ()
@@ -488,7 +527,7 @@ Native Emacs glyph rows may have different pixel heights as content moves."
        "minibuffer-add"
        (lambda (context) (wb-gui--enter context "新增任务" "GUI 验收任务"))
        (lambda (context)
-         (= (etaf-value (etaf-data-total (wb-gui--data context))) 101))))
+         (= (wb-gui--total context) 101))))
       (cl-loop for page from 2 to 11
                collect
                (let ((target page))
@@ -526,21 +565,20 @@ Native Emacs glyph rows may have different pixel heights as content moves."
                         (wb-gui--text-p c "进行中"))))
       (wb-gui--action
        "cell-mouse-toggle" (lambda (c) (wb-gui--click c "完成" 1))
-       (lambda (c) (and (plist-get (etaf-data-selected-item (wb-gui--data c)) :done)
+       (lambda (c) (and (wb-gui--checked-p c 1)
                         (equal (wb-gui--selected-id c) 1))))
       (wb-gui--action "cell-mouse-delete" (lambda (c) (wb-gui--click c "删除" 1))
                       (lambda (c) (and (equal (wb-gui--ids c) (number-sequence 2 11))
-                                       (= (etaf-value (etaf-data-total
-                                                       (wb-gui--data c))) 100)
+                                       (= (wb-gui--total c) 100)
                                        (not (wb-gui--selected-id c)))))
       (wb-gui--action "filter-open" (lambda (c) (wb-gui--press c "未完成"))
                       (lambda (c)
                         (and (equal (wb-gui--ids c) '(2 4 6 7 9 10 11 13 14 15))
-                             (= (etaf-value (etaf-data-total (wb-gui--data c))) 74))))
+                             (= (wb-gui--total c) 74))))
       (wb-gui--action "filter-done" (lambda (c) (wb-gui--press c "已完成"))
                       (lambda (c)
                         (and (equal (wb-gui--ids c) '(3 5 8 12 16 20 24 28 32 36))
-                             (= (etaf-value (etaf-data-total (wb-gui--data c))) 26))))
+                             (= (wb-gui--total c) 26))))
       (wb-gui--action "minibuffer-search"
                       (lambda (c) (wb-gui--enter c "搜索" "键盘"))
                       (lambda (c) (equal (wb-gui--ids c) '(4))))
@@ -575,14 +613,14 @@ Native Emacs glyph rows may have different pixel heights as content moves."
       (wb-gui--action
        "second-independent-app"
        (lambda (context)
-         (etaf-gui-verifier-context-put context 'primary-data (wb-gui--data context))
+         (etaf-gui-verifier-context-put context 'primary-runtime (wb-gui--runtime context))
          (wb-open secondary)
          (etaf-gui-verifier-context-select-buffer context (get-buffer secondary)))
        (lambda (c)
          (and (equal (wb-gui--ids c) (number-sequence 1 10))
-              (= (etaf-value (etaf-data-total (wb-gui--data c))) 100)
-              (not (eq (wb-gui--data c)
-                       (etaf-gui-verifier-context-get c 'primary-data))))))
+              (= (wb-gui--total c) 100)
+              (not (eq (wb-gui--runtime c)
+                       (etaf-gui-verifier-context-get c 'primary-runtime))))))
       (wb-gui--action
        "close-second-app"
        (lambda (context)
@@ -602,7 +640,7 @@ Native Emacs glyph rows may have different pixel heights as content moves."
          (and (not (etaf-runtime-mounted-p
                     (etaf-gui-verifier-context-get c 'retired-runtime)))
               (equal (wb-gui--ids c) (number-sequence 1 10))
-              (= (etaf-value (etaf-data-total (wb-gui--data c))) 100))))))
+              (= (wb-gui--total c) 100))))))
      :completion
      (lambda (context)
        (and (= (etaf-gui-verifier-context-action-count context)
