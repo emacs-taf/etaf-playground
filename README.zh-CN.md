@@ -92,7 +92,7 @@ emacsclient --eval '(progn (require (quote task-workbench)) (wb-open "*Workbench
 只有显式设置 `EBOX_NATIVE_REFLOW_MODULE_PATH` 时，才要求加载该路径下的兼容
 native 模块。适配器不启动 server。需检查 mounted Runtime、动作断言和实际截图；
 截图本身不能证明延迟上界或无闪烁。现有 server 的截图与录屏细节见
-`../etaf/scripts/README.md`。
+[ETAF GUI 验证指南（英文）](https://gitea.gklazycat.heiyu.space/geekinney/etaf/src/branch/main/docs/manual.md#gui-verification-tools)。
 
 以下命令是保留的 **legacy 隔离环境工具**，只用于明确选择独立测试 Emacs 的
 场景，不是当前默认的 existing-server 流程：
@@ -135,7 +135,8 @@ split window、陈旧 frame 或没有完成时序审查都会保持 fail-closed�
 批处理回归：`make perf`（Research Shelf 的 1413×62 viewport，选行/主题延迟）。
 当前 GUI 验收还要求三组独立的前台实测，每项操作从回调开始到强制 redisplay
 返回的 p95 和 max 均不超过 50ms；该门禁尚未通过。使用
-`../etaf/scripts/README.md` 中的测量入口，保留预热、GC 记录和全部样本。
+[ETAF GUI 测量指南（英文）](https://gitea.gklazycat.heiyu.space/geekinney/etaf/src/branch/main/docs/manual.md#measuring-an-existing-gui-action)
+中的测量入口，保留预热、GC 记录和全部样本。
 redisplay 返回不能证明操作系统已经呈现画面，批处理结果也不能替代 GUI 门禁。
 
 仓库中的 Research Shelf 只是上述通用工作区的一个 consumer。它默认安装确定性的

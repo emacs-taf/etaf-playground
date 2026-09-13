@@ -105,7 +105,8 @@ When `EBOX_NATIVE_REFLOW_MODULE_PATH` is explicitly set, it requires that exact
 compatible module. It does not start a server. Check the mounted Runtime,
 action assertions and the actual
 images. Screenshots alone do not prove a latency bound or absence of flicker.
-See `../etaf/scripts/README.md` for existing-server capture and recording details.
+See the [ETAF GUI verification guide](https://gitea.gklazycat.heiyu.space/geekinney/etaf/src/branch/main/docs/manual.md#gui-verification-tools)
+for existing-server capture and recording details.
 
 The following commands are **legacy isolated-environment tools**, retained for
 explicit requests to use a separate test Emacs. They are not the default
@@ -174,7 +175,8 @@ repository/environment/scenario/fixture/build identity:
   Current acceptance also requires three independent foreground GUI sample sets
   with per-operation p95 and max at or below 50ms, from action callback through
   forced redisplay. This gate remains outstanding. Use the measurement boundary
-  in `../etaf/scripts/README.md`, preserving warmups, GC and all samples. Returning
+  in the [ETAF GUI measurement guide](https://gitea.gklazycat.heiyu.space/geekinney/etaf/src/branch/main/docs/manual.md#measuring-an-existing-gui-action),
+  preserving warmups, GC and all samples. Returning
   from redisplay does not certify compositor presentation.
 
 Evidence from one lane supports only that lane's conclusion. A
