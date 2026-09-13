@@ -23,7 +23,7 @@
       (when (buffer-live-p buffer) (kill-buffer buffer)))))
 
 (ert-deftest etaf-playground-mounts-static-rule-companion-in-fresh-emacs ()
-  "The shipped rule companion mounts with an isolated database and fresh registry."
+  "The shipped scoped app mounts, filters and paginates in a fresh process."
   (let* ((workspace (file-name-directory
                      (directory-file-name
                       (file-name-directory (locate-library "etaf-playground")))))
@@ -51,7 +51,19 @@
                                   (buffer-name buffer) "research-shelf")
                                  (unless (with-current-buffer buffer
                                            (string-match-p "Research Shelf" (buffer-string)))
-                                   (error "Missing Research Shelf preview")))
+                                   (error "Missing Research Shelf preview"))
+                                 (let ((runtime (etaf-runtime-for-buffer buffer)))
+                                   (dolist (step
+                                            '((research-shelf-filter-reading . "Showing Reading")
+                                              (research-shelf-filter-all . "Showing All")
+                                              (research-shelf-page-next . "Page 2 / 22")
+                                              (research-shelf-page-previous . "Page 1 / 22")))
+                                     (let ((generation (etaf-runtime-generation runtime)))
+                                       (etaf-dispatch-event runtime (car step) 'press)
+                                       (unless (and (> (etaf-runtime-generation runtime) generation)
+                                                    (with-current-buffer buffer
+                                                      (string-match-p (cdr step) (buffer-string))))
+                                         (error "Research Shelf did not publish %S" (car step)))))))
                              (when-let* ((runtime (etaf-runtime-for-buffer buffer)))
                                (etaf-unmount runtime))
                              (kill-buffer buffer)

@@ -22,7 +22,7 @@
     {
       "name": "etaf-playground-mounts-static-rule-companion-in-fresh-emacs",
       "file": "tests/etaf-playground-tests.el",
-      "purpose": "Research Shelf mounts through the public preview API with its static ECSS companion and isolated database."
+      "purpose": "Research Shelf mounts, filters and paginates through public APIs with its scoped ECSS companion and an isolated database."
     }
   ]
 }
