@@ -3,103 +3,21 @@
   "load_path": [
     ".",
     "tests",
-    "examples",
-    "scripts",
-    "benchmarks",
-    "../etaf",
-    "../etaf/scripts",
-    "../etaf-ui",
-    "../etaf-db",
     "../ebox",
+    "../ebox-playground",
     "../ecss",
+    "../ekp",
+    "../etaf",
+    "../etaf-db",
+    "../etaf-ui",
     "../tp"
   ],
   "support": [],
   "cases": [
     {
-      "name": "wb-workbench-mounts-composed-app",
-      "file": "tests/task-workbench-tests.el",
-      "purpose": "wb workbench mounts composed app"
-    },
-    {
-      "name": "wb-workbench-filter-search-and-pagination",
-      "file": "tests/task-workbench-tests.el",
-      "purpose": "wb workbench filter search and pagination"
-    },
-    {
-      "name": "wb-workbench-page-size-validates-and-reloads",
-      "file": "tests/task-workbench-tests.el",
-      "purpose": "wb workbench page size validates and reloads"
-    },
-    {
-      "name": "wb-workbench-cell-toggle-delete-and-detail",
-      "file": "tests/task-workbench-tests.el",
-      "purpose": "wb workbench cell toggle delete and detail"
-    },
-    {
-      "name": "wb-workbench-add-trims-and-ignores-empty-input",
-      "file": "tests/task-workbench-tests.el",
-      "purpose": "wb workbench add trims and ignores empty input"
-    },
-    {
-      "name": "wb-workbench-last-page-and-high-id-deletion",
-      "file": "tests/task-workbench-tests.el",
-      "purpose": "wb workbench last page and high id deletion"
-    },
-    {
-      "name": "wb-workbench-theme-focus-and-conditional-slot-content",
-      "file": "tests/task-workbench-tests.el",
-      "purpose": "wb workbench theme focus and conditional slot content"
-    },
-    {
-      "name": "wb-workbench-explanation-toggle-isolates-card-heights",
-      "file": "tests/task-workbench-tests.el",
-      "purpose": "wb workbench explanation toggle isolates card heights"
-    },
-    {
-      "name": "wb-workbench-theme-render-failure-retains-published-handlers",
-      "file": "tests/task-workbench-tests.el",
-      "purpose": "wb workbench theme render failure retains published handlers"
-    },
-    {
-      "name": "wb-workbench-resource-failure-retry-and-cleanup",
-      "file": "tests/task-workbench-tests.el",
-      "purpose": "wb workbench resource failure retry and cleanup"
-    },
-    {
-      "name": "wb-workbench-apps-isolate-state-and-remount-cleans-scopes",
-      "file": "tests/task-workbench-tests.el",
-      "purpose": "wb workbench apps isolate state and remount cleans scopes"
-    },
-    {
-      "name": "etaf-playground-framework-discovers-generic-file-triplets",
+      "name": "etaf-playground-mount-rejects-unknown-example",
       "file": "tests/etaf-playground-tests.el",
-      "purpose": "framework discovers generic file triplets"
-    },
-    {
-      "name": "etaf-playground-static-reader-is-inert-and-strict",
-      "file": "tests/etaf-playground-tests.el",
-      "purpose": "static reader is inert and strict"
-    },
-    {
-      "name": "etaf-playground-pair-mounts-sqlite-backed-surface",
-      "file": "tests/etaf-playground-tests.el",
-      "purpose": "pair mounts sqlite backed surface"
-    },
-    {
-      "name": "etaf-playground-filters-and-pagination-reload-data",
-      "file": "tests/etaf-playground-tests.el",
-      "purpose": "filters and pagination reload data"
-    },
-    {
-      "name": "etaf-playground-workspace-reflows-at-responsive-widths",
-      "file": "tests/etaf-playground-tests.el",
-      "purpose": "workspace reflows at responsive widths"
-    },
-    {
-      "name": "etaf-playground-theme-and-lifecycle-are-repeatable",
-      "file": "tests/etaf-playground-tests.el",
-      "purpose": "theme and lifecycle are repeatable"
+      "purpose": "An unknown example fails explicitly without publishing preview content."
     }
   ]
 }

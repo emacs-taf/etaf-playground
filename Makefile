@@ -10,7 +10,7 @@ EXAMPLES := $(ENTRY_EXAMPLES)
 EXAMPLE_ELC := $(EXAMPLES:.el=.elc)
 TEST_FILES := $(wildcard tests/*-tests.el)
 
-.PHONY: all compile examples-read test perf perf-prepare perf-evaluator perf-repeatability perf-regressions \
+.PHONY: all compile examples-read perf perf-prepare perf-evaluator perf-repeatability perf-regressions \
 	perf-check gui-doctor gui-research gui-flex gui-grid gui-all \
 	check checkdoc load clean
 
@@ -43,10 +43,6 @@ examples-read: compile
 		--eval '(dolist (file (quote ($(foreach file,$(ENTRY_EXAMPLES),"$(file)")))) (load (file-name-sans-extension file) nil nil nil))' \
 		--eval '(princ "ETAF example modules load OK\\n")'
 
-test: examples-read
-	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
-		$(foreach test,$(TEST_FILES),-l $(test)) -f ert-run-tests-batch-and-exit
-
 perf:
 	$(MAKE) perf-prepare EMACS="$(EMACS)"
 	$(MAKE) perf-evaluator EMACS="$(EMACS)"
@@ -76,13 +72,13 @@ perf-repeatability: perf-prepare
 # prevents parallel make from cleaning/recompiling a sibling while another
 # package is loading its compiled dependencies.
 perf-regressions:
-	$(MAKE) -C ../ecss test EMACS="$(EMACS)"
-	$(MAKE) -C ../tp test EMACS="$(EMACS)"
-	$(MAKE) -C ../ebox test EMACS="$(EMACS)" ECSS_DIR=../ecss TP_DIR=../tp
-	$(MAKE) -C ../etaf test EMACS="$(EMACS)"
-	$(MAKE) -C ../etaf-ui test EMACS="$(EMACS)"
-	$(MAKE) -C ../etaf-db test EMACS="$(EMACS)"
-	$(MAKE) test EMACS="$(EMACS)"
+	$(MAKE) -C ../ecss  EMACS="$(EMACS)"
+	$(MAKE) -C ../tp  EMACS="$(EMACS)"
+	$(MAKE) -C ../ebox  EMACS="$(EMACS)" ECSS_DIR=../ecss TP_DIR=../tp
+	$(MAKE) -C ../etaf  EMACS="$(EMACS)"
+	$(MAKE) -C ../etaf-ui  EMACS="$(EMACS)"
+	$(MAKE) -C ../etaf-db  EMACS="$(EMACS)"
+	$(MAKE)  EMACS="$(EMACS)"
 
 # Measure absolute latency before the CPU-heavy regression graph.  Regressions
 # still gate the same target, but cannot thermally contaminate product samples.
@@ -131,3 +127,6 @@ acceptance:
 api-check:
 	$(EMACS) -Q --batch -L . $(API_PROVIDER_PATH) --eval '(setq load-prefer-newer t)' -l scripts/check-api.el
 API_PROVIDER_PATH = -L ../ecss -L ../tp -L ../ekp -L ../ebox -L ../etaf -L ../etaf-ui -L ../etaf-db -L ../ebox-playground
+
+.PHONY: test
+test: acceptance
