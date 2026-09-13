@@ -109,35 +109,35 @@
 (etaf-define-component wb-button (&key label on-press disabled variant)
   :view
   (etaf-button :label label :on-press on-press :disabled disabled
-               :variant variant :padding '(0 2)
+               :variant variant :padding '((lh 0) (ch 2))
                :use (list (wb-trace))))
 
 ;;; Stateless layout: props, default slot, named slots, scoped styles
 
 (etaf-define-component wb-shell (&key title)
   :view
-  (column :width '(viewport) :height '(viewport-height) :overflow 'scroll
-          :item-gap 1
+  (column :width '(vw 100) :height '(vh 100) :overflow 'scroll
+          :item-gap '(lh 1)
           :color (etaf-theme-token :ui-fg)
           :bgcolor (etaf-theme-token :ui-bg)
-   (flex :width 'stretch :flex-wrap 'wrap :gap '(1 (16))
+   (flex :width 'stretch :flex-wrap 'wrap :gap '((lh 1) (px 16))
          :align-items 'center :justify-content 'space-between
-    (column :flex-grow 1 :min-width 0
+    (column :flex-grow 1 :min-width '(ch 0)
      (text :class "title" (expr title))
      (etaf-label :variant 'muted :text "个人任务 · 本地工作空间"))
-    (flex :width 'max-content :flex-wrap 'wrap :gap '(1 (10))
+    (flex :width 'max-content :flex-wrap 'wrap :gap '((lh 1) (px 10))
           :align-items 'center
      (slot :name 'toolbar)))
-   (flex :width 'stretch :flex-wrap 'wrap :gap '(1 (16))
+   (flex :width 'stretch :flex-wrap 'wrap :gap '((lh 1) (px 16))
          :align-items 'flex-start
     (slot))
    (slot :name 'footer (text "准备就绪")))
   :styles
   (styles
-   ("&" :padding (1 3))
+   ("&" :padding ((lh 1) (ch 3)))
    (".title" :font-weight bold)
-   (".etaf-table-body" :item-gap 1)
-   (".etaf-table-header" :padding (0 1))))
+   (".etaf-table-body" :item-gap (lh 1))
+   (".etaf-table-header" :padding ((lh 0) (ch 1)))))
 
 ;;; Reusable cell: Context dependency + controlled Checkbox + disabled Button
 
@@ -148,7 +148,7 @@
   (let ((data (etaf-state))
         (item task))                  ; Capture this render's ordinary prop.
     (etaf-view
-     (row :item-gap 10
+     (row :item-gap '(ch 10)
       (etaf-checkbox
        :label "完成" :checked (plist-get item :done)
        :on-press #'wb-trace-press      ; Additive; does not replace on-change.
@@ -187,7 +187,7 @@
          (data (plist-get state :data))
          (expanded (plist-get state :expanded)))
     (etaf-view
-     (etaf-panel :title "详情" :item-gap 1
+     (etaf-panel :title "详情" :item-gap '(lh 1)
       (expr
        (if-let* ((task (etaf-data-selected-item data)))
            (etaf-view (wb-task-info :task task))
@@ -195,7 +195,7 @@
       (etaf-checkbox
        :label "显示说明" :checked (etaf-value expanded)
        :on-change (lambda (next) (setf (etaf-value expanded) next)))
-      (box :if (etaf-value expanded) :height 3 :overflow 'scroll
+      (box :if (etaf-value expanded) :height '(lh 3) :overflow 'scroll
        (column
         (text :for (tip '("点击行：选择任务"
                          "勾选：修改完成状态"
@@ -231,14 +231,14 @@
          (resource (plist-get state :resource))
          (fail-next (plist-get state :fail-next)))
     (etaf-view
-     (etaf-panel :title "服务状态" :item-gap 1
+     (etaf-panel :title "服务状态" :item-gap '(lh 1)
       (text
        (expr
         (pcase (etaf-resource-status resource)
           ('success (etaf-resource-value resource))
           ('error (error-message-string (etaf-resource-error resource)))
           (_ "加载中…"))))
-      (row :item-gap 10
+      (row :item-gap '(ch 10)
        (wb-button :label "刷新 / 重试" :variant 'secondary
         :on-press (lambda () (etaf-resource-load resource)))
        (wb-button :label "模拟失败" :variant 'ghost
@@ -300,26 +300,26 @@
         :on-press (lambda () (etaf-dispatch 'wb-focus add-ref))))
 
       ;; Parent owns each panel's participation in this Flex layout.
-      (etaf-panel :title "筛选" :flex-basis 18 :flex-grow 1 :flex-shrink 0 :item-gap 1
-       (flex :flex-wrap 'wrap :gap '(1 (10)) :align-items 'stretch
-        (wb-button :label "全部" :width 'stretch :flex-basis 16 :flex-grow 1
+      (etaf-panel :title "筛选" :flex-basis '(ch 18) :flex-grow 1 :flex-shrink 0 :item-gap '(lh 1)
+       (flex :flex-wrap 'wrap :gap '((lh 1) (px 10)) :align-items 'stretch
+        (wb-button :label "全部" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
          :variant (if (null (etaf-value (etaf-data-query data)))
                       'secondary 'ghost)
          :on-press (lambda () (wb-query data nil)))
-        (wb-button :label "未完成" :width 'stretch :flex-basis 16 :flex-grow 1
+        (wb-button :label "未完成" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
          :variant (if (equal (etaf-value (etaf-data-query data)) '(:done nil))
                       'secondary 'ghost)
          :on-press (lambda () (wb-query data '(:done nil))))
-        (wb-button :label "已完成" :width 'stretch :flex-basis 16 :flex-grow 1
+        (wb-button :label "已完成" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
          :variant (if (equal (etaf-value (etaf-data-query data)) '(:done t))
                       'secondary 'ghost)
          :on-press (lambda () (wb-query data '(:done t))))
         (wb-button :label "搜索" :variant 'secondary :width 'stretch
-         :flex-basis 16 :flex-grow 1
+         :flex-basis '(ch 16) :flex-grow 1
          :on-press (lambda () (wb-query data (read-string "搜索："))))))
 
-      (etaf-panel :title "任务" :flex-grow 4 :flex-basis 64 :min-width 0
-                  :item-gap 1
+      (etaf-panel :title "任务" :flex-grow 4 :flex-basis '(ch 64) :min-width '(ch 0)
+                  :item-gap '(lh 1)
        (etaf-data-grid
         :controller data :columns wb-columns :row-key #'wb-task-id
         :on-row-press (lambda (row) (etaf-data-select-one data (wb-task-id row)))
@@ -337,13 +337,13 @@
           (etaf-data-set-page data 1)
           (etaf-data-load data))))
 
-      (flex :flex-wrap 'wrap :flex-basis 36 :flex-grow 1 :min-width 0
-            :align-content 'space-between :align-items 'flex-start :gap '(1 (16))
-       (wb-detail :flex-basis 28 :flex-grow 1)
-       (wb-service :flex-basis 28 :flex-grow 1))
+      (flex :flex-wrap 'wrap :flex-basis '(ch 36) :flex-grow 1 :min-width '(ch 0)
+            :align-content 'space-between :align-items 'flex-start :gap '((lh 1) (px 16))
+       (wb-detail :flex-basis '(ch 28) :flex-grow 1)
+       (wb-service :flex-basis '(ch 28) :flex-grow 1))
 
       (slot :name 'footer
-       (grid :width 'stretch :grid-template-columns '((fr 1) (fr 1)) :gap 1
+       (grid :width 'stretch :grid-template-columns '((fr 1) (fr 1)) :gap '((lh 1) (ch 1))
         (etaf-label :variant 'muted :text (etaf-value summary))
         (etaf-label :variant 'muted
                     :text "数据仅保存在当前工作台内存中")))))))

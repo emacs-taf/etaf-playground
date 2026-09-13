@@ -1,5 +1,7 @@
+.DEFAULT_GOAL := check
+.NOTPARALLEL:
 EMACS ?= emacs
-LOAD_PATH = -L . -L scripts -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-db
+LOAD_PATH = -L . -L scripts -L benchmarks -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-db
 EBOX_NATIVE_RELEASE_DIR = $(shell $(EMACS) -Q --batch $(LOAD_PATH) \
 	--eval '(setq load-prefer-newer t)' -l ../ebox/ebox-native-reflow.el \
 	--eval '(princ (expand-file-name (format "../ebox/native/target/%s/release/" (ebox-native-reflow--rust-target))))')
@@ -24,7 +26,7 @@ compile:
 	$(MAKE) -C ../etaf compile EMACS="$(EMACS)"
 	$(MAKE) -C ../etaf-ui compile EMACS="$(EMACS)"
 	$(MAKE) -C ../etaf-db compile EMACS="$(EMACS)"
-	rm -f *.elc scripts/*.elc tests/*.elc $(EXAMPLE_ELC)
+	rm -f *.elc scripts/*.elc benchmarks/*.elc tests/*.elc $(EXAMPLE_ELC)
 	$(EMACS) -Q --batch $(LOAD_PATH) -L ../etaf/scripts -L ../ebox-playground \
 		--eval "(setq load-prefer-newer t byte-compile-error-on-warn t byte-compile-warnings '(not obsolete))" \
 		--eval '(load-file "etaf-playground.el")' \
@@ -33,7 +35,6 @@ compile:
 		--eval '(byte-compile-file "etaf-playground.el")' \
 		--eval '(byte-compile-file "scripts/playground-gui-scenarios.el")' \
 		--eval '(byte-compile-file "scripts/task-workbench-gui-scenarios.el")' \
-		--eval '(byte-compile-file "scripts/research-shelf-m0a-evidence.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(TEST_FILES),"$(file)")))) (byte-compile-file file))'
 
 examples-read: compile
@@ -61,7 +62,7 @@ perf-evaluator:
 	"$(EMACS)" -Q --batch $(LOAD_PATH) \
 		--eval '(setq load-prefer-newer t native-comp-jit-compilation nil)' \
 		--eval '(setq ebox-native-reflow-module-path (getenv "EBOX_NATIVE_REFLOW_MODULE_PATH"))' \
-		-l scripts/benchmark-research-shelf.el \
+		-l benchmarks/benchmark-research-shelf.el \
 		-f etaf-performance-evaluator-batch
 
 # A final hard-max claim must survive three complete independent sample sets.
@@ -109,9 +110,19 @@ load: compile
 		--eval '(princ "etaf-playground load OK\\n")'
 
 checkdoc:
-	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "scripts/benchmark-research-shelf.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el" "scripts/research-shelf-m0a-evidence.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
+	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "benchmarks/benchmark-research-shelf.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
 
-check: checkdoc test
+check: structure-check compile acceptance
 
 clean:
-	rm -f *.elc scripts/*.elc tests/*.elc $(EXAMPLE_ELC)
+	rm -f *.elc scripts/*.elc benchmarks/*.elc tests/*.elc $(EXAMPLE_ELC)
+
+.PHONY: structure-check setup-hooks
+structure-check:
+	python3 scripts/check-repository.py
+setup-hooks:
+	git config --local core.hooksPath .githooks
+
+.PHONY: acceptance
+acceptance:
+	python3 scripts/run-acceptance.py --emacs "$(EMACS)"

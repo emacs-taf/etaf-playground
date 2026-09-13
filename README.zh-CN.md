@@ -142,3 +142,9 @@ redisplay 返回不能证明操作系统已经呈现画面，批处理结果也�
 256 条 SQLite fixture，每页显示 12 条；测试或压测时可以绑定
 `etaf-research-shelf-fixture-size` 和 `etaf-research-shelf-page-size` 调整规模，
 界面中激活 `Rows N ✎` 可以输入 1–100。
+
+## 开发
+
+克隆后运行 `make setup-hooks`。提交变更前运行 `make check`；`make structure-check` 用于快速检查目录、命名和引用。统一开发规则见 [AGENTS.md](AGENTS.md)。
+
+`make check` 运行规范检查、编译及 [tests/acceptance.json](tests/acceptance.json) 中的公共验收场景。`make test` 运行更全面的回归测试；GUI 与性能验收使用独立入口。验收清单依据对外契约选择，不按当前能否通过筛选。

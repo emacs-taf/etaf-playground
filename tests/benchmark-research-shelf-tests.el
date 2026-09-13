@@ -3,7 +3,7 @@
 ;;; Code:
 (require 'ert)
 (require 'etaf-performance)
-(load-file (expand-file-name "scripts/benchmark-research-shelf.el"
+(load-file (expand-file-name "benchmarks/benchmark-research-shelf.el"
                             default-directory))
 
 (declare-function etaf-performance-evaluator--percentile
@@ -312,7 +312,7 @@
   "The driver contains no v1 recorder fields or implicit global tracing."
   (let ((source
          (with-temp-buffer
-           (insert-file-contents "scripts/benchmark-research-shelf.el")
+           (insert-file-contents "benchmarks/benchmark-research-shelf.el")
            (buffer-string))))
     (dolist (obsolete
              '("etaf-performance-mode"

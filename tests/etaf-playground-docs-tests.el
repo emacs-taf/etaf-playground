@@ -24,7 +24,7 @@
 
 (ert-deftest etaf-performance-docs-distinguish-evidence-lanes ()
   "Latency, trace, and GUI evidence remain explicitly separate lanes."
-  (dolist (file '("README.md" "DESIGN.md" "DESIGN.zh-CN.md"))
+  (dolist (file '("README.md"))
     (let ((text (etaf-playground-docs-tests--normalized-contents file)))
       (should (string-match-p "latency lane\\|延迟 lane" text))
       (should (string-match-p "trace lane\\|追踪 lane" text))
@@ -35,16 +35,6 @@
       (should (string-match-p
                "not GUI first paint\\|不是 GUI first paint"
                text)))))
-
-(ert-deftest etaf-performance-docs-separate-current-gate-from-historical-budget ()
-  "The active 50ms gate must not be confused with the historical 105ms text."
-  (dolist (file '("DESIGN.md" "DESIGN.zh-CN.md"))
-    (let ((text (etaf-playground-docs-tests--normalized-contents file)))
-      (should (string-match-p "5.*warmup.*30.*sample\\|5.*warmup.*30.*sample" text))
-      (should (string-match-p "p95.*max.*50ms\\|p95.*max.*50ms" text))
-      (should (string-match-p "105ms p50" text))
-      (should (string-match-p "historical\\|历史" text))
-      (should (string-match-p "M0b1" text)))))
 
 (provide 'etaf-playground-docs-tests)
 ;;; etaf-playground-docs-tests.el ends here

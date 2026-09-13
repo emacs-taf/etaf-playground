@@ -445,14 +445,14 @@ constructed.  When omitted, initialize it for direct programmatic callers."
   (etaf-view (etaf-research-shelf-item-advance :item row)))
 
 (defconst etaf-research-shelf--grid-columns
-  '((:key :title :label "Title" :width 21)
-    (:key :author :label "Author" :width 12)
-    (:key :status :label "Status" :width 10)
-    (:key :progress :label "Progress" :width 8)
-    (:key :kind :label "Kind" :width 7)
-    (:key :starred :label "Star" :width 6
+  '((:key :title :label "Title" :width (ch 21))
+    (:key :author :label "Author" :width (ch 12))
+    (:key :status :label "Status" :width (ch 10))
+    (:key :progress :label "Progress" :width (ch 8))
+    (:key :kind :label "Kind" :width (ch 7))
+    (:key :starred :label "Star" :width (ch 6)
      :cell etaf-research-shelf-star-cell)
-    (:key :advance :label "Advance" :width 8
+    (:key :advance :label "Advance" :width (ch 8)
      :cell etaf-research-shelf-advance-cell))
   "Compact DataGrid columns for the Research Shelf list.")
 
@@ -506,9 +506,9 @@ constructed.  When omitted, initialize it for direct programmatic callers."
   (etaf-inject 'research-shelf-model nil t)
   :view
   (column :class "research-shelf-filter-rail"
-          :width 'stretch :min-width 0
-          :flex-grow 1 :flex-shrink 1 :flex-basis '(220)
-          :padding '(1 1)
+          :width 'stretch :min-width '(ch 0)
+          :flex-grow 1 :flex-shrink 1 :flex-basis '(px 220)
+          :padding '((lh 1) (ch 1))
           :border (etaf-theme-token :line)
           :color (etaf-theme-token :ink)
           :bgcolor (etaf-theme-token :panel)
@@ -528,7 +528,7 @@ constructed.  When omitted, initialize it for direct programmatic callers."
    (etaf-research-shelf-filter-button
     :filter-key 'starred :fallback "★ Starred"
     :ref 'research-shelf-filter-starred)
-   (box :height 1)
+   (box :height '(lh 1))
    (text :color (etaf-theme-token :muted) "STORAGE")
    (text
     (expr (file-name-nondirectory (plist-get (etaf-state) :database-file))))
@@ -545,14 +545,14 @@ constructed.  When omitted, initialize it for direct programmatic callers."
   (list :model (etaf-inject 'research-shelf-model nil t)
         :form (etaf-inject 'research-shelf-library nil t))
   :view
-  (column :class "research-shelf-list" :width 'stretch :min-width 0
-          :flex-grow 4 :flex-shrink 1 :flex-basis '(620)
-          :padding '(1 2)
+  (column :class "research-shelf-list" :width 'stretch :min-width '(ch 0)
+          :flex-grow 4 :flex-shrink 1 :flex-basis '(px 620)
+          :padding '((lh 1) (ch 2))
           :border (etaf-theme-token :line)
           :bgcolor (etaf-theme-token :panel)
    (flex :width 'stretch :flex-wrap 'wrap
-         :align-items 'center :gap '(1 (8))
-    (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
+         :align-items 'center :gap '((lh 1) (px 8))
+    (column :flex-grow 1 :flex-shrink 1 :flex-basis '(px 0) :min-width '(ch 0)
      (text :font-weight 'bold
       (expr (etaf-playground-static-value
              (plist-get (etaf-state) :form) :title "Reading queue")))
@@ -614,9 +614,9 @@ constructed.  When omitted, initialize it for direct programmatic callers."
   (list :model (etaf-inject 'research-shelf-model nil t)
         :form (etaf-inject 'research-shelf-detail nil t))
   :view
-  (column :class "research-shelf-detail" :width 'stretch :min-width 0
-          :flex-grow 2 :flex-shrink 1 :flex-basis '(340)
-          :padding '(2 2)
+  (column :class "research-shelf-detail" :width 'stretch :min-width '(ch 0)
+          :flex-grow 2 :flex-shrink 1 :flex-basis '(px 340)
+          :padding '((lh 2) (ch 2))
           :border (etaf-theme-token :line)
           :bgcolor (etaf-theme-token :panel)
    (text :color (etaf-theme-token :accent)
@@ -636,7 +636,7 @@ constructed.  When omitted, initialize it for direct programmatic callers."
                  (plist-get (etaf-state) :model))))
          (format "%s · %s" (plist-get row :author) (plist-get row :kind))
        "Select one row to inspect it.")))
-   (box :height 1)
+   (box :height '(lh 1))
    (text :font-weight 'bold
     (expr
      (if-let* ((row
@@ -662,7 +662,7 @@ constructed.  When omitted, initialize it for direct programmatic callers."
             (filled (max 0 (min 10 (/ progress 10)))))
        (format "%s %s" (make-string filled ?█)
                (make-string (- 10 filled) ?░)))))
-   (box :height 1)
+   (box :height '(lh 1))
    (text :color (etaf-theme-token :muted)
     (expr
      (if-let* ((row
@@ -670,7 +670,7 @@ constructed.  When omitted, initialize it for direct programmatic callers."
                  (plist-get (etaf-state) :model))))
          (concat "“" (or (plist-get row :note) "No note yet.") "”")
        "Your notes and actions will appear here.")))
-   (box :height 1)
+   (box :height '(lh 1))
    (etaf-research-shelf-detail-actions)))
 
 (etaf-define-component etaf-research-shelf-detail-actions ()
@@ -678,7 +678,7 @@ constructed.  When omitted, initialize it for direct programmatic callers."
   :setup
   (etaf-inject 'research-shelf-model nil t)
   :view
-  (flex :width 'stretch :flex-wrap 'wrap :gap '(1 (6))
+  (flex :width 'stretch :flex-wrap 'wrap :gap '((lh 1) (px 6))
    (etaf-button
     :label "+ 10%" :ref 'research-shelf-progress :variant 'secondary
     :disabled
@@ -725,9 +725,9 @@ constructed.  When omitted, initialize it for direct programmatic callers."
         :root (etaf-inject 'research-shelf-root-spec nil t)
         :header (etaf-inject 'research-shelf-header-spec nil t))
   :view
-  (flex :class "research-shelf-header" :width 'stretch :min-width 0
-        :flex-wrap 'wrap :align-items 'center :gap '(1 (10))
-   (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
+  (flex :class "research-shelf-header" :width 'stretch :min-width '(ch 0)
+        :flex-wrap 'wrap :align-items 'center :gap '((lh 1) (px 10))
+   (column :flex-grow 1 :flex-shrink 1 :flex-basis '(px 0) :min-width '(ch 0)
     (text :color (etaf-theme-token :accent)
      (expr (etaf-playground-static-value
             (plist-get (etaf-state) :header) :eyebrow "Research Shelf")))
@@ -738,7 +738,7 @@ constructed.  When omitted, initialize it for direct programmatic callers."
      (expr (etaf-playground-static-value
             (plist-get (etaf-state) :root) :subtitle
             "A quiet place for unfinished ideas"))))
-   (column :width 'max-content :min-width 0
+   (column :width 'max-content :min-width '(ch 0)
            :flex-grow 0 :flex-shrink 0
     (etaf-checkbox
      :label "Dark" :ref 'research-shelf-theme-toggle
@@ -757,8 +757,8 @@ constructed.  When omitted, initialize it for direct programmatic callers."
         :footer (etaf-inject 'research-shelf-footer-spec nil t))
   :view
   (flex :class "research-shelf-footer" :width 'stretch
-        :flex-wrap 'wrap :gap '(1 (8))
-   (column :flex-grow 1 :flex-shrink 1 :flex-basis '(0) :min-width 0
+        :flex-wrap 'wrap :gap '((lh 1) (px 8))
+   (column :flex-grow 1 :flex-shrink 1 :flex-basis '(px 0) :min-width '(ch 0)
     (text
      (expr
       (etaf-value (plist-get (plist-get (etaf-state) :model) :toast))))
@@ -776,8 +776,8 @@ The App supplies `header', `filters', `library', `detail', and `footer'; each
 slot has a reusable built-in fallback for direct composition."
   :view
   (column
-         :class "research-shelf-shell" :width '(viewport)
-          :height '(viewport-height)
+         :class "research-shelf-shell" :width '(vw 100)
+          :height '(vh 100)
           :color (etaf-theme-token :ink)
           :bgcolor (etaf-theme-token :paper)
    (slot :name 'header
@@ -785,7 +785,7 @@ slot has a reusable built-in fallback for direct composition."
    (flex
           :class "research-shelf-workspace" :width 'stretch
          :flex-wrap 'wrap :align-items 'stretch :align-content 'start
-         :gap '(1 (6))
+         :gap '((lh 1) (px 6))
     (slot :name 'filters
           (etaf-research-shelf-filter-rail))
     (slot :name 'library
