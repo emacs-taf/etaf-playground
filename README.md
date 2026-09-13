@@ -1,5 +1,8 @@
 # ETAF Playground
 
+Add the repository root to `load-path` and use `(require 'etaf-playground)`.
+[`etaf-playground.el`](etaf-playground.el) documents the supported API; `lisp/` contains internal implementations.
+
 ETAF Playground is a generic authoring workspace: the left side edits one
 same-basename application's sources and the right side mounts its live ETAF
 preview. The framework discovers examples from files; it does not contain a
@@ -189,3 +192,10 @@ application UI is only a consumer of the generic workspace; activate `Rows N
 After cloning, run `make setup-hooks`. Before submitting a change, run `make check`; `make structure-check` is the fast organization gate. The shared rules are in [AGENTS.md](AGENTS.md).
 
 `make check` runs structure checks, compilation and the public acceptance scenarios listed in [tests/acceptance.json](tests/acceptance.json). `make test` runs the broader regression suite; GUI and performance checks remain explicit targets. The acceptance inventory is selected by user-visible contracts, not by current pass/fail status.
+
+## Source layout migration
+
+Replace checkout paths ending in `/etaf-playground/lisp` with `/etaf-playground` and require
+`etaf-playground`. Package archives must preserve the root entry and `lisp/` directory.
+Use only the public interfaces documented in the entry Commentary; internal
+feature imports and the former entry locations are removed.

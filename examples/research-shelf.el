@@ -13,7 +13,7 @@
 (require 'etaf)
 (require 'etaf-ui)
 (require 'etaf-sqlite)
-(require 'etaf-theme-tp)
+(require 'etaf)
 (require 'etaf-playground)
 
 ;;; ---------------------------------------------------------------------------

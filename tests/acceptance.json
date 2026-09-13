@@ -6,13 +6,13 @@
     "examples",
     "scripts",
     "benchmarks",
-    "../etaf/lisp",
+    "../etaf",
     "../etaf/scripts",
-    "../etaf-ui/lisp",
+    "../etaf-ui",
     "../etaf-db",
-    "../ebox/lisp",
-    "../ecss/lisp",
-    "../tp/lisp"
+    "../ebox",
+    "../ecss",
+    "../tp"
   ],
   "support": [],
   "cases": [

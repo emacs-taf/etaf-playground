@@ -12,8 +12,8 @@
 (require 'seq)
 (require 'etaf)
 (require 'etaf-playground)
-(require 'etaf-performance)
-(require 'ebox-native-reflow)
+(require 'etaf)
+(require 'ebox)
 
 (defvar etaf-research-shelf-database-file)
 (defvar etaf-research-shelf-fixture-size)
@@ -222,7 +222,7 @@ VERIFY and CLEANUP."
 
 (defun etaf-performance-evaluator--verify-runtime-accelerator ()
   "Require the optional Ebox native runtime accelerator."
-  (unless (and (require 'ebox-native-reflow nil t)
+  (unless (and (require 'ebox nil t)
                (ebox-native-reflow-layout-ready-p))
     (error "Performance evaluator requires the Ebox native runtime"))
   (princ "perf-runtime-accelerator=ready\n")

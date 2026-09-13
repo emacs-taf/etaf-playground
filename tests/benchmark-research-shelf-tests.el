@@ -2,7 +2,7 @@
 
 ;;; Code:
 (require 'ert)
-(require 'etaf-performance)
+(require 'etaf)
 (load-file (expand-file-name "benchmarks/benchmark-research-shelf.el"
                             default-directory))
 

@@ -1,9 +1,9 @@
 .DEFAULT_GOAL := check
 .NOTPARALLEL:
 EMACS ?= emacs
-LOAD_PATH = -L . -L scripts -L benchmarks -L ../etaf/lisp -L ../etaf-ui/lisp -L ../ebox/lisp -L ../ecss/lisp -L ../tp/lisp -L ../etaf-db
+LOAD_PATH = -L . -L lisp -L scripts -L benchmarks -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-db
 EBOX_NATIVE_RELEASE_DIR = $(shell $(EMACS) -Q --batch $(LOAD_PATH) \
-	--eval '(setq load-prefer-newer t)' -l ../ebox/lisp/ebox-native-reflow.el \
+	--eval '(setq load-prefer-newer t)' -l ../ebox/ebox.el \
 	--eval '(princ (expand-file-name (format "../ebox/native/target/%s/release/" (ebox-native-reflow--rust-target))))')
 ENTRY_EXAMPLES := $(wildcard examples/*.el)
 EXAMPLES := $(ENTRY_EXAMPLES)
@@ -32,7 +32,7 @@ compile:
 		--eval '(load-file "etaf-playground.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(ENTRY_EXAMPLES),"$(file)")))) (load-file file))' \
 		--eval '(dolist (file (quote ($(foreach file,$(EXAMPLES),"$(file)")))) (byte-compile-file file))' \
-		--eval '(byte-compile-file "etaf-playground.el")' \
+		--eval '(progn (byte-compile-file "lisp/etaf-playground-runtime.el") (byte-compile-file "etaf-playground.el"))' \
 		--eval '(byte-compile-file "scripts/playground-gui-scenarios.el")' \
 		--eval '(byte-compile-file "scripts/task-workbench-gui-scenarios.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(TEST_FILES),"$(file)")))) (byte-compile-file file))'
@@ -112,7 +112,7 @@ load: compile
 checkdoc:
 	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "benchmarks/benchmark-research-shelf.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
 
-check: structure-check compile acceptance
+check: structure-check compile acceptance api-check
 
 clean:
 	rm -f *.elc scripts/*.elc benchmarks/*.elc tests/*.elc $(EXAMPLE_ELC)
@@ -126,3 +126,8 @@ setup-hooks:
 .PHONY: acceptance
 acceptance:
 	python3 scripts/run-acceptance.py --emacs "$(EMACS)"
+
+.PHONY: api-check
+api-check:
+	$(EMACS) -Q --batch -L . $(API_PROVIDER_PATH) --eval '(setq load-prefer-newer t)' -l scripts/check-api.el
+API_PROVIDER_PATH = -L ../ecss -L ../tp -L ../ekp -L ../ebox -L ../etaf -L ../etaf-ui -L ../etaf-db -L ../ebox-playground

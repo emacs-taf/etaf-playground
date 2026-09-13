@@ -12,7 +12,7 @@
 (require 'ebox-playground)
 (require 'etaf-playground)
 (require 'benchmark-research-shelf)
-(require 'ebox-native-reflow)
+(require 'ebox)
 
 (defvar etaf-research-shelf-database-file)
 (defvar etaf-research-shelf-fixture-size)
@@ -473,7 +473,7 @@ product-specific postcondition in the evidence stream."
      :initialize
      (lambda (context)
        (let ((source (find-file fixture)))
-         (ebox-dsl-mode)
+         (ebox-playground-mode)
          (etaf-gui-verifier-context-select-buffer context source)))
      :invariants #'etaf-playground-gui-scenarios--invariants
      :adapter #'etaf-playground-gui-scenarios--adapter
@@ -485,7 +485,7 @@ product-specific postcondition in the evidence stream."
        (lambda (context)
          (etaf-gui-verifier-context-put context 'target-fullscreen 'maximized)
          (set-frame-parameter nil 'fullscreen 'maximized)
-         (etaf-gui-verifier-context-select-buffer context (ebox-dsl-render))
+         (etaf-gui-verifier-context-select-buffer context (ebox-playground-render))
          (etaf-gui-verifier-context-put context 'expects-mounted t))
        :settled-p #'etaf-playground-gui-scenarios--mounted-settled-p
        :assertions

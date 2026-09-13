@@ -10,7 +10,7 @@
 
 (require 'cl-lib)
 (require 'ert)
-(require 'etaf-research-shelf
+(require 'etaf
          (expand-file-name "../examples/research-shelf.el"
                            (file-name-directory
                             (or load-file-name
