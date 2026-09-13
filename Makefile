@@ -1,9 +1,9 @@
 .DEFAULT_GOAL := check
 .NOTPARALLEL:
 EMACS ?= emacs
-LOAD_PATH = -L . -L scripts -L benchmarks -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-db
+LOAD_PATH = -L . -L scripts -L benchmarks -L ../etaf/lisp -L ../etaf-ui/lisp -L ../ebox/lisp -L ../ecss/lisp -L ../tp/lisp -L ../etaf-db
 EBOX_NATIVE_RELEASE_DIR = $(shell $(EMACS) -Q --batch $(LOAD_PATH) \
-	--eval '(setq load-prefer-newer t)' -l ../ebox/ebox-native-reflow.el \
+	--eval '(setq load-prefer-newer t)' -l ../ebox/lisp/ebox-native-reflow.el \
 	--eval '(princ (expand-file-name (format "../ebox/native/target/%s/release/" (ebox-native-reflow--rust-target))))')
 ENTRY_EXAMPLES := $(wildcard examples/*.el)
 EXAMPLES := $(ENTRY_EXAMPLES)

@@ -84,11 +84,11 @@ run_scenario() {
     "$GENERIC_RUNNER" run "$SCENARIO_ADAPTER" "$SCENARIO_ENTRY" \
         "$@" \
         --run-dir "$SCENARIO_RUN_DIR" \
-        --load-path "$REPOS_DIR/tp" \
-        --load-path "$REPOS_DIR/ecss" \
-        --load-path "$REPOS_DIR/ebox" \
-        --load-path "$REPOS_DIR/etaf" \
-        --load-path "$REPOS_DIR/etaf-ui" \
+        --load-path "$REPOS_DIR/tp/lisp" \
+        --load-path "$REPOS_DIR/ecss/lisp" \
+        --load-path "$REPOS_DIR/ebox/lisp" \
+        --load-path "$REPOS_DIR/etaf/lisp" \
+        --load-path "$REPOS_DIR/etaf-ui/lisp" \
         --load-path "$REPOS_DIR/etaf-db" \
         --load-path "$REPOS_DIR/ebox-playground" \
         --load-path "$REPOS_DIR/ebox-playground/scripts" \

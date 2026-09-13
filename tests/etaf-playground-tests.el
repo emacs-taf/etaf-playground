@@ -62,11 +62,11 @@
   (let* ((workspace (file-name-directory
                      (directory-file-name etaf-playground-test--root)))
          (tp (etaf-playground-test--package-description
-              (expand-file-name "tp/tp.el" workspace)))
+              (expand-file-name "tp/lisp/tp.el" workspace)))
          (ebox (etaf-playground-test--package-description
-                (expand-file-name "ebox/ebox.el" workspace)))
+                (expand-file-name "ebox/lisp/ebox.el" workspace)))
          (etaf (etaf-playground-test--package-description
-                (expand-file-name "etaf/etaf.el" workspace)))
+                (expand-file-name "etaf/lisp/etaf.el" workspace)))
          (playground (etaf-playground-test--package-description
                       (expand-file-name
                        "etaf-playground/etaf-playground.el" workspace))))
