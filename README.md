@@ -180,7 +180,8 @@ fails on either a greater-than-2-ms increase or the existing 50-ms limit.
 Keep the evaluator unchanged when comparing application revisions. These are
 batch dispatch-to-publication measurements; the complete GUI flow and foreground
 latency acceptance remain separate. Without an output variable, the command
-prints the path of a fresh temporary report.
+prints the path of a fresh temporary report. Application messages go to a
+separate temporary log; the terminal shows timings, verdict and artifact paths.
 
 For repeated absolute-latency runs, use `make perf-prepare` once after source
 changes, let compilation activity settle, then run `make perf-evaluator` without

@@ -134,10 +134,14 @@ test: acceptance
 
 .PHONY: perf-workbench
 perf-workbench:
+	@wb_log=$$(mktemp "$${TMPDIR:-/tmp}/etaf-workbench.XXXXXX"); \
+	wb_status=0; \
 	scripts/with-performance-lock.sh "$(EMACS)" -Q --batch $(LOAD_PATH) \
 		--eval '(setq load-prefer-newer t native-comp-jit-compilation nil)' \
 		-l benchmarks/benchmark-task-workbench.el \
-		-f etaf-workbench-benchmark-batch
+		-f etaf-workbench-benchmark-batch 2>"$$wb_log" || wb_status=$$?; \
+	printf 'log=%s\n' "$$wb_log"; \
+	exit $$wb_status
 
 .PHONY: tool-check
 tool-check:
