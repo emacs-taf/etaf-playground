@@ -383,7 +383,7 @@ product-specific postcondition in the evidence stream."
   "Return the Research Shelf GUI scenario adapter."
   (etaf-gui-verifier-scenario-create
      :name "research-shelf"
-     :claim "Research Shelf mounts, resizes, scrolls, and handles interactions"
+     :claim "Research Shelf renders, handles interactions, and persists SQLite writes"
      :initialize
      (lambda (context)
        (etaf-gui-verifier-context-select-buffer
@@ -460,10 +460,49 @@ product-specific postcondition in the evidence stream."
            (and (string-match-p "Page 2 /" text)
                 (string-match-p "13–24 of" text))))
        t)
-      (etaf-playground-gui-scenarios--maximize-action))
+      (etaf-playground-gui-scenarios--maximize-action)
+      (etaf-gui-verifier-action-create
+       :id "reopen-database"
+       :execute
+       (lambda (context)
+         (let* ((buffer (etaf-gui-verifier-context-target-buffer context))
+                (name (buffer-name buffer))
+                (runtime (etaf-runtime-for-buffer buffer)))
+           (etaf-gui-verifier-context-put context 'closed-runtime runtime)
+           (etaf-gui-verifier-context-put context 'closed-buffer buffer)
+           (etaf-unmount runtime)
+           (kill-buffer buffer)
+           (etaf-gui-verifier-context-select-buffer
+            context (etaf-playground-mount-example name "research-shelf"))))
+       :settled-p
+       (lambda (context)
+         (and (etaf-playground-gui-scenarios--mounted-settled-p context)
+              (not (buffer-live-p
+                    (etaf-gui-verifier-context-get context 'closed-buffer)))
+              (not (etaf-runtime-mounted-p
+                    (etaf-gui-verifier-context-get context 'closed-runtime)))
+              (string-match-p "256 items"
+                              (etaf-playground-gui-scenarios--buffer-text context))))
+       :screenshot t)
+      (etaf-playground-gui-scenarios--research-event-action
+       "persisted-row-select" 'research-shelf-row-2
+       (lambda (context)
+         (let ((text (etaf-playground-gui-scenarios--buffer-text context)))
+           (and (string-match-p "John Berger · Book" text)
+                (string-match-p "Progress  10%" text)
+                (string-match-p "256 items" text))))
+       t "progress-survives-reopen")
+      (etaf-playground-gui-scenarios--research-event-action
+       "reload-persisted-record" 'research-shelf-reload
+       (lambda (context)
+         (let ((text (etaf-playground-gui-scenarios--buffer-text context)))
+           (and (string-match-p "Library reloaded" text)
+                (string-match-p "Progress  10%" text)
+                (string-match-p "256 items" text))))
+       t "reload-does-not-repeat-write"))
      :completion
      (lambda (context)
-       (= (etaf-gui-verifier-context-action-count context) 13))))
+       (= (etaf-gui-verifier-context-action-count context) 16))))
 
 (defun etaf-playground-gui-scenarios-ebox (scenario fixture)
   "Return one Ebox SCENARIO adapter for FIXTURE."

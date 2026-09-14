@@ -169,6 +169,10 @@ defines its application actions, while Flex and Grid are two inputs to the same
 Ebox reference scenario factory. Adding another application does not create a
 second daemon/recording/checkpoint implementation.
 
+The Research Shelf scenario also closes its preview and mounts a fresh Runtime
+against the same SQLite file. It reselects the edited record and reloads the
+library, requiring the saved progress and 256-record count to remain unchanged.
+
 Each scenario creates a unique named daemon, disables native-comp JIT, loads
 the sibling repositories explicitly, creates one GUI frame, activates Emacs
 from the controlling shell, records through a PTY-backed macOS screen recorder,

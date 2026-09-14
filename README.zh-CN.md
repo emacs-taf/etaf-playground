@@ -144,6 +144,9 @@ Context、checkpoint、录屏和 evidence 合同。`scripts/playground-gui-scena
 scenario factory 的两个输入。增加新应用时不会复制第二套 daemon/录屏/checkpoint
 实现。
 
+Research Shelf 场景还会关闭预览，再用同一个 SQLite 文件挂载新 Runtime。
+重新选择已编辑记录并刷新列表后，已保存进度和 256 条记录总数必须保持不变。
+
 每个场景都会创建唯一命名 daemon，关闭 native-comp JIT，显式加载 sibling 仓库，
 创建单一 GUI frame，由外层 shell 激活 Emacs，通过保留 PTY 的 macOS recorder 录屏，
 依次执行 mount/resize/scroll/interaction checkpoint，生成 screenshot 与 manifest，最后
