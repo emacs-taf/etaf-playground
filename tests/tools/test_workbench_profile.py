@@ -1,6 +1,7 @@
 """Exercise the diagnostic command against a real checked Workbench action."""
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -10,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ProfileCommandTests(unittest.TestCase):
-    def run_profile(self, scenario="row-toggle", samples="1"):
+    def run_profile(self, scenario="row-toggle", samples="1", depth="256"):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "profile.json"
             command = [os.environ.get("EMACS", "emacs"), "-Q", "--batch"]
@@ -24,6 +25,7 @@ class ProfileCommandTests(unittest.TestCase):
                 command, cwd=ROOT, capture_output=True, text=True, timeout=120,
                 env=dict(os.environ, ETAF_WORKBENCH_PROFILE_SCENARIO=scenario,
                          ETAF_WORKBENCH_PROFILE_SAMPLES=samples,
+                         ETAF_WORKBENCH_PROFILE_STACK_DEPTH=depth,
                          ETAF_WORKBENCH_PROFILE_OUTPUT=str(output)), check=False)
             return result, json.loads(output.read_text())
 
@@ -38,6 +40,20 @@ class ProfileCommandTests(unittest.TestCase):
         providers = {row["provider"] for row in report["operations"][0]["stages"]}
         self.assertTrue({"etaf", "ebox", "tp"}.issubset(providers))
         stacks = [stack for profile in report["cpu_profiles"] for stack in profile]
+        self.assertEqual(report["max_stack_depth"], 256)
+        self.assertEqual(report["depth_limit_samples"], sum(
+            stack["samples"] for stack in stacks if stack["at_depth_limit"]))
+        for stack in stacks:
+            self.assertEqual(stack["at_depth_limit"], len(stack["frames"]) >= 256)
+            self.assertNotEqual(stack["frames"][-1:], ["nil"])
+        nearest = {}
+        for stack in stacks:
+            caller = next((name for name in stack["frames"]
+                           if re.match(r"^(ebox|ecss|tp|etaf|wb)-", name)), None)
+            if caller:
+                nearest[caller] = nearest.get(caller, 0) + stack["samples"]
+        self.assertEqual({row["function"]: row["samples"]
+                          for row in report["nearest_package_callers"]}, nearest)
         self.assertGreater(report["cpu_samples"], 0)
         self.assertEqual(report["cpu_samples"], sum(stack["samples"] for stack in stacks))
         self.assertTrue(report["functions"])
@@ -49,6 +65,15 @@ class ProfileCommandTests(unittest.TestCase):
         self.assertIn("not elapsed time", result.stdout)
         self.assertLess(len(result.stdout.splitlines()), 30)
 
+    def test_shallow_stacks_report_incomplete_caller_attribution(self):
+        result, report = self.run_profile(depth="16")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(report["max_stack_depth"], 16)
+        self.assertGreater(report["depth_limit_samples"], 0)
+        self.assertAlmostEqual(report["depth_limit_percent"],
+                               100 * report["depth_limit_samples"] / report["cpu_samples"])
+        self.assertIn("omitted callers can be undercounted", result.stdout)
+
     def test_invalid_scenario_and_sample_count_fail_with_an_atomic_report(self):
         for scenario, samples in (("missing", "1"), ("row-toggle", "0"),
                                   ("row-toggle", "oops")):
@@ -58,6 +83,14 @@ class ProfileCommandTests(unittest.TestCase):
             self.assertTrue(report["error"])
             self.assertEqual(report["operations"], [])
             self.assertEqual(report["cpu_profiles"], [])
+
+    def test_invalid_depth_fails_before_sampling(self):
+        for depth in ("0", "1025", "oops"):
+            result, report = self.run_profile(depth=depth)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["cpu_profiles"], [])
+            self.assertEqual(report["depth_limit_samples"], 0)
 
 
 if __name__ == "__main__":

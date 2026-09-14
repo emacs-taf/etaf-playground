@@ -187,11 +187,21 @@ To locate an expensive operation, run `make profile-workbench SCENARIO=row-toggl
 (also `theme-toggle` or `focus-add`). It runs two fresh instances of the same
 checked workload: public provider-stage recording first, CPU sampling second.
 Each pass warms up five times and diagnoses ten actions by default. The compact
-output ranks overlapping stage means and function hotspots; the JSON report
+output ranks overlapping stage means and the nearest named package caller of
+each CPU sample. Caller buckets are disjoint; anonymous and primitive frames
+are attributed to their nearest named caller, while GC/runtime-only samples
+may have none. The JSON report
 retains each operation, sanitized sampled stacks, self/inclusive sample weights,
 function source files, loaded revisions, local changes and source hashes.
 Use `ETAF_WORKBENCH_PROFILE_OUTPUT` for an explicit report path and
 `ETAF_WORKBENCH_PROFILE_SAMPLES=1..100` to choose the action count.
+Stacks retain up to 256 frames by default; set
+`ETAF_WORKBENCH_PROFILE_STACK_DEPTH=16..1024` to change this limit. The report
+marks stacks reaching the limit and prints their sample weight. Such stacks
+may omit outer callers, so inclusive rankings can undercount them; increase
+the depth before using those rankings to attribute cost to an architectural layer.
+Inspect the retained stacks and self/inclusive counts to distinguish a caller's
+own work from its descendants; an inclusive total is not that function's overhead.
 Function samples are statistical evidence, not call counts or exact function
 durations; anonymous closures may remain unnamed. Very short actions may produce
 no CPU samples and return a diagnostic failure. Investigate the owning provider

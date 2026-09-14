@@ -77,6 +77,7 @@
   "Diagnose the Workbench scenario selected by environment variables.
 ETAF_WORKBENCH_PROFILE_SCENARIO defaults to row-toggle; theme-toggle and
 focus-add are also supported.  ETAF_WORKBENCH_PROFILE_SAMPLES defaults to 10.
+ETAF_WORKBENCH_PROFILE_STACK_DEPTH defaults to 256 frames (16 through 1024).
 ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
   (let* ((scenario (or (getenv "ETAF_WORKBENCH_PROFILE_SCENARIO") "row-toggle"))
          (label (cdr (assoc scenario '(("row-toggle" . "完成")
@@ -84,6 +85,8 @@ ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
                                        ("focus-add" . "定位新增按钮")))))
          (count-text (or (getenv "ETAF_WORKBENCH_PROFILE_SAMPLES") "10"))
          (count (string-to-number count-text))
+         (depth-text (or (getenv "ETAF_WORKBENCH_PROFILE_STACK_DEPTH") "256"))
+         (profiler-max-stack-depth (string-to-number depth-text))
          (output (or (getenv "ETAF_WORKBENCH_PROFILE_OUTPUT")
                      (make-temp-file "etaf-workbench-profile-" nil ".json")))
          (report (list :schema 1 :purpose "diagnostic-only"
@@ -92,6 +95,7 @@ ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
                        :warmups 5 :samples_per_pass count
                        :cpu_units "profiler sample weights"
                        :stack_order "leaf-first"
+                       :max_stack_depth profiler-max-stack-depth
                        :sampling_interval_ns profiler-sampling-interval
                        :emacs emacs-version :machine (system-name)
                        :system system-configuration
@@ -107,15 +111,19 @@ ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
                        :workload_hash (etaf-workbench-benchmark--source-hash
                                        'etaf-workbench-benchmark-batch)
                        :app_hash (etaf-workbench-benchmark--source-hash 'wb-open)))
-         operations profiles (total 0)
+         operations profiles (total 0) (depth-limit-samples 0)
          (inclusive (make-hash-table :test #'eq))
          (self (make-hash-table :test #'eq))
-         functions)
+         (nearest-callers (make-hash-table :test #'eq))
+         functions caller-rows)
     (condition-case problem
         (progn
           (unless label (error "Unknown Workbench scenario: %s" scenario))
           (unless (and (string-match-p "\\`[0-9]+\\'" count-text) (<= 1 count 100))
             (error "Profile samples must be an integer from 1 to 100"))
+          (unless (and (string-match-p "\\`[0-9]+\\'" depth-text)
+                       (<= 16 profiler-max-stack-depth 1024))
+            (error "Profile stack depth must be an integer from 16 to 1024"))
           (etaf-workbench-benchmark--write output report)
           ;; These two fresh mounts share the acceptance workload and checks.
           ;; Stage tracing never runs concurrently with CPU sampling.
@@ -143,18 +151,38 @@ ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
                (profiler-stop))
              (let (stacks)
                (maphash
-                (lambda (stack samples)
-                  (cl-incf total samples)
-                  (push (list :frames (vconcat (mapcar #'etaf-workbench-profile--frame-name
-                                                     (append stack nil)))
-                              :samples samples) stacks)
-                  (when (and (> (length stack) 0) (symbolp (aref stack 0)))
-                    (let ((name (aref stack 0)))
-                      (puthash name (+ samples (gethash name self 0)) self)))
-                  (dolist (name (delete-dups
-                                 (cl-remove-if-not #'symbolp (append stack nil))))
-                    (when name
-                      (puthash name (+ samples (gethash name inclusive 0)) inclusive))))
+                (lambda (raw-stack samples)
+                  ;; Emacs pads normal sample vectors with nil.  Only occupied
+                  ;; frames count toward the depth limit; GC has its own short
+                  ;; vector.  Do not label padding as a truncated call chain.
+                  (let* ((last-frame (cl-position-if #'identity raw-stack :from-end t))
+                         (stack (seq-subseq raw-stack 0 (if last-frame (1+ last-frame) 0)))
+                         (caller
+                          (seq-find
+                           (lambda (frame)
+                             (and (symbolp frame)
+                                  (string-match-p
+                                   "\\`\\(?:ebox\\|ecss\\|tp\\|etaf\\|wb\\)-"
+                                   (symbol-name frame))))
+                           stack)))
+                    (cl-incf total samples)
+                    (when caller
+                      (puthash caller (+ samples (gethash caller nearest-callers 0))
+                               nearest-callers))
+                    (when (>= (length stack) profiler-max-stack-depth)
+                      (cl-incf depth-limit-samples samples))
+                    (push (list :frames (vconcat (mapcar #'etaf-workbench-profile--frame-name
+                                                       (append stack nil)))
+                                :at_depth_limit (if (>= (length stack) profiler-max-stack-depth)
+                                                    t :false)
+                                :samples samples) stacks)
+                    (when (and (> (length stack) 0) (symbolp (aref stack 0)))
+                      (let ((name (aref stack 0)))
+                        (puthash name (+ samples (gethash name self 0)) self)))
+                    (dolist (name (delete-dups
+                                   (cl-remove-if-not #'symbolp (append stack nil))))
+                      (when name
+                        (puthash name (+ samples (gethash name inclusive 0)) inclusive)))))
                 (profiler-profile-log (profiler-cpu-profile)))
                (push (vconcat stacks) profiles)))
            count)
@@ -173,13 +201,28 @@ ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
           (setq functions (sort functions (lambda (a b)
                                             (> (plist-get a :inclusive_samples)
                                                (plist-get b :inclusive_samples)))))
+          (maphash
+           (lambda (name samples)
+             (push (list :function (symbol-name name) :samples samples
+                         :percent (* 100.0 (/ (float samples) total)))
+                   caller-rows))
+           nearest-callers)
+          (setq caller-rows (sort caller-rows (lambda (a b)
+                                              (> (plist-get a :samples)
+                                                 (plist-get b :samples)))))
           (setq report (plist-put report :status "completed"))
           (etaf-workbench-profile--print-stages operations)
           (princ (format "CPU sample weight: %d; inclusive counts overlap, not elapsed time\n" total))
-          (dolist (row (seq-take functions 15))
-            (princ (format "  %6.1f%%  self=%-5d %s\n"
-                           (plist-get row :inclusive_percent)
-                           (plist-get row :self_samples) (plist-get row :function)))))
+          (princ (format "Stack depth: %d; depth-limit sample weight: %d (%.1f%%)\n"
+                         profiler-max-stack-depth depth-limit-samples
+                         (* 100.0 (/ (float depth-limit-samples) total))))
+          (when (> depth-limit-samples 0)
+            (princ "Depth limit reached: omitted callers can be undercounted; increase stack depth.\n"))
+          (princ "Nearest named package callers (disjoint sample attribution):\n")
+          (dolist (row (seq-take caller-rows 12))
+            (princ (format "  %6.1f%%  samples=%-5d %s\n"
+                           (plist-get row :percent)
+                           (plist-get row :samples) (plist-get row :function)))))
       (error
        (setq report (plist-put report :status "failed"))
        (setq report (plist-put report :error
@@ -188,8 +231,14 @@ ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
        (princ (format "FAILED %s\n" (plist-get report :error)))))
     (setq report (plist-put report :operations (vconcat (nreverse operations)))
           report (plist-put report :cpu_samples total)
+          report (plist-put report :depth_limit_samples depth-limit-samples)
+          report (plist-put report :depth_limit_percent
+                            (if (> total 0)
+                                (* 100.0 (/ (float depth-limit-samples) total))
+                              0.0))
           report (plist-put report :cpu_profiles (vconcat (nreverse profiles)))
           report (plist-put report :functions (vconcat functions)))
+    (setq report (plist-put report :nearest_package_callers (vconcat caller-rows)))
     (etaf-workbench-benchmark--write output report)
     (princ (format "diagnostic=%s report=%s\n" (plist-get report :status) output))
     (kill-emacs (if (equal (plist-get report :status) "completed") 0 1))))
