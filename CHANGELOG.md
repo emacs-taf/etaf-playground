@@ -5,9 +5,14 @@
 ### Fixed
 
 - Workbench task cells reserve enough room to display both control captions in
-  compact and wide layouts.
+  compact and wide layouts. Its callbacks use committed props directly, and the
+  Add button uses an instance-local Host reference for independent workbenches.
 
 ### Changed
+
+- Research Shelf and Task Workbench declare stable Context, state and resource
+  handles with Component `:bindings`. Views and callbacks use those names
+  directly; update ETAF to a revision supporting instance bindings.
 
 - ECSS companions contain one plain ordered rule list. Remove the `styles`
   wrapper and write `nil` for an empty file. Preview uses the shared ECSS reader

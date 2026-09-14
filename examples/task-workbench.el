@@ -141,25 +141,21 @@
 ;;; Reusable cell: Context dependency + controlled Checkbox + disabled Button
 
 (etaf-define-component wb-task-controls (&key task)
-  :setup
-  (etaf-inject 'wb-data nil t)
-  :render
-  (let ((data (etaf-state))
-        (item task))                  ; Capture this render's ordinary prop.
-    (etaf-view
-     (row :item-gap '(ch 1)
-      (etaf-checkbox
-       :label "完成" :checked (plist-get item :done)
-       :on-press #'wb-trace-press      ; Additive; does not replace on-change.
-       :on-change
-       (lambda (next)
-         (etaf-dispatch 'wb-mutate data 'update
-                        (plist-put (copy-sequence item) :done next))))
-      (wb-button
-       :label "删除" :variant 'ghost :disabled (not (plist-get item :done))
-       :on-press
-       (lambda ()
-         (etaf-dispatch 'wb-mutate data 'delete (wb-task-id item))))))))
+  :bindings ((data (etaf-inject 'wb-data nil t)))
+  :view
+  (row :item-gap '(ch 1)
+       (etaf-checkbox
+        :label "完成" :checked (plist-get task :done)
+        :on-press #'wb-trace-press      ; Additive; does not replace on-change.
+        :on-change
+        (lambda (next)
+          (etaf-dispatch 'wb-mutate data 'update
+                         (plist-put (copy-sequence task) :done next))))
+       (wb-button
+        :label "删除" :variant 'ghost :disabled (not (plist-get task :done))
+        :on-press
+        (lambda ()
+          (etaf-dispatch 'wb-mutate data 'delete (wb-task-id task))))))
 
 (defun wb-controls-cell (row)
   "Return reusable task controls for ROW at the consuming cell."
@@ -179,30 +175,26 @@
    (text (expr (if (plist-get task :done) "已完成" "进行中")))))
 
 (etaf-define-component wb-detail ()
-  :setup
-  (list :data (etaf-inject 'wb-data nil t) :expanded (etaf-ref t))
-  :render
-  (let* ((state (etaf-state))
-         (data (plist-get state :data))
-         (expanded (plist-get state :expanded)))
-    (etaf-view
-     (etaf-panel :title "详情" :item-gap '(lh 1)
-      (expr
-       (if-let* ((task (etaf-data-selected-item data)))
-           (etaf-view (wb-task-info :task task))
-         (etaf-view (text "点击任务行查看详情"))))
-      (etaf-checkbox
-       :label "显示说明" :checked (etaf-value expanded)
-       :on-change (lambda (next) (setf (etaf-value expanded) next)))
-      (box :if (etaf-value expanded) :height '(lh 3) :overflow 'scroll
-       (column
-        (text :for (tip '("点击行：选择任务"
-                         "勾选：修改完成状态"
-                         "完成后可以删除"
-                         "TAB：移动焦点"
-                         "RET：激活控件"))
-              :key tip
-         (expr tip))))))))
+  :bindings ((data (etaf-inject 'wb-data nil t))
+             (expanded (etaf-ref t)))
+  :view
+  (etaf-panel :title "详情" :item-gap '(lh 1)
+              (expr
+               (if-let* ((task (etaf-data-selected-item data)))
+                   (etaf-view (wb-task-info :task task))
+                 (etaf-view (text "点击任务行查看详情"))))
+              (etaf-checkbox
+               :label "显示说明" :checked (etaf-value expanded)
+               :on-change (lambda (next) (setf (etaf-value expanded) next)))
+              (box :if (etaf-value expanded) :height '(lh 3) :overflow 'scroll
+                   (column
+                    (text :for (tip '("点击行：选择任务"
+                                      "勾选：修改完成状态"
+                                      "完成后可以删除"
+                                      "TAB：移动焦点"
+                                      "RET：激活控件"))
+                          :key tip
+                          (expr tip))))))
 
 ;;; Resource: explicit status/error/retry, scoped result cleanup
 ;;; This is a synchronous demo loader, not a simulated asynchronous API.
@@ -212,55 +204,53 @@
   (message "旧服务结果已释放"))
 
 (etaf-define-component wb-service ()
-  :setup
-  (let* ((fail-next (etaf-ref nil))
-         (resource
-          (etaf-resource
-           (lambda ()
-             (when (etaf-value fail-next)
-               (setf (etaf-value fail-next) nil)
-               (error "模拟加载失败"))
-             (etaf-resource-result "服务正常"
-                                   :cleanup #'wb-service-cleanup))
-           :immediate nil)))
-    (etaf-on-mounted (lambda () (etaf-resource-load resource)))
-    (list :resource resource :fail-next fail-next))
-  :render
-  (let* ((state (etaf-state))
-         (resource (plist-get state :resource))
-         (fail-next (plist-get state :fail-next)))
-    (etaf-view
-     (etaf-panel :title "服务状态" :item-gap '(lh 1)
-      (text
-       (expr
-        (pcase (etaf-resource-status resource)
-          ('success (etaf-resource-value resource))
-          ('error (error-message-string (etaf-resource-error resource)))
-          (_ "加载中…"))))
-      (row :item-gap '(ch 10)
-       (wb-button :label "刷新 / 重试" :variant 'secondary
-        :on-press (lambda () (etaf-resource-load resource)))
-       (wb-button :label "模拟失败" :variant 'ghost
-        :on-press
-        (lambda ()
-          (setf (etaf-value fail-next) t)
-          (etaf-resource-load resource))))))))
+  :bindings
+  ((fail-next (etaf-ref nil))
+   (resource
+    (etaf-resource
+     (lambda ()
+       (when (etaf-value fail-next)
+         (setf (etaf-value fail-next) nil)
+         (error "模拟加载失败"))
+       (etaf-resource-result "服务正常"
+                             :cleanup #'wb-service-cleanup))
+     :immediate nil)))
+  :setup (etaf-on-mounted (lambda () (etaf-resource-load resource)))
+  :view
+  (etaf-panel :title "服务状态" :item-gap '(lh 1)
+              (text
+               (expr
+                (pcase (etaf-resource-status resource)
+                  ('success (etaf-resource-value resource))
+                  ('error (error-message-string (etaf-resource-error resource)))
+                  (_ "加载中…"))))
+              (row :item-gap '(ch 10)
+                   (wb-button :label "刷新 / 重试" :variant 'secondary
+                              :on-press (lambda () (etaf-resource-load resource)))
+                   (wb-button :label "模拟失败" :variant 'ghost
+                              :on-press
+                              (lambda ()
+                                (setf (etaf-value fail-next) t)
+                                (etaf-resource-load resource))))))
 
 ;;; App owner: Data, refs, computed, watch, Context, Theme, lifecycle
 
 (etaf-define-component wb-app ()
+  :bindings
+  ((data (etaf-data-controller
+          (etaf-data-memory-source (copy-tree wb-tasks) :id-key :id)
+          :page-size 10 :auto-load nil))
+   (dark (etaf-ref nil))
+   (next-id (etaf-ref (1+ (apply #'max (mapcar #'wb-task-id wb-tasks)))))
+   (summary
+    (etaf-computed
+     (lambda ()
+       (format "共 %d 条 · 当前页 %d 条"
+               (etaf-value (etaf-data-total data))
+               (length (etaf-value (etaf-data-items data)))))))
+   (add-ref (etaf-local-ref 'add)))
   :setup
-  (let* ((data (etaf-data-controller
-                (etaf-data-memory-source (copy-tree wb-tasks) :id-key :id)
-                :page-size 10 :auto-load nil))
-         (dark (etaf-ref nil))
-         (next-id (etaf-ref (1+ (apply #'max (mapcar #'wb-task-id wb-tasks)))))
-         (summary
-          (etaf-computed
-           (lambda ()
-             (format "共 %d 条 · 当前页 %d 条"
-                     (etaf-value (etaf-data-total data))
-                     (length (etaf-value (etaf-data-items data))))))))
+  (progn
     (etaf-provide 'wb-data data)
     (etaf-theme-provide
      (etaf-computed (lambda () (wb-theme (etaf-value dark)))))
@@ -269,83 +259,74 @@
                   (message "切换到%s主题" (if new "深色" "浅色"))))
     (etaf-on-mounted (lambda () (etaf-data-load data)))
     (etaf-on-updated (lambda () (message "工作台已更新")))
-    (etaf-on-unmounted (lambda () (message "工作台已卸载")))
     ;; Data, computed, watch and nested Resource scopes dispose automatically.
-    (list :data data :dark dark :next-id next-id :summary summary
-          :add-ref (make-symbol "wb-add")))
-  :render
-  (let* ((state (etaf-state))
-         (data (plist-get state :data))
-         (dark (plist-get state :dark))
-         (next-id (plist-get state :next-id))
-         (summary (plist-get state :summary))
-         (add-ref (plist-get state :add-ref)))
-    (etaf-view
-     (wb-shell :title "任务工作台"
-      (slot :name 'toolbar
-       (wb-button
-        :ref add-ref :label "新增任务"
-        :on-press
-        (lambda ()
-          (let ((title (string-trim (read-string "任务名称："))))
-            (unless (string-empty-p title)
-              (let ((id (etaf-value next-id)))
-                (cl-incf (etaf-value next-id))
-                (etaf-dispatch 'wb-mutate data 'insert
-                               (list :id id :title title :done nil)))))))
-       (etaf-checkbox :label "深色" :checked (etaf-value dark)
-        :on-change (lambda (next) (setf (etaf-value dark) next)))
-       (wb-button :label "定位新增按钮" :variant 'ghost
-        :on-press (lambda () (etaf-dispatch 'wb-focus add-ref))))
+    (etaf-on-unmounted (lambda () (message "工作台已卸载"))))
+  :view
+  (wb-shell :title "任务工作台"
+            (slot :name 'toolbar
+                  (wb-button
+                   :ref add-ref :label "新增任务"
+                   :on-press
+                   (lambda ()
+                     (let ((title (string-trim (read-string "任务名称："))))
+                       (unless (string-empty-p title)
+                         (let ((id (etaf-value next-id)))
+                           (cl-incf (etaf-value next-id))
+                           (etaf-dispatch 'wb-mutate data 'insert
+                                          (list :id id :title title :done nil)))))))
+                  (etaf-checkbox :label "深色" :checked (etaf-value dark)
+                                 :on-change (lambda (next) (setf (etaf-value dark) next)))
+                  (wb-button :label "定位新增按钮" :variant 'ghost
+                             :on-press (lambda () (etaf-dispatch 'wb-focus add-ref))))
 
-      ;; Parent owns each panel's participation in this Flex layout.
-      (etaf-panel :title "筛选" :flex-basis '(ch 18) :flex-grow 1 :flex-shrink 0 :item-gap '(lh 1)
-       (flex :flex-wrap 'wrap :gap '((lh 1) (px 10)) :align-items 'stretch
-        (wb-button :label "全部" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
-         :variant (if (null (etaf-value (etaf-data-query data)))
-                      'secondary 'ghost)
-         :on-press (lambda () (wb-query data nil)))
-        (wb-button :label "未完成" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
-         :variant (if (equal (etaf-value (etaf-data-query data)) '(:done nil))
-                      'secondary 'ghost)
-         :on-press (lambda () (wb-query data '(:done nil))))
-        (wb-button :label "已完成" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
-         :variant (if (equal (etaf-value (etaf-data-query data)) '(:done t))
-                      'secondary 'ghost)
-         :on-press (lambda () (wb-query data '(:done t))))
-        (wb-button :label "搜索" :variant 'secondary :width 'stretch
-         :flex-basis '(ch 16) :flex-grow 1
-         :on-press (lambda () (wb-query data (read-string "搜索："))))))
+            ;; Parent owns each panel's participation in this Flex layout.
+            (etaf-panel :title "筛选" :flex-basis '(ch 18) :flex-grow 1 :flex-shrink 0 :item-gap '(lh 1)
+                        (flex :flex-wrap 'wrap :gap '((lh 1) (px 10)) :align-items 'stretch
+                              (wb-button :label "全部" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
+                                         :variant (if (null (etaf-value (etaf-data-query data)))
+                                                      'secondary 'ghost)
+                                         :on-press (lambda () (wb-query data nil)))
+                              (wb-button :label "未完成" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
+                                         :variant (if (equal (etaf-value (etaf-data-query data)) '(:done nil))
+                                                      'secondary 'ghost)
+                                         :on-press (lambda () (wb-query data '(:done nil))))
+                              (wb-button :label "已完成" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
+                                         :variant (if (equal (etaf-value (etaf-data-query data)) '(:done t))
+                                                      'secondary 'ghost)
+                                         :on-press (lambda () (wb-query data '(:done t))))
+                              (wb-button :label "搜索" :variant 'secondary :width 'stretch
+                                         :flex-basis '(ch 16) :flex-grow 1
+                                         :on-press (lambda () (wb-query data (read-string "搜索："))))))
 
-      (etaf-panel :title "任务" :flex-grow 4 :flex-basis '(ch 64) :min-width '(ch 0)
-                  :item-gap '(lh 1)
-       (etaf-data-grid
-        :controller data :columns wb-columns :row-key #'wb-task-id
-        :on-row-press (lambda (row) (etaf-data-select-one data (wb-task-id row)))
-        :loading-label "读取任务…" :error-label "读取失败，请重新筛选"
-        :empty-label "没有匹配的任务"
-        (slot :name 'footer
-         (etaf-pagination :controller data
-                          :previous-label "‹ 上一页" :next-label "下一页 ›")))
-       (etaf-number-input
-        :label "每页条数" :value (etaf-value (etaf-data-page-size data))
-        :min 1 :max 20
-        :on-change
-        (lambda (next)
-          (etaf-data-set-page-size data next)
-          (etaf-data-set-page data 1)
-          (etaf-data-load data))))
+            (etaf-panel :title "任务" :flex-grow 4 :flex-basis '(ch 64) :min-width '(ch 0)
+                        :item-gap '(lh 1)
+                        (etaf-data-grid
+                         :controller data :columns wb-columns :row-key #'wb-task-id
+                         :on-row-press (lambda (row) (etaf-data-select-one data (wb-task-id row)))
+                         :loading-label "读取任务…" :error-label "读取失败，请重新筛选"
+                         :empty-label "没有匹配的任务"
+                         (slot :name 'footer
+                               (etaf-pagination :controller data
+                                                :previous-label "‹ 上一页" :next-label "下一页 ›")))
+                        (etaf-number-input
+                         :label "每页条数" :value (etaf-value (etaf-data-page-size data))
+                         :min 1 :max 20
+                         :on-change
+                         (lambda (next)
+                           (etaf-data-set-page-size data next)
+                           (etaf-data-set-page data 1)
+                           (etaf-data-load data))))
 
-      (flex :flex-wrap 'wrap :flex-basis '(ch 36) :flex-grow 1 :min-width '(ch 0)
-            :align-content 'space-between :align-items 'flex-start :gap '((lh 1) (px 16))
-       (wb-detail :flex-basis '(ch 28) :flex-grow 1)
-       (wb-service :flex-basis '(ch 28) :flex-grow 1))
+            (flex :flex-wrap 'wrap :flex-basis '(ch 36) :flex-grow 1 :min-width '(ch 0)
+                  :align-content 'space-between :align-items 'flex-start :gap '((lh 1) (px 16))
+                  (wb-detail :flex-basis '(ch 28) :flex-grow 1)
+                  (wb-service :flex-basis '(ch 28) :flex-grow 1))
 
-      (slot :name 'footer
-       (grid :width 'stretch :grid-template-columns '((fr 1) (fr 1)) :gap '((lh 1) (ch 1))
-        (etaf-label :variant 'muted :text (etaf-value summary))
-        (etaf-label :variant 'muted
-                    :text "数据仅保存在当前工作台内存中")))))))
+            (slot :name 'footer
+                  (grid :width 'stretch :grid-template-columns '((fr 1) (fr 1)) :gap '((lh 1) (ch 1))
+                        (etaf-label :variant 'muted :text (etaf-value summary))
+                        (etaf-label :variant 'muted
+                                    :text "数据仅保存在当前工作台内存中")))))
 
 ;;; Open / close. Each buffer gets independent App state and local refs.
 
