@@ -178,6 +178,21 @@ With OPTIONAL, report nil when the viewport does not display the number."
              label row-id (length matches)))
     (caar matches)))
 
+(defun wb-gui--task-captions-readable-p (context)
+  "Return non-nil when every rendered task control has its full caption."
+  (let ((runtime (wb-gui--runtime context)))
+    (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
+      (cl-every
+       (lambda (entry)
+         (let ((label (plist-get (cdr entry) :aria-label))
+               (bounds (etaf-host-ref-bounds runtime (car entry))))
+           (or (not (member label '("完成" "删除")))
+               (null bounds)
+               (string-match-p
+                (regexp-quote label)
+                (buffer-substring-no-properties (car bounds) (cdr bounds))))))
+       (etaf-runtime-host-props-entries runtime)))))
+
 (defun wb-gui--layout-snapshot (context)
   "Observe painted control pixels and semantic row bounds in CONTEXT.
 The viewport and font are part of the comparison; character offsets alone
@@ -492,7 +507,12 @@ Native Emacs glyph rows may have different pixel heights as content moves."
          (setq wb-gui--prepared-buffer nil)))
      :invariants
      (lambda (context)
-       (etaf-playground-gui-scenarios--invariants context nil))
+       (append
+        (etaf-playground-gui-scenarios--invariants context nil)
+        (when (wb-gui--runtime context)
+          (list (etaf-gui-verifier-assert
+                 "task-captions-readable"
+                 (wb-gui--task-captions-readable-p context))))))
      :adapter #'wb-gui--adapter
      :actions
      (append

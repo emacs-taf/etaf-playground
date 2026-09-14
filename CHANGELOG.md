@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- Workbench task cells reserve enough room to display both control captions in
+  compact and wide layouts.
+
 ### Changed
 
 - ECSS companions contain one plain ordered rule list. Remove the `styles`

@@ -147,7 +147,7 @@
   (let ((data (etaf-state))
         (item task))                  ; Capture this render's ordinary prop.
     (etaf-view
-     (row :item-gap '(ch 10)
+     (row :item-gap '(ch 1)
       (etaf-checkbox
        :label "完成" :checked (plist-get item :done)
        :on-press #'wb-trace-press      ; Additive; does not replace on-change.
