@@ -10,6 +10,9 @@
 
 ### Changed
 
+- Workbench's local theme and help controls use UI ref bindings. Task mutations
+  and page-size changes retain explicit callbacks for their Data operations.
+
 - Research Shelf and Task Workbench declare stable Context, state and resource
   handles with Component `:bindings`. Views and callbacks use those names
   directly; update ETAF to a revision supporting instance bindings.

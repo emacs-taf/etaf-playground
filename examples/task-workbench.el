@@ -184,8 +184,7 @@
                    (etaf-view (wb-task-info :task task))
                  (etaf-view (text "点击任务行查看详情"))))
               (etaf-checkbox
-               :label "显示说明" :checked (etaf-value expanded)
-               :on-change (lambda (next) (setf (etaf-value expanded) next)))
+               :label "显示说明" :bind expanded)
               (box :if (etaf-value expanded) :height '(lh 3) :overflow 'scroll
                    (column
                     (text :for (tip '("点击行：选择任务"
@@ -274,8 +273,7 @@
                            (cl-incf (etaf-value next-id))
                            (etaf-dispatch 'wb-mutate data 'insert
                                           (list :id id :title title :done nil)))))))
-                  (etaf-checkbox :label "深色" :checked (etaf-value dark)
-                                 :on-change (lambda (next) (setf (etaf-value dark) next)))
+                  (etaf-checkbox :label "深色" :bind dark)
                   (wb-button :label "定位新增按钮" :variant 'ghost
                              :on-press (lambda () (etaf-dispatch 'wb-focus add-ref))))
 
