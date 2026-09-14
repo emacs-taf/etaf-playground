@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := check
 .NOTPARALLEL:
 EMACS ?= emacs
-LOAD_PATH = -L . -L lisp -L scripts -L benchmarks -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-db
+LOAD_PATH = -L . -L lisp -L scripts -L benchmarks -L examples -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-db
 EBOX_NATIVE_RELEASE_DIR = $(shell $(EMACS) -Q --batch $(LOAD_PATH) \
 	--eval '(setq load-prefer-newer t)' -l ../ebox/ebox.el \
 	--eval '(princ (expand-file-name (format "../ebox/native/target/%s/release/" (ebox-native-reflow--rust-target))))')
@@ -35,6 +35,7 @@ compile:
 		--eval '(progn (byte-compile-file "lisp/etaf-playground-runtime.el") (byte-compile-file "etaf-playground.el"))' \
 		--eval '(byte-compile-file "scripts/playground-gui-scenarios.el")' \
 		--eval '(byte-compile-file "scripts/task-workbench-gui-scenarios.el")' \
+		--eval '(byte-compile-file "benchmarks/benchmark-task-workbench.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(TEST_FILES),"$(file)")))) (byte-compile-file file))'
 
 examples-read: compile
@@ -106,9 +107,9 @@ load: compile
 		--eval '(princ "etaf-playground load OK\\n")'
 
 checkdoc:
-	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "benchmarks/benchmark-research-shelf.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
+	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "benchmarks/benchmark-research-shelf.el" "benchmarks/benchmark-task-workbench.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
 
-check: structure-check compile acceptance api-check
+check: structure-check compile acceptance api-check tool-check
 
 clean:
 	rm -f *.elc scripts/*.elc benchmarks/*.elc tests/*.elc $(EXAMPLE_ELC)
@@ -130,3 +131,14 @@ API_PROVIDER_PATH = -L ../ecss -L ../tp -L ../ekp -L ../ebox -L ../etaf -L ../et
 
 .PHONY: test
 test: acceptance
+
+.PHONY: perf-workbench
+perf-workbench:
+	scripts/with-performance-lock.sh "$(EMACS)" -Q --batch $(LOAD_PATH) \
+		--eval '(setq load-prefer-newer t native-comp-jit-compilation nil)' \
+		-l benchmarks/benchmark-task-workbench.el \
+		-f etaf-workbench-benchmark-batch
+
+.PHONY: tool-check
+tool-check:
+	python3 -m unittest discover -s tests/tools -p 'test_*.py'

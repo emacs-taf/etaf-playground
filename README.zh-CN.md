@@ -136,6 +136,23 @@ split window、陈旧 frame 或没有完成时序审查都会保持 fail-closed�
 
 验证命令：`make check EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs`。
 批处理回归：`make perf`（Research Shelf 的 1413×62 viewport，选行/主题延迟）。
+
+工作台另有快速批处理负载。先执行 `make check` 编译当前 checkout 及依赖：
+
+```sh
+ETAF_WORKBENCH_BENCHMARK_OUTPUT=/tmp/workbench-before.json make perf-workbench
+# 修改并重新编译后：
+ETAF_WORKBENCH_BENCHMARK_OUTPUT=/tmp/workbench-after.json make perf-workbench
+python3 scripts/compare-workbench-performance.py /tmp/workbench-before.json /tmp/workbench-after.json
+```
+
+行状态切换、主题切换和新增按钮定位各自使用独立的 100 条任务、每页 10 条应用，
+固定执行 5 次预热和 30 次采样，每次都在计时区间外验证发布结果。报告保留原始
+样本、环境和源码摘要；对比命令重新计算 p95/max，拒绝环境不匹配或不完整的证据，
+增幅超过 2 ms 或超过既有 50 ms 门槛均返回失败。比较应用版本时保持测量程序不变。
+这是批处理的分发至发布耗时，完整 GUI 流程和前台延迟仍需分别验收。未指定输出变量
+时，命令打印自动创建的临时报告路径。
+
 当前 GUI 验收还要求三组独立的前台实测，每项操作从回调开始到强制 redisplay
 返回的 p95 和 max 均不超过 50ms；该门禁尚未通过。使用
 [ETAF GUI 测量指南（英文）](https://gitea.gklazycat.heiyu.space/geekinney/etaf/src/branch/main/docs/manual.md#measuring-an-existing-gui-action)

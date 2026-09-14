@@ -160,6 +160,28 @@ Run `make check EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs`.
 Run `make perf` for the fixed 1413×62 batch latency gate. Every scenario performs
 five unmeasured warmups followed by 30 measured samples; both p95 and max must
 remain at or below 50ms, including Theme and post-resize interactions.
+
+Workbench has a separate fast batch workload after `make check` has compiled
+this checkout and its dependencies:
+
+```sh
+ETAF_WORKBENCH_BENCHMARK_OUTPUT=/tmp/workbench-before.json make perf-workbench
+# After the next change and compilation:
+ETAF_WORKBENCH_BENCHMARK_OUTPUT=/tmp/workbench-after.json make perf-workbench
+python3 scripts/compare-workbench-performance.py /tmp/workbench-before.json /tmp/workbench-after.json
+```
+
+Each of row toggle, theme toggle and Add-button focus starts with an independent
+100-task, 10-row application, then runs 5 warmups and 30 measured activations.
+Every activation checks the published result outside the timed interval. Reports
+record raw samples, environment and source digests. The comparison recalculates
+p95/max from those samples, rejects incompatible or incomplete evidence, and
+fails on either a greater-than-2-ms increase or the existing 50-ms limit.
+Keep the evaluator unchanged when comparing application revisions. These are
+batch dispatch-to-publication measurements; the complete GUI flow and foreground
+latency acceptance remain separate. Without an output variable, the command
+prints the path of a fresh temporary report.
+
 For repeated absolute-latency runs, use `make perf-prepare` once after source
 changes, let compilation activity settle, then run `make perf-evaluator` without
 rebuilding the dependency graph.
