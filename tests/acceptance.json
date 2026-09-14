@@ -53,6 +53,11 @@
       "name": "task-workbench-edit-delete-and-filter-retire-detail-controls",
       "file": "tests/task-workbench-tests.el",
       "purpose": "Deleting an edited selection removes its detail controls while subsequent filters and another selection remain usable."
+    },
+    {
+      "name": "task-workbench-row-menu-edits-and-confirms-deletion",
+      "file": "tests/task-workbench-tests.el",
+      "purpose": "Task row menus open editing, protect incomplete tasks and delete exactly one task after confirmation."
     }
   ]
 }

@@ -137,10 +137,7 @@ UNCANCELLABLE models work whose completion cannot be prevented."
 (defun wb-discard-draft (draft submitted)
   "Resolve DRAFT and SUBMITTED before navigation; return non-nil to continue."
   (when (or (null (etaf-value draft))
-            (etaf-call-with-input
-             (lambda ()
-               (let ((use-dialog-box nil))
-                 (yes-or-no-p "放弃未保存的修改？ ")))))
+            (etaf-confirm-dialog "放弃未保存的修改？"))
     (setf (etaf-value draft) nil (etaf-value submitted) nil)
     t))
 
@@ -246,10 +243,11 @@ UNCANCELLABLE models work whose completion cannot be prevented."
    (".etaf-table-body" :item-gap (lh 1))
    (".etaf-table-header" :padding ((lh 0) (ch 1)))))
 
-;;; Reusable cell: Context dependency + controlled Checkbox + disabled Button
+;;; Reusable cell: controlled Checkbox + Menu + confirmation
 
 (etaf-define-component wb-task-controls (&key task)
   :bindings ((data (etaf-inject 'wb-data nil t))
+             (draft (etaf-inject 'wb-draft nil t))
              (submitted (etaf-inject 'wb-submitted nil t)))
   :view
   (row :item-gap '(ch 1)
@@ -261,13 +259,23 @@ UNCANCELLABLE models work whose completion cannot be prevented."
         (lambda (next)
           (etaf-dispatch 'wb-mutate data 'update
                          (plist-put (copy-sequence task) :done next))))
-       (wb-button
-        :label "删除" :variant 'ghost
-        :disabled (or (not (plist-get task :done)) (wb-busy-p data)
-                      (wb-submission-locked-p data submitted))
-        :on-press
-        (lambda ()
-          (etaf-dispatch 'wb-mutate data 'delete (wb-task-id task))))))
+       (etaf-menu
+        :label "操作"
+        :disabled (or (wb-busy-p data) (wb-submission-locked-p data submitted))
+        :items (list '(:key edit :label "编辑")
+                     (list :key 'delete :label "删除" :disabled (not (plist-get task :done))))
+        :on-select
+        (lambda (action)
+          (pcase action
+            ('edit
+             (when (or (equal (etaf-data-selected-item data) task)
+                       (wb-discard-draft draft submitted))
+               (etaf-data-select-one data (wb-task-id task))))
+            ('delete
+             (when (etaf-confirm-dialog (format "删除任务「%s」？" (plist-get task :title)))
+               (when (equal (plist-get (etaf-value draft) :id) (wb-task-id task))
+                 (setf (etaf-value draft) nil (etaf-value submitted) nil))
+               (etaf-dispatch 'wb-mutate data 'delete (wb-task-id task)))))))))
 
 (defun wb-controls-cell (row)
   "Return reusable task controls for ROW at the consuming cell."

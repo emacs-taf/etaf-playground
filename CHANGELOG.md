@@ -4,6 +4,10 @@
 
 ### Added
 
+- Task rows compose the UI Menu with a confirmation dialog. Edit opens the
+  existing form, incomplete tasks cannot be deleted, and declining confirmation
+  preserves both data and focus. Draft-discard prompts use the same dialog.
+
 - Make Task Workbench available through the Playground catalog. Its title/state form keeps a draft, validates blank titles, supports save/cancel and asks before discarding edits on task/filter changes. Search uses TextInput; native prompts share Ebox input lifetime.
 
 ### Fixed

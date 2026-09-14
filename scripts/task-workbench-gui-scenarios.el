@@ -186,7 +186,7 @@ With OPTIONAL, report nil when the viewport does not display the number."
        (lambda (entry)
          (let ((label (plist-get (cdr entry) :aria-label))
                (bounds (etaf-host-ref-bounds runtime (car entry))))
-           (or (not (member label '("完成" "删除")))
+           (or (not (member label '("完成" "操作")))
                (null bounds)
                (string-match-p
                 (regexp-quote label)
@@ -397,6 +397,35 @@ Optional KEYS exercises a specific native editing sequence yielding TEXT."
           (setq unread-command-events
                 (append (listify-key-sequence keys) unread-command-events)))
       (funcall function))))
+
+(defun wb-gui--menu (context row-id choice &optional confirmation mouse)
+  "Choose CHOICE in ROW-ID's menu in CONTEXT, optionally using MOUSE.
+CONFIRMATION supplies yes/no when the action opens a confirmation dialog.
+The symbol cancel quits the menu.  Record actual native completion choices."
+  (let ((minibuffer-setup-hook
+         (cons
+          (lambda ()
+            (let* ((menu (string-prefix-p "操作: " (minibuffer-prompt)))
+                   (keys
+                    (if menu
+                        (progn
+                          (etaf-gui-verifier-context-put
+                           context 'menu-choices
+                           (all-completions "" minibuffer-completion-table minibuffer-completion-predicate))
+                          (if (eq choice 'cancel) (kbd "C-g")
+                            (vconcat choice (kbd "RET"))))
+                      (unless confirmation (error "Unexpected Workbench confirmation"))
+                      (if (or use-short-answers
+                              (eq (indirect-function 'yes-or-no-p) (indirect-function 'y-or-n-p)))
+                          (vconcat (substring confirmation 0 1))
+                        (vconcat confirmation (kbd "RET"))))))
+              (setq unread-command-events
+                    (append (listify-key-sequence keys) unread-command-events))))
+          minibuffer-setup-hook)))
+    (condition-case problem
+        (if mouse (wb-gui--click context "操作" row-id)
+          (wb-gui--press context "操作" row-id))
+      (quit (unless (eq choice 'cancel) (signal (car problem) (cdr problem)))))))
 
 (defun wb-gui--mouse-at (position)
   "Click the actual visible buffer POSITION using its displayed event data."
@@ -610,9 +639,14 @@ Optional KEYS exercises a specific native editing sequence yielding TEXT."
                     (equal (wb-gui--ids c)
                            (number-sequence (1+ (* 10 (1- target))) (* 10 target)))))))
       (list
-      (wb-gui--action "disabled-cell-mouse" (lambda (c) (wb-gui--click c "删除" 1))
+      (wb-gui--action "disabled-menu-action" (lambda (c) (wb-gui--menu c 1 'cancel nil t))
                       (lambda (c) (and (not (wb-gui--selected-id c))
+                                       (equal (etaf-gui-verifier-context-get c 'menu-choices) '("编辑"))
+                                       (equal (etaf-focused-host-ref (wb-gui--runtime c)) (wb-gui--control c "操作" 1))
                                        (equal (wb-gui--ids c) (number-sequence 1 10)))))
+      (wb-gui--action "menu-edit" (lambda (c) (wb-gui--menu c 1 "编辑"))
+                      (lambda (c) (and (equal (wb-gui--selected-id c) 1)
+                                       (wb-gui--text-p c "标题 设计组件接口"))))
       (wb-gui--action
        "row-mouse-select"
        (lambda (_context) (wb-gui--mouse-at (wb-gui--find-text "设计组件接口")))
@@ -676,7 +710,10 @@ Optional KEYS exercises a specific native editing sequence yielding TEXT."
        "cell-mouse-toggle" (lambda (c) (wb-gui--click c "完成" 1))
        (lambda (c) (and (wb-gui--checked-p c 1)
                         (equal (wb-gui--selected-id c) 1))))
-      (wb-gui--action "cell-mouse-delete" (lambda (c) (wb-gui--click c "删除" 1))
+      (wb-gui--action "menu-decline-delete" (lambda (c) (wb-gui--menu c 1 "删除" "no"))
+                      (lambda (c) (and (member 1 (wb-gui--ids c))
+                                       (equal (etaf-focused-host-ref (wb-gui--runtime c)) (wb-gui--control c "操作" 1)))))
+      (wb-gui--action "cell-mouse-delete" (lambda (c) (wb-gui--menu c 1 "删除" "yes" t))
                       (lambda (c) (and (equal (wb-gui--ids c) (number-sequence 2 11))
                                        (= (wb-gui--total c) 100)
                                        (not (wb-gui--selected-id c)))))

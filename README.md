@@ -88,7 +88,9 @@ Retry read only refreshes data. An unknown receipt requires reading back the
 record before adopting its saved value. The displayed saved revision changes
 only on writes, so read recovery can be checked without replaying a save.
 Service health separately demonstrates asynchronous Resource loading and cleanup.
-Row menus and a persistent component error boundary remain ecosystem requirements.
+Each row's Actions menu opens editing or requests deletion of a completed task.
+Declining confirmation preserves the task and returns focus to the menu entry.
+A persistent component error boundary remains an ecosystem requirement.
 
 ## Repeatable Emacs 31.1 GUI verification
 
