@@ -12,6 +12,9 @@
 
 ### Fixed
 
+- Workbench actions and component updates no longer print lifecycle messages
+  into the minibuffer, keeping ordinary interaction and viewport geometry stable.
+
 - Workbench task cells reserve enough room to display both control captions in
   compact and wide layouts. Its callbacks use committed props directly, and the
   Add button uses an instance-local Host reference for independent workbenches.

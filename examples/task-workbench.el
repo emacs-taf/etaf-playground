@@ -194,28 +194,12 @@ UNCANCELLABLE models work whose completion cannot be prevented."
 (etaf-action-define wb-focus (runtime target)
   (etaf-focus runtime target))
 
-;;; Behavior: stable callbacks, additive to the Button's business action
-
-(defun wb-trace-press ()
-  "Report a completed control action."
-  (message "动作已执行"))
-(defun wb-trace-cleanup ()
-  "Report disposal of a control's reusable behavior."
-  (message "按钮行为已释放"))
-(defun wb-trace-install ()
-  "Return the cleanup callback for a control's reusable behavior."
-  #'wb-trace-cleanup)
-
-(etaf-define-behavior wb-trace ()
-  (etaf-behavior-create 'wb-trace
-                        :on-press #'wb-trace-press
-                        :install #'wb-trace-install))
+;;; Reusable control sizing
 
 (etaf-define-component wb-button (&key label on-press disabled variant)
   :view
   (etaf-button :label label :on-press on-press :disabled disabled
-               :variant variant :padding '((lh 0) (ch 2))
-               :use (list (wb-trace))))
+               :variant variant :padding '((lh 0) (ch 2))))
 
 ;;; Stateless layout: props, default slot, named slots, scoped styles
 
@@ -254,7 +238,6 @@ UNCANCELLABLE models work whose completion cannot be prevented."
        (etaf-checkbox
         :label "完成" :checked (plist-get task :done)
         :disabled (or (wb-busy-p data) (wb-submission-locked-p data submitted))
-        :on-press #'wb-trace-press      ; Additive; does not replace on-change.
         :on-change
         (lambda (next)
           (etaf-dispatch 'wb-mutate data 'update
@@ -364,12 +347,8 @@ UNCANCELLABLE models work whose completion cannot be prevented."
                           :key tip
                           (expr tip))))))
 
-;;; Resource: explicit status/error/retry, scoped result cleanup
+;;; Resource: explicit service status
 ;;; The same native asynchronous adapter delivers service and task results.
-
-(defun wb-service-cleanup ()
-  "Report disposal of a previously loaded service result."
-  (message "旧服务结果已释放"))
 
 (etaf-define-component wb-data-service ()
   :bindings ((data (etaf-inject 'wb-data nil t)) (mode (etaf-inject 'wb-mode nil t)))
@@ -407,7 +386,7 @@ UNCANCELLABLE models work whose completion cannot be prevented."
          (wb-defer 0.05
                    (lambda ()
                      (when fail (error "模拟加载失败"))
-                     (etaf-resource-result "服务正常" :cleanup #'wb-service-cleanup)))))
+                     "服务正常"))))
      :immediate nil :timeout 0.5)))
   :setup (etaf-on-mounted (lambda () (etaf-resource-load resource)))
   :view
@@ -459,13 +438,8 @@ UNCANCELLABLE models work whose completion cannot be prevented."
          (setf (etaf-value draft) nil (etaf-value submitted) nil))))
     (etaf-theme-provide
      (etaf-computed (lambda () (wb-theme (etaf-value dark)))))
-    (etaf-watch dark
-                (lambda (new _old)
-                  (message "切换到%s主题" (if new "深色" "浅色"))))
-    (etaf-on-mounted (lambda () (etaf-data-load data)))
-    (etaf-on-updated (lambda () (message "工作台已更新")))
     ;; Data, computed, watch and nested Resource scopes dispose automatically.
-    (etaf-on-unmounted (lambda () (message "工作台已卸载"))))
+    (etaf-on-mounted (lambda () (etaf-data-load data))))
   :view
   (wb-shell :title title
             (slot :name 'toolbar

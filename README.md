@@ -87,7 +87,7 @@ submission; a rejected write retains the draft for retry. After a committed writ
 Retry read only refreshes data. An unknown receipt requires reading back the
 record before adopting its saved value. The displayed saved revision changes
 only on writes, so read recovery can be checked without replaying a save.
-Service health separately demonstrates asynchronous Resource loading and cleanup.
+Service health separately demonstrates asynchronous Resource loading.
 Each row's Actions menu opens editing or requests deletion of a completed task.
 Declining confirmation preserves the task and returns focus to the menu entry.
 A persistent component error boundary remains an ecosystem requirement.
