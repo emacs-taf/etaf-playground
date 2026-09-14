@@ -30,8 +30,11 @@
           (error "Workbench checkbox has no readable state"))
         (not (null (string-match-p "☑" text)))))))
 
-(defun etaf-workbench-benchmark--scenario (name label)
-  "Measure NAME's LABEL activation, checking each published result."
+(defun etaf-workbench-benchmark--scenario
+    (name label &optional call-operation sample-count)
+  "Measure NAME's LABEL activation, checking each published result.
+Diagnostic CALL-OPERATION receives BUFFER, RUNTIME and TARGET for each measured
+action after the five warmups.  SAMPLE-COUNT defaults to 30."
   (let ((buffer (generate-new-buffer " *Workbench benchmark*"))
         runtime target samples)
     (unwind-protect
@@ -44,11 +47,13 @@
             (error "Workbench fixture must publish 100 tasks and 10 page rows"))
           (setq runtime (etaf-runtime-for-buffer buffer)
                 target (etaf-workbench-benchmark--target runtime label))
-          (dotimes (index 35)
+          (dotimes (index (+ 5 (or sample-count 30)))
             (let* ((checked (unless (equal name "focus-add")
                               (etaf-workbench-benchmark--checked-p buffer runtime target)))
                    (start (float-time)))
-              (etaf-dispatch-event runtime target 'press)
+              (if (and call-operation (>= index 5))
+                  (funcall call-operation buffer runtime target)
+                (etaf-dispatch-event runtime target 'press))
               (let ((elapsed (* 1000.0 (- (float-time) start))))
                 (when (>= index 5) (push elapsed samples)))
               (if (equal name "focus-add")
@@ -60,7 +65,8 @@
                   (error "Workbench did not publish the toggled value: %s" name)))))
           (let ((ordered (sort (copy-sequence samples) #'<)))
             (list :name name :samples_ms (vconcat (nreverse samples))
-                  :p95_ms (nth 28 ordered) :max_ms (nth 29 ordered))))
+                  :p95_ms (nth (floor (* 0.95 (length ordered))) ordered)
+                  :max_ms (car (last ordered)))))
       (when runtime (etaf-unmount runtime))
       (kill-buffer buffer))))
 

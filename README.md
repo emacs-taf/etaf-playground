@@ -183,6 +183,22 @@ latency acceptance remain separate. Without an output variable, the command
 prints the path of a fresh temporary report. Application messages go to a
 separate temporary log; the terminal shows timings, verdict and artifact paths.
 
+To locate an expensive operation, run `make profile-workbench SCENARIO=row-toggle`
+(also `theme-toggle` or `focus-add`). It runs two fresh instances of the same
+checked workload: public provider-stage recording first, CPU sampling second.
+Each pass warms up five times and diagnoses ten actions by default. The compact
+output ranks overlapping stage means and function hotspots; the JSON report
+retains each operation, sanitized sampled stacks, self/inclusive sample weights,
+function source files, loaded revisions, local changes and source hashes.
+Use `ETAF_WORKBENCH_PROFILE_OUTPUT` for an explicit report path and
+`ETAF_WORKBENCH_PROFILE_SAMPLES=1..100` to choose the action count.
+Function samples are statistical evidence, not call counts or exact function
+durations; anonymous closures may remain unnamed. Very short actions may produce
+no CPU samples and return a diagnostic failure. Investigate the owning provider
+and repeated work along its callers, then use the separate **unprofiled**
+`perf-workbench` comparison to validate the fix. Instrumented runs cannot pass
+the latency or GUI acceptance gates.
+
 For repeated absolute-latency runs, use `make perf-prepare` once after source
 changes, let compilation activity settle, then run `make perf-evaluator` without
 rebuilding the dependency graph.

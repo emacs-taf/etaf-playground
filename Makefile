@@ -36,6 +36,7 @@ compile:
 		--eval '(byte-compile-file "scripts/playground-gui-scenarios.el")' \
 		--eval '(byte-compile-file "scripts/task-workbench-gui-scenarios.el")' \
 		--eval '(byte-compile-file "benchmarks/benchmark-task-workbench.el")' \
+		--eval '(byte-compile-file "benchmarks/profile-task-workbench.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(TEST_FILES),"$(file)")))) (byte-compile-file file))'
 
 examples-read: compile
@@ -145,4 +146,16 @@ perf-workbench:
 
 .PHONY: tool-check
 tool-check:
-	python3 -m unittest discover -s tests/tools -p 'test_*.py'
+	EMACS="$(EMACS)" python3 -m unittest discover -s tests/tools -p 'test_*.py'
+
+.PHONY: profile-workbench
+profile-workbench:
+	@wb_log=$$(mktemp "$${TMPDIR:-/tmp}/etaf-workbench-profile.XXXXXX"); \
+	wb_status=0; \
+	ETAF_WORKBENCH_PROFILE_SCENARIO="$(or $(SCENARIO),row-toggle)" \
+	scripts/with-performance-lock.sh "$(EMACS)" -Q --batch $(LOAD_PATH) \
+		--eval '(setq load-prefer-newer t native-comp-jit-compilation nil)' \
+		-l benchmarks/profile-task-workbench.el \
+		-f etaf-workbench-profile-batch 2>"$$wb_log" || wb_status=$$?; \
+	printf 'log=%s\n' "$$wb_log"; \
+	exit $$wb_status

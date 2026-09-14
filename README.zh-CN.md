@@ -154,6 +154,18 @@ python3 scripts/compare-workbench-performance.py /tmp/workbench-before.json /tmp
 时，命令打印自动创建的临时报告路径。应用消息另存临时日志，终端显示耗时、结论和
 报告／日志路径。
 
+定位高开销操作使用 `make profile-workbench SCENARIO=row-toggle`，也支持
+`theme-toggle`、`focus-add`。同一套带结果断言的负载分别创建两个实例：先记录公共
+提供方阶段，再独立做 CPU 采样。每轮预热 5 次，默认诊断 10 次动作。终端只显示
+可重叠的阶段平均耗时及函数热点排行；JSON 保留逐次操作、脱离闭包状态的采样栈、
+函数自身／含子调用的采样权重、源码位置、加载版本、工作区改动和源码摘要。
+用 `ETAF_WORKBENCH_PROFILE_OUTPUT` 指定报告位置，用
+`ETAF_WORKBENCH_PROFILE_SAMPLES=1..100` 设置动作数。
+函数采样是统计证据，不是调用次数或精确函数耗时；匿名闭包可能无法命名，极短
+动作可能没有 CPU 样本并返回诊断失败。沿热点调用路径检查职责归属及重复工作，
+修复后使用独立的**无采样** `perf-workbench` 对照验收。这些带观测开销的运行
+不能充当延迟或 GUI 验收通过的证据。
+
 当前 GUI 验收还要求三组独立的前台实测，每项操作从回调开始到强制 redisplay
 返回的 p95 和 max 均不超过 50ms；该门禁尚未通过。使用
 [ETAF GUI 测量指南（英文）](https://gitea.gklazycat.heiyu.space/geekinney/etaf/src/branch/main/docs/manual.md#measuring-an-existing-gui-action)
