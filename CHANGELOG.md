@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Make Task Workbench available through the Playground catalog. Its title/state form keeps a draft, validates blank titles, supports save/cancel and asks before discarding edits on task/filter changes. Search uses TextInput; native prompts share Ebox input lifetime.
+
 ### Fixed
 
 - Workbench task cells reserve enough room to display both control captions in

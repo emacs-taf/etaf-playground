@@ -1,0 +1,2 @@
+;; Inert root props; Components and application state live in the companion.
+(wb-app :title "任务工作台")

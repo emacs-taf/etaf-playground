@@ -13,6 +13,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'etaf-ui)
+(require 'etaf-playground)
 
 ;;; Data and ordinary functions
 
@@ -37,11 +38,22 @@
   "Return TASK's stable identity."
   (plist-get task :id))
 
-(defun wb-query (data query)
-  "Apply QUERY to DATA and load its first page."
-  (etaf-data-set-query data query)
-  (etaf-data-set-page data 1)
-  (etaf-data-load data))
+(defun wb-discard-draft (draft)
+  "Ask before discarding DRAFT; return non-nil if navigation may continue."
+  (when (or (null (etaf-value draft))
+            (etaf-call-with-input
+             (lambda ()
+               (let ((use-dialog-box nil))
+                 (yes-or-no-p "放弃未保存的修改？ ")))))
+    (setf (etaf-value draft) nil)
+    t))
+
+(defun wb-query (data draft query)
+  "Apply QUERY to DATA's first page after resolving the unsaved DRAFT."
+  (when (wb-discard-draft draft)
+    (etaf-data-set-query data query)
+    (etaf-data-set-page data 1)
+    (etaf-data-load data)))
 
 (defun wb-theme (dark)
   "Return the workbench palette for DARK or light mode."
@@ -174,14 +186,52 @@
    (text :font-weight 'bold (expr (plist-get task :title)))
    (text (expr (if (plist-get task :done) "已完成" "进行中")))))
 
+(defun wb-edit-field (draft original task field value)
+  "Update TASK's FIELD to VALUE in DRAFT, clearing it when equal to ORIGINAL."
+  (let ((next (plist-put (copy-sequence task) field value)))
+    (setf (etaf-value draft) (unless (equal next original) next))))
+
+(etaf-define-component wb-task-form (&key task original draft data)
+  :view
+  (column :item-gap '(lh 1)
+   (etaf-text-input
+    :label "标题" :value (plist-get task :title)
+    :on-change (lambda (next) (wb-edit-field draft original task :title next)))
+   (etaf-select
+    :label "状态" :value (plist-get task :done)
+    :options '((nil . "进行中") (t . "已完成"))
+    :on-change (lambda (next) (wb-edit-field draft original task :done next)))
+   (etaf-label :variant 'danger
+               :text (if (string-empty-p (string-trim (plist-get task :title)))
+                         "标题：不能为空" ""))
+   (etaf-label :variant 'muted :text (if (etaf-value draft) "已修改 · 尚未保存" "与已保存内容一致"))
+   (row :item-gap '(ch 1)
+    (etaf-button
+     :label "保存修改"
+     :disabled (or (null (etaf-value draft))
+                   (string-empty-p (string-trim (plist-get task :title))))
+     :on-press
+     (lambda ()
+       (etaf-data-mutate data 'update (plist-put (copy-sequence task) :title
+                                                (string-trim (plist-get task :title))))
+       (when (eq (etaf-value (etaf-data-status data)) 'success)
+         (setf (etaf-value draft) nil))))
+    (etaf-button :label "取消修改" :variant 'ghost :disabled (null (etaf-value draft))
+                 :on-press (lambda () (setf (etaf-value draft) nil))))))
+
 (etaf-define-component wb-detail ()
   :bindings ((data (etaf-inject 'wb-data nil t))
+             (draft (etaf-inject 'wb-draft nil t))
              (expanded (etaf-ref t)))
   :view
   (etaf-panel :title "详情" :item-gap '(lh 1)
               (expr
-               (if-let* ((task (etaf-data-selected-item data)))
-                   (etaf-view (wb-task-info :task task))
+               (if-let* ((task (or (etaf-value draft) (etaf-data-selected-item data))))
+                   (etaf-view
+                    (column :item-gap '(lh 1)
+                     (wb-task-info :task (or (etaf-data-selected-item data) task))
+                     (wb-task-form :task task :original (etaf-data-selected-item data)
+                                   :draft draft :data data)))
                  (etaf-view (text "点击任务行查看详情"))))
               (etaf-checkbox
                :label "显示说明" :bind expanded)
@@ -234,12 +284,13 @@
 
 ;;; App owner: Data, refs, computed, watch, Context, Theme, lifecycle
 
-(etaf-define-component wb-app ()
+(etaf-define-component wb-app (&key (title "任务工作台"))
   :bindings
   ((data (etaf-data-controller
           (etaf-data-memory-source (copy-tree wb-tasks) :id-key :id)
           :page-size 10 :auto-load nil))
    (dark (etaf-ref nil))
+   (draft (etaf-ref nil))
    (next-id (etaf-ref (1+ (apply #'max (mapcar #'wb-task-id wb-tasks)))))
    (summary
     (etaf-computed
@@ -251,6 +302,7 @@
   :setup
   (progn
     (etaf-provide 'wb-data data)
+    (etaf-provide 'wb-draft draft)
     (etaf-theme-provide
      (etaf-computed (lambda () (wb-theme (etaf-value dark)))))
     (etaf-watch dark
@@ -261,13 +313,14 @@
     ;; Data, computed, watch and nested Resource scopes dispose automatically.
     (etaf-on-unmounted (lambda () (message "工作台已卸载"))))
   :view
-  (wb-shell :title "任务工作台"
+  (wb-shell :title title
             (slot :name 'toolbar
                   (wb-button
                    :ref add-ref :label "新增任务"
                    :on-press
                    (lambda ()
-                     (let ((title (string-trim (read-string "任务名称："))))
+                     (let ((title (string-trim
+                                   (etaf-call-with-input (lambda () (read-string "任务名称："))))))
                        (unless (string-empty-p title)
                          (let ((id (etaf-value next-id)))
                            (cl-incf (etaf-value next-id))
@@ -283,24 +336,29 @@
                               (wb-button :label "全部" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
                                          :variant (if (null (etaf-value (etaf-data-query data)))
                                                       'secondary 'ghost)
-                                         :on-press (lambda () (wb-query data nil)))
+                                         :on-press (lambda () (wb-query data draft nil)))
                               (wb-button :label "未完成" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
                                          :variant (if (equal (etaf-value (etaf-data-query data)) '(:done nil))
                                                       'secondary 'ghost)
-                                         :on-press (lambda () (wb-query data '(:done nil))))
+                                         :on-press (lambda () (wb-query data draft '(:done nil))))
                               (wb-button :label "已完成" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
                                          :variant (if (equal (etaf-value (etaf-data-query data)) '(:done t))
                                                       'secondary 'ghost)
-                                         :on-press (lambda () (wb-query data '(:done t))))
-                              (wb-button :label "搜索" :variant 'secondary :width 'stretch
+                                         :on-press (lambda () (wb-query data draft '(:done t))))
+                              (etaf-text-input :label "搜索" :width 'stretch
                                          :flex-basis '(ch 16) :flex-grow 1
-                                         :on-press (lambda () (wb-query data (read-string "搜索："))))))
+                                         :value (let ((query (etaf-value (etaf-data-query data))))
+                                                  (if (stringp query) query ""))
+                                         :on-change (lambda (next) (wb-query data draft next)))))
 
             (etaf-panel :title "任务" :flex-grow 4 :flex-basis '(ch 64) :min-width '(ch 0)
                         :item-gap '(lh 1)
                         (etaf-data-grid
                          :controller data :columns wb-columns :row-key #'wb-task-id
-                         :on-row-press (lambda (row) (etaf-data-select-one data (wb-task-id row)))
+                         :on-row-press (lambda (row)
+                                         (when (or (equal (etaf-data-selected-item data) row)
+                                                   (wb-discard-draft draft))
+                                           (etaf-data-select-one data (wb-task-id row))))
                          :loading-label "读取任务…" :error-label "读取失败，请重新筛选"
                          :empty-label "没有匹配的任务"
                          (slot :name 'footer
@@ -327,6 +385,12 @@
                                     :text "数据仅保存在当前工作台内存中")))))
 
 ;;; Open / close. Each buffer gets independent App state and local refs.
+
+(defun wb-root (static-form &optional _styles)
+  "Create the Workbench View from inert STATIC-FORM props."
+  (etaf-node (car static-form) (cdr static-form) nil))
+
+(etaf-playground-register-example "task-workbench" :root #'wb-root :feature 'task-workbench)
 
 (defun wb-open (&optional buffer-name)
   "Open an independent workbench in BUFFER-NAME or the default buffer."

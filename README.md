@@ -71,6 +71,17 @@ The companion registers `:reload-on-refresh t`, so saving the `.el`, `.etaf`, or
 `.ecss` source and refreshing reloads the complete consumer before the next
 mount.
 
+## Task Workbench
+
+Evaluate `(etaf-playground-open "task-workbench")` for source and preview, or
+`(etaf-playground-mount-example "*Tasks*" "task-workbench")` for a standalone
+preview. Each instance starts with 100 independent in-memory tasks. Select a
+row, edit Title or State through native input, then Save changes or Cancel.
+Blank titles disable saving; edits remain drafts until saved. Switching tasks
+or filters asks before discarding an unsaved draft. TAB and RET reach the same
+controls as the mouse. The current example uses synchronous in-memory writes;
+asynchronous save/recovery and row menus are still required ecosystem work.
+
 ## Repeatable Emacs 31.1 GUI verification
 
 Use the user's running graphical Emacs server for current GUI acceptance.

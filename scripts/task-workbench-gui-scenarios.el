@@ -356,8 +356,9 @@ Native Emacs glyph rows may have different pixel heights as content moves."
     (etaf-gui-verifier-context-put context 'visited-task-ids visited)
     (etaf-gui-verifier-context-put context 'visited-tasks (length visited))))
 
-(defun wb-gui--enter (context label text)
-  "Activate LABEL and type TEXT through the actual minibuffer in CONTEXT."
+(defun wb-gui--enter (context label text &optional keys)
+  "Activate LABEL and type TEXT through the minibuffer in CONTEXT.
+Optional KEYS exercises a specific native editing sequence yielding TEXT."
   (let (received)
     (let ((minibuffer-exit-hook
            (cons (lambda ()
@@ -367,12 +368,26 @@ Native Emacs glyph rows may have different pixel heights as content moves."
           (lambda ()
             ;; The recursive input loop starts after setup hooks return.
             ;; Queue real input events; RET during setup has no exit target.
+            (unless keys (delete-minibuffer-contents))
             (setq unread-command-events
-                  (append (listify-key-sequence (vconcat text (kbd "RET")))
+                  (append (listify-key-sequence (or keys (vconcat text (kbd "RET"))))
                           unread-command-events)))
         (wb-gui--press context label)))
     (unless (equal received text)
       (error "Minibuffer did not receive the expected keyboard input"))))
+
+(defun wb-gui--confirm (answer function)
+  "Type native confirmation ANSWER while invoking FUNCTION."
+  (let ((keys (if (or use-short-answers
+                      (eq (indirect-function 'yes-or-no-p)
+                          (indirect-function 'y-or-n-p)))
+                  (vconcat (substring answer 0 1))
+                (vconcat answer (kbd "RET")))))
+    (minibuffer-with-setup-hook
+        (lambda ()
+          (setq unread-command-events
+                (append (listify-key-sequence keys) unread-command-events)))
+      (funcall function))))
 
 (defun wb-gui--mouse-at (position)
   "Click the actual visible buffer POSITION using its displayed event data."
@@ -583,6 +598,60 @@ Native Emacs glyph rows may have different pixel heights as content moves."
        (lambda (_context) (wb-gui--mouse-at (wb-gui--find-text "设计组件接口")))
        (lambda (c) (and (equal (wb-gui--selected-id c) 1)
                         (wb-gui--text-p c "进行中"))))
+      (wb-gui--action
+       "form-blank-title" (lambda (c) (wb-gui--enter c "标题" "   "))
+       (lambda (c) (and (wb-gui--text-p c "标题：不能为空")
+                        (plist-get (etaf-runtime-host-props-for (wb-gui--runtime c)
+                                                                (wb-gui--control c "保存修改")) :disabled))))
+      (wb-gui--action
+       "form-cancel-draft" (lambda (c) (wb-gui--press c "取消修改"))
+       (lambda (c) (and (wb-gui--text-p c "标题 设计组件接口")
+                        (not (wb-gui--text-p c "已修改 ·")))))
+      (wb-gui--action
+       "form-native-selection-undo"
+       (lambda (c)
+         (wb-gui--enter c "标题" "中文交互草稿"
+                        (vconcat (kbd "C-a C-SPC C-e C-w") "中文交互草稿"
+                                 (kbd "C-b C-f") "x" (kbd "C-/ RET"))))
+       (lambda (c) (and (wb-gui--text-p c "标题 中文交互草稿")
+                        (wb-gui--text-p c "设计组件接口")
+                        (wb-gui--text-p c "已修改 ·"))))
+      (wb-gui--action
+       "form-native-cancel"
+       (lambda (c)
+         (condition-case nil
+             (minibuffer-with-setup-hook
+                 (lambda () (setq unread-command-events
+                                   (append (listify-key-sequence (kbd "C-g")) unread-command-events)))
+               (wb-gui--press c "标题"))
+           (quit nil)))
+       (lambda (c) (and (wb-gui--text-p c "标题 中文交互草稿")
+                        (equal (etaf-focused-host-ref (wb-gui--runtime c)) (wb-gui--control c "标题")))))
+      (wb-gui--action
+       "form-select-state" (lambda (c) (wb-gui--enter c "状态" "已完成"))
+       (lambda (c) (and (wb-gui--text-p c "状态 已完成") (not (wb-gui--checked-p c 1)))))
+      (wb-gui--action
+       "form-cancel-switch"
+       (lambda (_c) (wb-gui--confirm "no" (lambda () (wb-gui--mouse-at (wb-gui--find-text "编写使用示例")))))
+       (lambda (c) (and (equal (wb-gui--selected-id c) 1) (wb-gui--text-p c "标题 中文交互草稿"))))
+      (wb-gui--action
+       "form-save" (lambda (c) (wb-gui--press c "保存修改"))
+       (lambda (c) (and (wb-gui--checked-p c 1) (not (wb-gui--text-p c "设计组件接口"))
+                        (not (wb-gui--text-p c "已修改 ·")))))
+      (wb-gui--action
+       "form-restore-task"
+       (lambda (c) (wb-gui--enter c "标题" "设计组件接口")
+         (wb-gui--enter c "状态" "进行中") (wb-gui--press c "保存修改"))
+       (lambda (c) (and (not (wb-gui--checked-p c 1)) (wb-gui--text-p c "设计组件接口")
+                        (not (wb-gui--text-p c "已修改 ·")))))
+      (wb-gui--action
+       "form-accept-switch"
+       (lambda (c) (wb-gui--enter c "标题" "应当放弃的草稿")
+         (wb-gui--confirm "yes" (lambda () (wb-gui--mouse-at (wb-gui--find-text "编写使用示例")))))
+       (lambda (c) (and (equal (wb-gui--selected-id c) 2) (not (wb-gui--text-p c "应当放弃的草稿")))))
+      (wb-gui--action
+       "form-return-first" (lambda (_c) (wb-gui--mouse-at (wb-gui--find-text "设计组件接口")))
+       (lambda (c) (equal (wb-gui--selected-id c) 1)))
       (wb-gui--action
        "cell-mouse-toggle" (lambda (c) (wb-gui--click c "完成" 1))
        (lambda (c) (and (wb-gui--checked-p c 1)

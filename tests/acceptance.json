@@ -23,6 +23,11 @@
       "name": "etaf-playground-mounts-static-rule-companion-in-fresh-emacs",
       "file": "tests/etaf-playground-tests.el",
       "purpose": "Research Shelf mounts, filters and paginates through public APIs with its scoped ECSS companion and an isolated database."
+    },
+    {
+      "name": "task-workbench-draft-validates-saves-cancels-and-isolates-instances",
+      "file": "tests/task-workbench-tests.el",
+      "purpose": "Editing only changes a draft until save; navigation resolves pending edits."
     }
   ]
 }

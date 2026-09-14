@@ -65,6 +65,15 @@ preview 时才加载 ETAF/Ebox/TP runtime。运行 preview 需要 TP 1.0.1 或�
 该 companion 注册了 `:reload-on-refresh t`；保存 `.el`、`.etaf` 或 `.ecss` 后刷新
 source，会在下一次 mount 前重新加载完整 consumer。
 
+## 任务工作台
+
+求值 `(etaf-playground-open "task-workbench")` 打开源码和预览，或使用
+`(etaf-playground-mount-example "*Tasks*" "task-workbench")` 挂载独立预览。
+每实例有独立的 100 条内存任务。选择任务行，通过“标题”和“状态”入口编辑，
+再“保存修改”或“取消修改”。空白标题禁用保存，保存前只改变草稿；切换任务
+或筛选前会确认是否放弃未保存修改。TAB、RET 与鼠标使用同一组控件。当前
+示例仍使用同步内存写入，异步保存恢复与行菜单属于待完成的生态能力。
+
 ## 可重复执行的 Emacs 31.1 GUI 实测
 
 当前 GUI 验收使用用户已经运行的图形 Emacs server：通过 `emacsclient`
