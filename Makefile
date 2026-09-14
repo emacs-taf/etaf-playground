@@ -31,13 +31,7 @@ compile:
 		--eval "(setq load-prefer-newer t byte-compile-error-on-warn t byte-compile-warnings '(not obsolete))" \
 		--eval '(load-file "etaf-playground.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(ENTRY_EXAMPLES),"$(file)")))) (load-file file))' \
-		--eval '(dolist (file (quote ($(foreach file,$(EXAMPLES),"$(file)")))) (byte-compile-file file))' \
-		--eval '(progn (byte-compile-file "lisp/etaf-playground-runtime.el") (byte-compile-file "etaf-playground.el"))' \
-		--eval '(byte-compile-file "scripts/playground-gui-scenarios.el")' \
-		--eval '(byte-compile-file "scripts/task-workbench-gui-scenarios.el")' \
-		--eval '(byte-compile-file "benchmarks/benchmark-task-workbench.el")' \
-		--eval '(byte-compile-file "benchmarks/profile-task-workbench.el")' \
-		--eval '(dolist (file (quote ($(foreach file,$(TEST_FILES),"$(file)")))) (byte-compile-file file))'
+		--eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(EXAMPLES),"$(file)") "lisp/etaf-playground-runtime.el" "etaf-playground.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el" "benchmarks/benchmark-task-workbench.el" "benchmarks/profile-task-workbench.el" $(foreach file,$(TEST_FILES),"$(file)")))) (kill-emacs 1))'
 
 examples-read: compile
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
