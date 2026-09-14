@@ -68,6 +68,10 @@ SAMPLE-COUNT defaults to 30.  Wall samples include provider waiting time."
           (setq runtime (etaf-runtime-for-buffer buffer)
                 target (etaf-workbench-benchmark--target runtime label))
           (dotimes (index (+ 5 (or sample-count 30)))
+            ;; Every focus sample must move focus.  Reset outside both timing
+            ;; and diagnostic recording; repeatedly focusing Add measures a no-op.
+            (when (equal name "focus-add")
+              (etaf-focus runtime (etaf-workbench-benchmark--target runtime "深色")))
             (let* ((checked (unless (equal name "focus-add")
                               (etaf-workbench-benchmark--checked-p buffer runtime target)))
                    (start (float-time)))

@@ -213,7 +213,10 @@ python3 scripts/compare-workbench-performance.py /tmp/workbench-before.json /tmp
 
 Each of row toggle, theme toggle and Add-button focus starts with an independent
 100-task, 10-row application, then runs 5 warmups and 30 measured activations.
-Every activation checks the published result outside the timed interval. Reports
+Every activation checks the published result outside the timed interval. The
+workload resets focus to the theme control before each Add-button focus sample,
+outside the timed interval, so each measured activation must change the focused Host.
+The same reset precedes each independently recorded diagnostic action. Reports
 record raw samples, environment and source digests. The comparison recalculates
 p95/max from those samples, rejects incompatible or incomplete evidence, and
 fails on either a greater-than-2-ms increase or the existing 50-ms limit.
