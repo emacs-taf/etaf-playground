@@ -30,17 +30,37 @@
           (error "Workbench checkbox has no readable state"))
         (not (null (string-match-p "☑" text)))))))
 
+(defun etaf-workbench-benchmark--wait (runtime)
+  "Wait for RUNTIME's observable task request to settle, pumping native timers."
+  (let* ((target (etaf-workbench-benchmark--target runtime "任务数据状态"))
+         (deadline (+ (float-time) 10))
+         (busy
+          (lambda ()
+            (unless (etaf-runtime-mounted-p runtime) (error "Workbench was unmounted"))
+            (plist-get (etaf-runtime-host-props-for runtime target) :aria-busy))))
+    (while (and (funcall busy) (< (float-time) deadline))
+      (accept-process-output nil 0.01))
+    (when (funcall busy) (error "Workbench task request did not settle"))))
+
+(defun etaf-workbench-benchmark--dispatch (runtime target)
+  "Activate TARGET and wait for all resulting task publications in RUNTIME."
+  (etaf-dispatch-event runtime target 'press)
+  (etaf-workbench-benchmark--wait runtime))
+
 (defun etaf-workbench-benchmark--scenario
     (name label &optional call-operation sample-count)
   "Measure NAME's LABEL activation, checking each published result.
 Diagnostic CALL-OPERATION receives BUFFER, RUNTIME and TARGET for each measured
-action after the five warmups.  SAMPLE-COUNT defaults to 30."
+action after the five warmups and must wait for asynchronous publication.
+SAMPLE-COUNT defaults to 30.  Wall samples include provider waiting time."
   (let ((buffer (generate-new-buffer " *Workbench benchmark*"))
         runtime target samples)
     (unwind-protect
         (progn
           (etaf-mount buffer (etaf-view (wb-app))
                       '(:viewport-width 1413 :viewport-height 62))
+          (setq runtime (etaf-runtime-for-buffer buffer))
+          (etaf-workbench-benchmark--wait runtime)
           (unless (with-current-buffer buffer
                     (string-match-p (regexp-quote "共 100 条 · 当前页 10 条")
                                     (buffer-string)))
@@ -53,7 +73,7 @@ action after the five warmups.  SAMPLE-COUNT defaults to 30."
                    (start (float-time)))
               (if (and call-operation (>= index 5))
                   (funcall call-operation buffer runtime target)
-                (etaf-dispatch-event runtime target 'press))
+                (etaf-workbench-benchmark--dispatch runtime target))
               (let ((elapsed (* 1000.0 (- (float-time) start))))
                 (when (>= index 5) (push elapsed samples)))
               (if (equal name "focus-add")
@@ -104,7 +124,7 @@ Exit nonzero on an incorrect result or a p95/max exceeding 50 milliseconds."
          (report
           (list :schema 1 :workload "task-workbench" :tasks 100 :page_size 10
                 :viewport_width 1413 :viewport_height 62 :warmups 5 :samples 30
-                :timing "batch-dispatch-to-publication" :emacs emacs-version
+                :timing "batch-dispatch-to-async-settlement" :provider_wait_included t :emacs emacs-version
                 :machine (system-name) :system system-configuration
                 :evaluator_hash
                 (etaf-workbench-benchmark--source-hash 'etaf-workbench-benchmark-batch)

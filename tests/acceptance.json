@@ -28,6 +28,31 @@
       "name": "task-workbench-draft-validates-saves-cancels-and-isolates-instances",
       "file": "tests/task-workbench-tests.el",
       "purpose": "Editing only changes a draft until save; navigation resolves pending edits."
+    },
+    {
+      "name": "task-workbench-async-search-supersedes-cancels-and-times-out",
+      "file": "tests/task-workbench-tests.el",
+      "purpose": "Search retires and restores selected details, renders current paint and empty states, rejects stale completion, and recovers from cancellation and timeout."
+    },
+    {
+      "name": "task-workbench-async-save-retries-only-known-failures",
+      "file": "tests/task-workbench-tests.el",
+      "purpose": "Pending writes disable duplicate saves; known failures preserve the draft."
+    },
+    {
+      "name": "task-workbench-committed-refresh-and-unknown-write-recovery",
+      "file": "tests/task-workbench-tests.el",
+      "purpose": "Read recovery preserves the saved revision without repeating writes; later independent reads report their own failures and cancellation."
+    },
+    {
+      "name": "task-workbench-closing-pending-save-preserves-another-instance",
+      "file": "tests/task-workbench-tests.el",
+      "purpose": "Closing a Workbench during a pending write cannot revive it or replace another instance draft."
+    },
+    {
+      "name": "task-workbench-edit-delete-and-filter-retire-detail-controls",
+      "file": "tests/task-workbench-tests.el",
+      "purpose": "Deleting an edited selection removes its detail controls while subsequent filters and another selection remain usable."
     }
   ]
 }

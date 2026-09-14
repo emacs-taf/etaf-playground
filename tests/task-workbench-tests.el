@@ -10,11 +10,19 @@
 (require 'etaf)
 (require 'ebox)
 
-(defun wb-test--control (runtime label)
-  "Return the unique visible control with LABEL in RUNTIME."
+(defun wb-test--control (runtime label &optional row-id)
+  "Return RUNTIME's unique LABEL control, optionally inside ROW-ID."
   (let ((entries (cl-remove-if-not
                   (lambda (entry) (equal label (plist-get (cdr entry) :aria-label)))
                   (etaf-runtime-host-props-entries runtime))))
+    (when row-id
+      (let ((bounds (etaf-host-ref-bounds runtime (wb-test--row runtime row-id))))
+        (setq entries
+              (cl-remove-if-not
+               (lambda (entry)
+                 (let ((position (etaf-host-ref-position runtime (car entry))))
+                   (and position (<= (car bounds) position) (< position (cdr bounds)))))
+               entries))))
     (should (= 1 (length entries)))
     (caar entries)))
 
@@ -32,9 +40,32 @@
     (with-current-buffer (etaf-runtime-buffer runtime)
       (buffer-substring-no-properties (car bounds) (cdr bounds)))))
 
-(defun wb-test--press (runtime label)
-  "Activate the public control with LABEL in RUNTIME."
-  (etaf-dispatch-event runtime (wb-test--control runtime label) 'press))
+(defun wb-test--press (runtime label &optional row-id)
+  "Activate RUNTIME's LABEL control, optionally inside ROW-ID."
+  (ert-info ((format "Activate Workbench control %S" label))
+    (etaf-dispatch-event runtime (wb-test--control runtime label row-id) 'press)))
+
+(defun wb-test--wait (predicate)
+  "Wait for the observable PREDICATE while native timers deliver results."
+  (let ((deadline (+ (float-time) 5)))
+    (while (and (not (funcall predicate)) (< (float-time) deadline))
+      (accept-process-output nil 0.01)))
+  (should (funcall predicate)))
+
+(defun wb-test--text-p (buffer text)
+  "Return non-nil when BUFFER displays TEXT."
+  (with-current-buffer buffer
+    (string-match-p (regexp-quote text) (buffer-substring-no-properties (point-min) (point-max)))))
+
+(defun wb-test--choose (runtime label value)
+  "Choose VALUE in the visible selection control LABEL of RUNTIME."
+  (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) value)))
+    (wb-test--press runtime label)))
+
+(defun wb-test--enter (runtime label value)
+  "Enter VALUE in the visible text control LABEL of RUNTIME."
+  (cl-letf (((symbol-function 'read-string) (lambda (&rest _) value)))
+    (wb-test--press runtime label)))
 
 (ert-deftest task-workbench-draft-validates-saves-cancels-and-isolates-instances ()
   "Editing only changes a draft until save; navigation resolves pending edits."
@@ -43,7 +74,8 @@
     (unwind-protect
         (progn
           (dolist (buffer (list first second))
-            (etaf-playground-mount-example (buffer-name buffer) "task-workbench"))
+            (etaf-playground-mount-example (buffer-name buffer) "task-workbench")
+            (wb-test--wait (lambda () (wb-test--text-p buffer "共 100 条 · 当前页 10 条"))))
           (let ((runtime (etaf-runtime-for-buffer first))
                 (other (etaf-runtime-for-buffer second)))
             (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
@@ -68,6 +100,7 @@
               (etaf-dispatch-event runtime (wb-test--row runtime 2) 'press))
             (should (with-current-buffer first (string-match-p "中文表单草稿" (buffer-string))))
             (wb-test--press runtime "保存修改")
+            (wb-test--wait (lambda () (not (wb-test--text-p first "已修改 ·"))))
             (should (string-match-p "中文表单草稿" (wb-test--row-text runtime 1)))
             (should (string-match-p "☑" (wb-test--row-text runtime 1)))
             (should (string-match-p "设计组件接口" (wb-test--row-text other 1)))
@@ -82,6 +115,190 @@
       (dolist (buffer (list first second))
         (when-let* ((runtime (etaf-runtime-for-buffer buffer))) (etaf-unmount runtime))
         (kill-buffer buffer)))))
+
+(defmacro wb-test--with-app (&rest body)
+  "Mount a fresh public example as BUFFER/RUNTIME and execute BODY."
+  (declare (indent 0) (debug t))
+  `(let ((buffer (generate-new-buffer " *async-workbench*")) runtime)
+     (unwind-protect
+         (progn
+           (etaf-playground-mount-example (buffer-name buffer) "task-workbench")
+           (setq runtime (etaf-runtime-for-buffer buffer))
+           (should (wb-test--text-p buffer "正在读取任务"))
+           (wb-test--wait (lambda () (wb-test--text-p buffer "共 100 条 · 当前页 10 条")))
+           ,@body)
+       (when (etaf-runtime-for-buffer buffer) (etaf-unmount runtime))
+       (when (buffer-live-p buffer) (kill-buffer buffer)))))
+
+(defun wb-test--deliver-late (seconds)
+  "Allow real timers to deliver obsolete operations for SECONDS."
+  (let ((deadline (+ (float-time) seconds)))
+    (while (< (float-time) deadline) (accept-process-output nil 0.01))))
+
+(ert-deftest task-workbench-async-search-supersedes-cancels-and-times-out ()
+  "Late search completion cannot replace newer, cancelled or disposed results."
+  (wb-test--with-app
+    (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
+    (wb-test--choose runtime "数据服务" "搜索乱序")
+    (wb-test--enter runtime "搜索" "接口")
+    (with-current-buffer buffer
+      (let* ((live (buffer-string))
+             (fresh (ebox-render
+                     (plist-get (ebox-surface-buffer-snapshot buffer) :input))))
+        (should (equal (get-text-property (string-match "新增任务" live) 'face live)
+                       (get-text-property (string-match "新增任务" fresh) 'face fresh)))))
+    (wb-test--enter runtime "搜索" "文档")
+    (wb-test--press runtime "深色")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "共 1 条 · 当前页 1 条")))
+    (should (string-match-p "补充文档" (wb-test--row-text runtime 5)))
+    (wb-test--deliver-late 0.35)
+    (should (string-match-p "补充文档" (wb-test--row-text runtime 5)))
+    (wb-test--enter runtime "搜索" "接口")
+    (wb-test--press runtime "取消等待")
+    (should (wb-test--text-p buffer "读取已取消"))
+    (wb-test--deliver-late 0.35)
+    (should (wb-test--text-p buffer "读取已取消"))
+    (should (string-match-p "补充文档" (wb-test--row-text runtime 5)))
+    (wb-test--choose runtime "数据服务" "请求超时")
+    (wb-test--press runtime "重试读取")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "timed out")))
+    (wb-test--press runtime "重试读取")
+    (wb-test--press runtime "取消等待")
+    (should (wb-test--text-p buffer "读取已取消"))
+    (wb-test--choose runtime "数据服务" "正常")
+    (wb-test--press runtime "全部")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "共 100 条 · 当前页 10 条")))
+    (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
+    (should (wb-test--text-p buffer "标题 设计组件接口"))
+    (wb-test--enter runtime "搜索" "不存在的任务")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "共 0 条")))
+    (should (wb-test--text-p buffer "没有匹配的任务"))
+    (wb-test--press runtime "重试读取")
+    (should (wb-test--text-p buffer "正在读取任务"))
+    (wb-test--wait (lambda () (wb-test--text-p buffer "数据已加载")))
+    (should (wb-test--text-p buffer "没有匹配的任务"))
+    (wb-test--press runtime "全部")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "共 100 条 · 当前页 10 条")))
+    (wb-test--choose runtime "数据服务" "请求超时")
+    (wb-test--enter runtime "搜索" "文档")
+    (etaf-unmount runtime)
+    (wb-test--deliver-late 2.1)
+    (should-not (etaf-runtime-for-buffer buffer))))
+
+(ert-deftest task-workbench-async-save-retries-only-known-failures ()
+  "Pending writes disable duplicate saves; known failures preserve the draft."
+  (wb-test--with-app
+    (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
+    (wb-test--enter runtime "标题" "重试后的标题")
+    (wb-test--choose runtime "数据服务" "保存失败")
+    (wb-test--press runtime "保存修改")
+    (should (wb-test--text-p buffer "正在保存"))
+    (should-error (wb-test--press runtime "保存修改") :type 'etaf-event-error)
+    (wb-test--wait (lambda () (wb-test--text-p buffer "保存失败，草稿已保留")))
+    (should-not (wb-test--text-p buffer "读取失败"))
+    (should (wb-test--text-p buffer "标题 重试后的标题"))
+    (should (string-match-p "设计组件接口" (wb-test--row-text runtime 1)))
+    (should (wb-test--text-p buffer "已保存版本 0"))
+    (wb-test--choose runtime "数据服务" "正常")
+    (wb-test--press runtime "保存修改")
+    (wb-test--wait (lambda () (not (wb-test--text-p buffer "已修改 ·"))))
+    (should (string-match-p "重试后的标题" (wb-test--row-text runtime 1)))
+    (should (wb-test--text-p buffer "已保存版本 1"))))
+
+(ert-deftest task-workbench-committed-refresh-and-unknown-write-recovery ()
+  "Read recovery preserves the saved revision and never repeats the write."
+  (wb-test--with-app
+    (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
+    (wb-test--enter runtime "标题" "已提交的新标题")
+    (wb-test--choose runtime "数据服务" "写入后刷新失败")
+    (wb-test--press runtime "保存修改")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "已写入；刷新未完成")))
+    (should-error (wb-test--press runtime "保存修改") :type 'etaf-event-error)
+    (should (string-match-p "设计组件接口" (wb-test--row-text runtime 1)))
+    (wb-test--choose runtime "数据服务" "正常")
+    (wb-test--press runtime "重试读取")
+    (wb-test--wait (lambda () (not (wb-test--text-p buffer "已修改 ·"))))
+    (should (string-match-p "已提交的新标题" (wb-test--row-text runtime 1)))
+    (should (wb-test--text-p buffer "已保存版本 1"))
+    (wb-test--choose runtime "数据服务" "请求超时")
+    (wb-test--enter runtime "搜索" "新标题")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "读取失败")))
+    (should-not (wb-test--text-p buffer "已写入；刷新未完成"))
+    (wb-test--press runtime "重试读取")
+    (wb-test--press runtime "取消等待")
+    (should (wb-test--text-p buffer "读取已取消"))
+    (wb-test--choose runtime "数据服务" "正常")
+    (wb-test--press runtime "全部")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "数据已加载")))
+    (should (wb-test--text-p buffer "共 100 条 · 当前页 10 条"))
+    (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
+    (should (wb-test--text-p buffer "已保存版本 1"))
+    (wb-test--enter runtime "标题" "回执丢失的标题")
+    (wb-test--choose runtime "数据服务" "保存回执丢失")
+    (wb-test--press runtime "保存修改")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "写入结果未知")))
+    (should-error (wb-test--press runtime "保存修改") :type 'etaf-event-error)
+    (should-error (wb-test--press runtime "采用已保存内容") :type 'etaf-event-error)
+    (wb-test--press runtime "核对已保存内容")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "已保存版本 2")))
+    (should (string-match-p "回执丢失的标题" (wb-test--row-text runtime 1)))
+    (wb-test--press runtime "采用已保存内容")
+    (should-not (wb-test--text-p buffer "已修改 ·"))))
+
+(ert-deftest task-workbench-closing-pending-save-preserves-another-instance ()
+  "A late write cannot reopen a closed Workbench or replace another draft."
+  (wb-test--with-app
+    (let ((other-buffer (generate-new-buffer " *workbench-independent-save*")) other)
+      (unwind-protect
+          (progn
+            (etaf-playground-mount-example (buffer-name other-buffer) "task-workbench")
+            (setq other (etaf-runtime-for-buffer other-buffer))
+            (wb-test--wait (lambda () (wb-test--text-p other-buffer "共 100 条 · 当前页 10 条")))
+            (etaf-dispatch-event other (wb-test--row other 1) 'press)
+            (wb-test--enter other "标题" "另一实例的草稿")
+            (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
+            (wb-test--enter runtime "标题" "关闭后完成的保存")
+            (wb-test--choose runtime "数据服务" "请求超时")
+            (wb-test--press runtime "保存修改")
+            (should (wb-test--text-p buffer "正在保存"))
+            (kill-buffer buffer)
+            (wb-test--deliver-late 2.1)
+            (should-not (etaf-runtime-mounted-p runtime))
+            (should-not (buffer-live-p buffer))
+            (should (eq other (etaf-runtime-for-buffer other-buffer)))
+            (should (wb-test--text-p other-buffer "标题 另一实例的草稿"))
+            (should (wb-test--text-p other-buffer "共 100 条 · 当前页 10 条"))
+            (should (string-match-p "设计组件接口" (wb-test--row-text other 1))))
+        (when (and other (etaf-runtime-mounted-p other)) (etaf-unmount other))
+        (when (buffer-live-p other-buffer) (kill-buffer other-buffer))))))
+
+(ert-deftest task-workbench-edit-delete-and-filter-retire-detail-controls ()
+  "Deleting an edited selection leaves subsequent list filtering usable."
+  (wb-test--with-app
+    (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
+    (wb-test--enter runtime "标题" "中文交互草稿")
+    (wb-test--choose runtime "状态" "已完成")
+    (wb-test--press runtime "保存修改")
+    (wb-test--wait (lambda () (not (wb-test--text-p buffer "已修改 ·"))))
+    (wb-test--enter runtime "标题" "设计组件接口")
+    (wb-test--choose runtime "状态" "进行中")
+    (wb-test--press runtime "保存修改")
+    (wb-test--wait (lambda () (not (wb-test--text-p buffer "已修改 ·"))))
+    (wb-test--press runtime "完成" 1)
+    (wb-test--wait (lambda () (not (plist-get (etaf-runtime-host-props-for
+                                             runtime (wb-test--control runtime "删除" 1)) :disabled))))
+    (etaf-focus runtime (wb-test--control runtime "删除" 1))
+    (wb-test--press runtime "删除" 1)
+    (wb-test--wait (lambda () (null (wb-test--row runtime 1))))
+    (should (wb-test--text-p buffer "点击任务行查看详情"))
+    (wb-test--press runtime "未完成")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "共 73 条 · 当前页 10 条")))
+    (should (wb-test--row runtime 2))
+    (should-not (wb-test--row runtime 3))
+    (wb-test--press runtime "全部")
+    (wb-test--wait (lambda () (wb-test--text-p buffer "共 99 条 · 当前页 10 条")))
+    (etaf-dispatch-event runtime (wb-test--row runtime 2) 'press)
+    (should (wb-test--text-p buffer "标题 编写使用示例"))))
 
 (provide 'task-workbench-tests)
 ;;; task-workbench-tests.el ends here

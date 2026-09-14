@@ -79,8 +79,16 @@ preview. Each instance starts with 100 independent in-memory tasks. Select a
 row, edit Title or State through native input, then Save changes or Cancel.
 Blank titles disable saving; edits remain drafts until saved. Switching tasks
 or filters asks before discarding an unsaved draft. TAB and RET reach the same
-controls as the mouse. The current example uses synchronous in-memory writes;
-asynchronous save/recovery and row menus are still required ecosystem work.
+controls as the mouse. Reads and writes complete through native asynchronous
+callbacks over one instance-owned memory source. The Data service selector
+arranges read failures, rejected writes, refresh failures, reversed search
+completion, timeout or a lost save receipt. Pending writes prevent duplicate
+submission; a rejected write retains the draft for retry. After a committed write,
+Retry read only refreshes data. An unknown receipt requires reading back the
+record before adopting its saved value. The displayed saved revision changes
+only on writes, so read recovery can be checked without replaying a save.
+Service health separately demonstrates asynchronous Resource loading and cleanup.
+Row menus and a persistent component error boundary remain ecosystem requirements.
 
 ## Repeatable Emacs 31.1 GUI verification
 
@@ -97,6 +105,8 @@ With this checkout and its sibling dependencies already on Emacs's load path:
 emacsclient --eval '(progn (require (quote task-workbench)) (wb-open "*Workbench review*"))'
 ```
 
+The automated traversal uses keyboard pagination at its first forward and last
+backward steps, with mouse pagination between them, and checks every task identity.
 The maintained example is `examples/task-workbench.el`; add that directory to
 `load-path` before requiring it. For automated interaction checks, load
 `scripts/task-workbench-gui-scenarios.el` with its `emacs-gui-verifier` engine
@@ -106,6 +116,19 @@ and adapter dependencies available, then use the existing frame:
 (task-workbench-gui-prepare)
 (run-at-time 0.05 nil #'task-workbench-gui-run "/absolute/fresh/evidence-directory")
 ```
+
+To quickly recheck selected-detail retirement and asynchronous read recovery,
+use a fresh prepared target and pass `'read-recovery` as the final argument:
+
+```elisp
+(task-workbench-gui-prepare)
+(run-at-time 0.05 nil #'task-workbench-gui-run
+             "/absolute/fresh/recovery-evidence" 'read-recovery)
+```
+
+This reuses nine full-scenario actions for search, timeout, cancellation,
+restored details and empty results. It keeps the same assertions and screenshots;
+the complete run remains required for the other workflows.
 
 The engine writes window screenshots, `manifest.jsonl`, and an atomic
 `result.json` into the evidence directory. A passed result certifies the action
@@ -189,15 +212,22 @@ record raw samples, environment and source digests. The comparison recalculates
 p95/max from those samples, rejects incompatible or incomplete evidence, and
 fails on either a greater-than-2-ms increase or the existing 50-ms limit.
 Keep the evaluator unchanged when comparing application revisions. These are
-batch dispatch-to-publication measurements; the complete GUI flow and foreground
-latency acceptance remain separate. Without an output variable, the command
+batch dispatch-to-asynchronous-settlement measurements. They include the demo
+provider's timer waiting time; row-toggle therefore includes the write and refresh
+waits and cannot establish the separate 50-ms local request/delivery budget.
+The existing wall limit still reports a failure instead of hiding that wait.
+The evaluator identity and timing boundary reject comparisons with old synchronous
+reports. Separate request-start and result-delivery latency certification remains
+pending, along with foreground latency acceptance. Without an output variable, the command
 prints the path of a fresh temporary report. Application messages go to a
 separate temporary log; the terminal shows timings, verdict and artifact paths.
 
 To locate an expensive operation, run `make profile-workbench SCENARIO=row-toggle`
 (also `theme-toggle` or `focus-add`). It runs two fresh instances of the same
 checked workload: public provider-stage recording first, CPU sampling second.
-Each pass warms up five times and diagnoses ten actions by default. The compact
+Each pass warms up five times and diagnoses ten actions by default. Recording
+and CPU sampling cover each action through asynchronous settlement; operation
+records share an action index, including result-delivery publications. The compact
 output ranks overlapping stage means and the nearest named package caller of
 each CPU sample. Caller buckets are disjoint; anonymous and primitive frames
 are attributed to their nearest named caller, while GC/runtime-only samples

@@ -38,19 +38,115 @@
   "Return TASK's stable identity."
   (plist-get task :id))
 
-(defun wb-discard-draft (draft)
-  "Ask before discarding DRAFT; return non-nil if navigation may continue."
+(defun wb-defer (seconds work &optional uncancellable)
+  "Run WORK later using native timers; return an asynchronous source result.
+UNCANCELLABLE models work whose completion cannot be prevented."
+  (etaf-async
+   (lambda (resolve reject)
+     (let ((timer
+            (run-at-time
+             seconds nil
+             (lambda ()
+               (let (result failure)
+                 (condition-case problem
+                     (setq result (funcall work))
+                   (error (setq failure problem)))
+                 ;; Publication errors belong to Data, outside the source boundary.
+                 (if failure (funcall reject failure) (funcall resolve result)))))))
+       (unless uncancellable (lambda () (cancel-timer timer)))))))
+
+(defun wb-source (mode)
+  "Adapt the memory provider to native asynchronous delivery controlled by MODE."
+  (let* ((capabilities (etaf-data-source-capabilities
+                        (etaf-data-memory-source (copy-tree wb-tasks) :id-key :id)))
+         (load (plist-get capabilities :load))
+         (mutate (plist-get capabilities :mutate))
+         fail-refresh)
+    (setf
+     (plist-get capabilities :load)
+     (lambda (query page page-size)
+       (let* ((behavior (etaf-value mode))
+              (failure (or fail-refresh (eq behavior 'read-error)))
+              ;; Snapshot the requested data before arranging delivery order.
+              (result (funcall load query page page-size))
+              (delay (pcase behavior
+                       ('timeout 2)
+                       ('out-of-order (if (equal query "接口") 0.3 0.02))
+                       (_ 0.05))))
+         (setq fail-refresh nil)
+         (wb-defer delay
+                   (lambda () (if failure (error "数据服务暂时不可用") result))
+                   (memq behavior '(out-of-order timeout)))))
+     (plist-get capabilities :mutate) nil
+     (plist-get capabilities :mutate-v2)
+     (lambda (operation payload)
+       (let ((behavior (etaf-value mode)))
+         (wb-defer
+          (if (eq behavior 'timeout) 2 0.05)
+          (lambda ()
+            (if (eq behavior 'write-error)
+                '(:certainty rolled-back :error (error "服务拒绝本次保存，未修改数据"))
+              (when (eq operation 'update)
+                (let ((stored (car (plist-get (funcall load (list :id (wb-task-id payload)) 1 1) :items))))
+                  (setq payload (plist-put (copy-sequence payload) :revision
+                                           (1+ (or (plist-get stored :revision) 0))))))
+              (funcall mutate operation payload)
+              (setq fail-refresh (eq behavior 'refresh-error))
+              (if (eq behavior 'unknown)
+                  '(:certainty external-unknown :error (error "保存回执丢失，请核对实际记录"))
+                (list :certainty 'committed
+                      :result (list :operation operation :item payload :changes 1)))))
+          (memq behavior '(unknown timeout))))))
+    (apply #'etaf-data-source capabilities)))
+
+(defun wb-busy-p (data)
+  "Return non-nil while DATA is waiting for a read or write."
+  (not (null (memq (etaf-value (etaf-data-status data)) '(loading refreshing)))))
+
+(defun wb-submission-locked-p (data submitted)
+  "Return non-nil while SUBMITTED has no safe write-retry outcome in DATA."
+  (and (not (null (etaf-value submitted)))
+       (not (null (memq (plist-get (etaf-data-mutation-outcome data) :certainty)
+                        '(committed external-unknown))))))
+
+(defun wb-reconciliation-pending-p (data)
+  "Return non-nil when DATA still needs to reconcile a committed write."
+  (and (eq (plist-get (etaf-data-mutation-outcome data) :certainty) 'committed)
+       (memq (etaf-data-reconciliation-state data)
+             '(reconciliation-pending projection-pending render-pending))))
+
+(defun wb-data-message (data)
+  "Describe DATA's read state and external write certainty separately."
+  (let* ((status (etaf-value (etaf-data-status data)))
+         (outcome (etaf-data-mutation-outcome data))
+         (certainty (plist-get outcome :certainty)))
+    (cond
+     ((plist-get outcome :pending-p) "正在保存…")
+     ((and (wb-reconciliation-pending-p data) (eq status 'refreshing)) "已写入，正在刷新…")
+     ((and (wb-reconciliation-pending-p data) (memq status '(error cancelled)))
+      "已写入；刷新未完成。重试读取不会重复保存。")
+     ((and (eq certainty 'external-unknown) (not (memq status '(loading refreshing))))
+      "写入结果未知，请核对已保存内容；结束编辑不会撤销写入。")
+     ((and (eq certainty 'rolled-back) (eq status 'error)) "保存失败，草稿已保留，可以重试。")
+     ((eq status 'error) (format "读取失败：%s" (error-message-string (etaf-value (etaf-data-error data)))))
+     ((eq status 'cancelled) "读取已取消，可重新读取。")
+     ((memq status '(loading refreshing)) "正在读取任务…")
+     ((eq status 'success) "数据已加载")
+     (t "准备读取任务…"))))
+
+(defun wb-discard-draft (draft submitted)
+  "Resolve DRAFT and SUBMITTED before navigation; return non-nil to continue."
   (when (or (null (etaf-value draft))
             (etaf-call-with-input
              (lambda ()
                (let ((use-dialog-box nil))
                  (yes-or-no-p "放弃未保存的修改？ ")))))
-    (setf (etaf-value draft) nil)
+    (setf (etaf-value draft) nil (etaf-value submitted) nil)
     t))
 
-(defun wb-query (data draft query)
-  "Apply QUERY to DATA's first page after resolving the unsaved DRAFT."
-  (when (wb-discard-draft draft)
+(defun wb-query (data draft submitted query)
+  "Apply QUERY to DATA after resolving DRAFT and SUBMITTED state."
+  (when (wb-discard-draft draft submitted)
     (etaf-data-set-query data query)
     (etaf-data-set-page data 1)
     (etaf-data-load data)))
@@ -153,18 +249,22 @@
 ;;; Reusable cell: Context dependency + controlled Checkbox + disabled Button
 
 (etaf-define-component wb-task-controls (&key task)
-  :bindings ((data (etaf-inject 'wb-data nil t)))
+  :bindings ((data (etaf-inject 'wb-data nil t))
+             (submitted (etaf-inject 'wb-submitted nil t)))
   :view
   (row :item-gap '(ch 1)
        (etaf-checkbox
         :label "完成" :checked (plist-get task :done)
+        :disabled (or (wb-busy-p data) (wb-submission-locked-p data submitted))
         :on-press #'wb-trace-press      ; Additive; does not replace on-change.
         :on-change
         (lambda (next)
           (etaf-dispatch 'wb-mutate data 'update
                          (plist-put (copy-sequence task) :done next))))
        (wb-button
-        :label "删除" :variant 'ghost :disabled (not (plist-get task :done))
+        :label "删除" :variant 'ghost
+        :disabled (or (not (plist-get task :done)) (wb-busy-p data)
+                      (wb-submission-locked-p data submitted))
         :on-press
         (lambda ()
           (etaf-dispatch 'wb-mutate data 'delete (wb-task-id task))))))
@@ -184,21 +284,24 @@
   :view
   (column
    (text :font-weight 'bold (expr (plist-get task :title)))
-   (text (expr (if (plist-get task :done) "已完成" "进行中")))))
+   (text (expr (if (plist-get task :done) "已完成" "进行中")))
+   (etaf-label :variant 'muted :text (format "已保存版本 %d" (or (plist-get task :revision) 0)))))
 
 (defun wb-edit-field (draft original task field value)
   "Update TASK's FIELD to VALUE in DRAFT, clearing it when equal to ORIGINAL."
   (let ((next (plist-put (copy-sequence task) field value)))
     (setf (etaf-value draft) (unless (equal next original) next))))
 
-(etaf-define-component wb-task-form (&key task original draft data)
+(etaf-define-component wb-task-form (&key task original draft submitted data)
   :view
   (column :item-gap '(lh 1)
    (etaf-text-input
     :label "标题" :value (plist-get task :title)
+    :disabled (or (wb-busy-p data) (wb-submission-locked-p data submitted))
     :on-change (lambda (next) (wb-edit-field draft original task :title next)))
    (etaf-select
     :label "状态" :value (plist-get task :done)
+    :disabled (or (wb-busy-p data) (wb-submission-locked-p data submitted))
     :options '((nil . "进行中") (t . "已完成"))
     :on-change (lambda (next) (wb-edit-field draft original task :done next)))
    (etaf-label :variant 'danger
@@ -208,20 +311,28 @@
    (row :item-gap '(ch 1)
     (etaf-button
      :label "保存修改"
-     :disabled (or (null (etaf-value draft))
+     :disabled (or (null (etaf-value draft)) (wb-busy-p data)
+                   (wb-submission-locked-p data submitted)
                    (string-empty-p (string-trim (plist-get task :title))))
      :on-press
      (lambda ()
+       (setf (etaf-value submitted) t)
        (etaf-data-mutate data 'update (plist-put (copy-sequence task) :title
-                                                (string-trim (plist-get task :title))))
-       (when (eq (etaf-value (etaf-data-status data)) 'success)
-         (setf (etaf-value draft) nil))))
-    (etaf-button :label "取消修改" :variant 'ghost :disabled (null (etaf-value draft))
-                 :on-press (lambda () (setf (etaf-value draft) nil))))))
+                                                (string-trim (plist-get task :title))))))
+    (etaf-button :label "取消修改" :variant 'ghost
+                 :disabled (or (null (etaf-value draft)) (wb-busy-p data))
+                 :on-press (lambda () (setf (etaf-value draft) nil (etaf-value submitted) nil))))
+   (etaf-button
+    :if (and (etaf-value submitted)
+             (eq (plist-get (etaf-data-mutation-outcome data) :certainty) 'external-unknown))
+    :label "采用已保存内容" :variant 'secondary
+    :disabled (not (eq (etaf-value (etaf-data-status data)) 'success))
+    :on-press (lambda () (setf (etaf-value draft) nil (etaf-value submitted) nil)))))
 
 (etaf-define-component wb-detail ()
   :bindings ((data (etaf-inject 'wb-data nil t))
              (draft (etaf-inject 'wb-draft nil t))
+             (submitted (etaf-inject 'wb-submitted nil t))
              (expanded (etaf-ref t)))
   :view
   (etaf-panel :title "详情" :item-gap '(lh 1)
@@ -231,7 +342,7 @@
                     (column :item-gap '(lh 1)
                      (wb-task-info :task (or (etaf-data-selected-item data) task))
                      (wb-task-form :task task :original (etaf-data-selected-item data)
-                                   :draft draft :data data)))
+                                   :draft draft :submitted submitted :data data)))
                  (etaf-view (text "点击任务行查看详情"))))
               (etaf-checkbox
                :label "显示说明" :bind expanded)
@@ -246,11 +357,36 @@
                           (expr tip))))))
 
 ;;; Resource: explicit status/error/retry, scoped result cleanup
-;;; This is a synchronous demo loader, not a simulated asynchronous API.
+;;; The same native asynchronous adapter delivers service and task results.
 
 (defun wb-service-cleanup ()
   "Report disposal of a previously loaded service result."
   (message "旧服务结果已释放"))
+
+(etaf-define-component wb-data-service ()
+  :bindings ((data (etaf-inject 'wb-data nil t)) (mode (etaf-inject 'wb-mode nil t)))
+  :view
+  (column :item-gap '(lh 1)
+   (etaf-label :role 'status :aria-label "任务数据状态"
+               :aria-busy (wb-busy-p data) :text (wb-data-message data))
+   (etaf-select :label "数据服务" :bind mode
+                :options '((normal . "正常") (read-error . "读取失败")
+                           (write-error . "保存失败") (refresh-error . "写入后刷新失败")
+                           (out-of-order . "搜索乱序") (timeout . "请求超时")
+                           (unknown . "保存回执丢失")))
+   (row :item-gap '(ch 1)
+    (etaf-button
+     :label "重试读取" :variant 'secondary :disabled (wb-busy-p data)
+     :on-press (lambda ()
+                 (if (wb-reconciliation-pending-p data)
+                     (etaf-data-retry-reconciliation data)
+                   (etaf-data-load data))))
+    (etaf-button :label "取消等待" :variant 'ghost :disabled (not (wb-busy-p data))
+                 :on-press (lambda () (etaf-data-cancel data))))
+   (etaf-button
+    :if (eq (plist-get (etaf-data-mutation-outcome data) :certainty) 'external-unknown)
+    :label "核对已保存内容" :variant 'secondary :disabled (wb-busy-p data)
+    :on-press (lambda () (etaf-data-load data)))))
 
 (etaf-define-component wb-service ()
   :bindings
@@ -258,15 +394,17 @@
    (resource
     (etaf-resource
      (lambda ()
-       (when (etaf-value fail-next)
-         (setf (etaf-value fail-next) nil)
-         (error "模拟加载失败"))
-       (etaf-resource-result "服务正常"
-                             :cleanup #'wb-service-cleanup))
-     :immediate nil)))
+       (let ((fail (etaf-value fail-next)))
+         (when fail (setf (etaf-value fail-next) nil))
+         (wb-defer 0.05
+                   (lambda ()
+                     (when fail (error "模拟加载失败"))
+                     (etaf-resource-result "服务正常" :cleanup #'wb-service-cleanup)))))
+     :immediate nil :timeout 0.5)))
   :setup (etaf-on-mounted (lambda () (etaf-resource-load resource)))
   :view
   (etaf-panel :title "服务状态" :item-gap '(lh 1)
+              (wb-data-service)
               (text
                (expr
                 (pcase (etaf-resource-status resource)
@@ -286,11 +424,11 @@
 
 (etaf-define-component wb-app (&key (title "任务工作台"))
   :bindings
-  ((data (etaf-data-controller
-          (etaf-data-memory-source (copy-tree wb-tasks) :id-key :id)
-          :page-size 10 :auto-load nil))
+  ((mode (etaf-ref 'normal))
+   (data (etaf-data-controller (wb-source mode) :page-size 10 :auto-load nil :timeout 0.5))
    (dark (etaf-ref nil))
    (draft (etaf-ref nil))
+   (submitted (etaf-ref nil))
    (next-id (etaf-ref (1+ (apply #'max (mapcar #'wb-task-id wb-tasks)))))
    (summary
     (etaf-computed
@@ -303,6 +441,14 @@
   (progn
     (etaf-provide 'wb-data data)
     (etaf-provide 'wb-draft draft)
+    (etaf-provide 'wb-submitted submitted)
+    (etaf-provide 'wb-mode mode)
+    (etaf-watch
+     (lambda () (list (etaf-value (etaf-data-status data)) (etaf-data-mutation-outcome data)))
+     (lambda (state _old)
+       (when (and (etaf-value submitted) (eq (car state) 'success)
+                  (eq (plist-get (cadr state) :certainty) 'committed))
+         (setf (etaf-value draft) nil (etaf-value submitted) nil))))
     (etaf-theme-provide
      (etaf-computed (lambda () (wb-theme (etaf-value dark)))))
     (etaf-watch dark
@@ -317,6 +463,7 @@
             (slot :name 'toolbar
                   (wb-button
                    :ref add-ref :label "新增任务"
+                   :disabled (or (wb-busy-p data) (wb-submission-locked-p data submitted))
                    :on-press
                    (lambda ()
                      (let ((title (string-trim
@@ -336,42 +483,53 @@
                               (wb-button :label "全部" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
                                          :variant (if (null (etaf-value (etaf-data-query data)))
                                                       'secondary 'ghost)
-                                         :on-press (lambda () (wb-query data draft nil)))
+                                         :disabled (or (plist-get (etaf-data-mutation-outcome data) :pending-p)
+                                                       (wb-submission-locked-p data submitted))
+                                         :on-press (lambda () (wb-query data draft submitted nil)))
                               (wb-button :label "未完成" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
                                          :variant (if (equal (etaf-value (etaf-data-query data)) '(:done nil))
                                                       'secondary 'ghost)
-                                         :on-press (lambda () (wb-query data draft '(:done nil))))
+                                         :disabled (or (plist-get (etaf-data-mutation-outcome data) :pending-p)
+                                                       (wb-submission-locked-p data submitted))
+                                         :on-press (lambda () (wb-query data draft submitted '(:done nil))))
                               (wb-button :label "已完成" :width 'stretch :flex-basis '(ch 16) :flex-grow 1
                                          :variant (if (equal (etaf-value (etaf-data-query data)) '(:done t))
                                                       'secondary 'ghost)
-                                         :on-press (lambda () (wb-query data draft '(:done t))))
+                                         :disabled (or (plist-get (etaf-data-mutation-outcome data) :pending-p)
+                                                       (wb-submission-locked-p data submitted))
+                                         :on-press (lambda () (wb-query data draft submitted '(:done t))))
                               (etaf-text-input :label "搜索" :width 'stretch
+                                         :disabled (or (plist-get (etaf-data-mutation-outcome data) :pending-p)
+                                                       (wb-submission-locked-p data submitted))
                                          :flex-basis '(ch 16) :flex-grow 1
                                          :value (let ((query (etaf-value (etaf-data-query data))))
                                                   (if (stringp query) query ""))
-                                         :on-change (lambda (next) (wb-query data draft next)))))
+                                         :on-change (lambda (next) (wb-query data draft submitted next)))))
 
             (etaf-panel :title "任务" :flex-grow 4 :flex-basis '(ch 64) :min-width '(ch 0)
                         :item-gap '(lh 1)
                         (etaf-data-grid
                          :controller data :columns wb-columns :row-key #'wb-task-id
                          :on-row-press (lambda (row)
-                                         (when (or (equal (etaf-data-selected-item data) row)
-                                                   (wb-discard-draft draft))
+                                         (when (and (not (plist-get (etaf-data-mutation-outcome data) :pending-p))
+                                                    (or (equal (etaf-data-selected-item data) row)
+                                                        (wb-discard-draft draft submitted)))
                                            (etaf-data-select-one data (wb-task-id row))))
-                         :loading-label "读取任务…" :error-label "读取失败，请重新筛选"
+                         :loading-label (wb-data-message data)
+                         :error-label (wb-data-message data)
                          :empty-label "没有匹配的任务"
                          (slot :name 'footer
                                (etaf-pagination :controller data
                                                 :previous-label "‹ 上一页" :next-label "下一页 ›")))
                         (etaf-number-input
                          :label "每页条数" :value (etaf-value (etaf-data-page-size data))
-                         :min 1 :max 20
+                         :min 1 :max 20 :disabled (or (wb-busy-p data) (wb-submission-locked-p data submitted))
                          :on-change
                          (lambda (next)
-                           (etaf-data-set-page-size data next)
-                           (etaf-data-set-page data 1)
-                           (etaf-data-load data))))
+                           (when (wb-discard-draft draft submitted)
+                             (etaf-data-set-page-size data next)
+                             (etaf-data-set-page data 1)
+                             (etaf-data-load data)))))
 
             (flex :flex-wrap 'wrap :flex-basis '(ch 36) :flex-grow 1 :min-width '(ch 0)
                   :align-content 'space-between :align-items 'flex-start :gap '((lh 1) (px 16))

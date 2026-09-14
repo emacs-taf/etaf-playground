@@ -35,7 +35,10 @@ class ProfileCommandTests(unittest.TestCase):
         self.assertEqual(report["status"], "completed")
         self.assertEqual(report["purpose"], "diagnostic-only")
         self.assertEqual((report["tasks"], report["page_size"]), (100, 10))
-        self.assertEqual(len(report["operations"]), 1)
+        self.assertGreater(len(report["operations"]), 1)
+        self.assertEqual({row["action_index"] for row in report["operations"]}, {1})
+        self.assertIn("event", {row["kind"] for row in report["operations"]})
+        self.assertTrue(all(row["status"] == "success" for row in report["operations"]))
         self.assertEqual(len(report["cpu_profiles"]), 1)
         providers = {row["provider"] for row in report["operations"][0]["stages"]}
         self.assertTrue({"etaf", "ebox", "tp"}.issubset(providers))

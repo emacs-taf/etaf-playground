@@ -347,14 +347,23 @@ Native Emacs glyph rows may have different pixel heights as content moves."
   (wb-gui--tab-to context (wb-gui--control context label row-id))
   (execute-kbd-macro (kbd "RET")))
 
-(defun wb-gui--visit-next-page (context)
-  "Advance CONTEXT one page and retain the complete visited task sequence."
-  (let ((visited (etaf-gui-verifier-context-get
-                  context 'visited-task-ids (wb-gui--ids context))))
-    (wb-gui--press context "Next page")
-    (setq visited (append visited (wb-gui--ids context)))
-    (etaf-gui-verifier-context-put context 'visited-task-ids visited)
-    (etaf-gui-verifier-context-put context 'visited-tasks (length visited))))
+(defun wb-gui--visit-next-page (context &optional mouse)
+  "Request CONTEXT's next page by keyboard or MOUSE; record published identities."
+  (unless (etaf-gui-verifier-context-get context 'visited-task-ids)
+    (etaf-gui-verifier-context-put context 'visited-task-ids (wb-gui--ids context)))
+  (if mouse (wb-gui--click context "Next page") (wb-gui--press context "Next page"))
+  (etaf-gui-verifier-context-put context 'pending-visited-page t))
+
+(defun wb-gui--data-settled-p (context)
+  "Return non-nil after CONTEXT's task request has published a terminal state."
+  (let* ((runtime (wb-gui--runtime context))
+         (props (etaf-runtime-host-props-for runtime (wb-gui--control context "任务数据状态"))))
+    (not (plist-get props :aria-busy))))
+
+(defun wb-gui--disabled-p (context label)
+  "Return the committed disabled state of CONTEXT's LABEL control."
+  (plist-get (etaf-runtime-host-props-for (wb-gui--runtime context)
+                                         (wb-gui--control context label)) :disabled))
 
 (defun wb-gui--enter (context label text &optional keys)
   "Activate LABEL and type TEXT through the minibuffer in CONTEXT.
@@ -420,7 +429,15 @@ Optional KEYS exercises a specific native editing sequence yielding TEXT."
    :settled-p
    (lambda (context)
      (and (etaf-playground-gui-scenarios--mounted-settled-p context)
-          (funcall predicate context)))
+          (wb-gui--data-settled-p context)
+          (progn
+            (when (etaf-gui-verifier-context-get context 'pending-visited-page)
+              (let ((visited (append (etaf-gui-verifier-context-get context 'visited-task-ids)
+                                     (wb-gui--ids context))))
+                (etaf-gui-verifier-context-put context 'visited-task-ids visited)
+                (etaf-gui-verifier-context-put context 'visited-tasks (length visited))
+                (etaf-gui-verifier-context-put context 'pending-visited-page nil)))
+            (funcall predicate context))))
    :assertions
    (lambda (context)
      (list (etaf-gui-verifier-assert id (funcall predicate context))))))
@@ -567,7 +584,8 @@ Optional KEYS exercises a specific native editing sequence yielding TEXT."
                collect
                (let ((target page))
                  (wb-gui--action
-                  (format "page-next-%d" target) #'wb-gui--visit-next-page
+                  (format "page-next-%d" target)
+                  (lambda (c) (wb-gui--visit-next-page c (> target 2)))
                   (lambda (c)
                     (and (equal (wb-gui--ids c)
                                 (number-sequence (1+ (* 10 (1- target)))
@@ -585,7 +603,9 @@ Optional KEYS exercises a specific native editing sequence yielding TEXT."
                (let ((target page))
                  (wb-gui--action
                   (format "page-previous-%d" target)
-                  (lambda (c) (wb-gui--press c "Previous page"))
+                  (lambda (c) (if (= target 1)
+                                  (wb-gui--press c "Previous page")
+                                (wb-gui--click c "Previous page")))
                   (lambda (c)
                     (equal (wb-gui--ids c)
                            (number-sequence (1+ (* 10 (1- target))) (* 10 target)))))))
@@ -729,7 +749,86 @@ Optional KEYS exercises a specific native editing sequence yielding TEXT."
          (and (not (etaf-runtime-mounted-p
                     (etaf-gui-verifier-context-get c 'retired-runtime)))
               (equal (wb-gui--ids c) (number-sequence 1 10))
-              (= (wb-gui--total c) 100))))))
+              (= (wb-gui--total c) 100))))
+      (wb-gui--action
+       "async-save-known-failure"
+       (lambda (c)
+         (wb-gui--mouse-at (wb-gui--find-text "设计组件接口"))
+         (wb-gui--enter c "标题" "异步保存草稿")
+         (wb-gui--enter c "数据服务" "保存失败")
+         (wb-gui--press c "保存修改"))
+       (lambda (c) (and (wb-gui--text-p c "保存失败，草稿已保留")
+                        (not (wb-gui--text-p c "读取失败"))
+                        (wb-gui--text-p c "已修改 ·")
+                        (wb-gui--text-p c "设计组件接口"))))
+      (wb-gui--action
+       "async-save-retry"
+       (lambda (c) (wb-gui--enter c "数据服务" "正常") (wb-gui--press c "保存修改"))
+       (lambda (c) (and (wb-gui--text-p c "异步保存草稿")
+                        (wb-gui--text-p c "已保存版本 1")
+                        (not (wb-gui--text-p c "已修改 ·")))))
+      (wb-gui--action
+       "async-committed-refresh-failure"
+       (lambda (c) (wb-gui--enter c "标题" "刷新恢复记录")
+         (wb-gui--enter c "数据服务" "写入后刷新失败") (wb-gui--press c "保存修改"))
+       (lambda (c) (and (wb-gui--text-p c "已写入；刷新未完成")
+                        (wb-gui--text-p c "异步保存草稿")
+                        (wb-gui--disabled-p c "保存修改"))))
+      (wb-gui--action
+       "async-read-only-retry"
+       (lambda (c) (wb-gui--enter c "数据服务" "正常") (wb-gui--press c "重试读取"))
+       (lambda (c) (and (wb-gui--text-p c "已保存版本 2")
+                        (wb-gui--text-p c "刷新恢复记录")
+                        (not (wb-gui--text-p c "已修改 ·")))))
+      (wb-gui--action
+       "async-save-receipt-lost"
+       (lambda (c) (wb-gui--enter c "标题" "回执核对记录")
+         (wb-gui--enter c "数据服务" "保存回执丢失") (wb-gui--press c "保存修改"))
+       (lambda (c) (and (wb-gui--text-p c "写入结果未知")
+                        (wb-gui--disabled-p c "保存修改")
+                        (wb-gui--disabled-p c "采用已保存内容"))))
+      (wb-gui--action
+       "async-confirm-saved-record" (lambda (c) (wb-gui--press c "核对已保存内容"))
+       (lambda (c) (and (wb-gui--text-p c "已保存版本 3")
+                        (not (wb-gui--disabled-p c "采用已保存内容")))))
+      (wb-gui--action
+       "async-adopt-saved-record" (lambda (c) (wb-gui--press c "采用已保存内容"))
+       (lambda (c) (and (wb-gui--text-p c "回执核对记录")
+                        (not (wb-gui--text-p c "已修改 ·")))))
+      (wb-gui--action
+       "async-restore-record"
+       (lambda (c) (wb-gui--enter c "数据服务" "正常")
+         (wb-gui--enter c "标题" "设计组件接口") (wb-gui--press c "保存修改"))
+       (lambda (c) (and (wb-gui--text-p c "已保存版本 4")
+                        (not (wb-gui--text-p c "已修改 ·")))))
+      (wb-gui--action
+       "async-search-supersede"
+       (lambda (c) (wb-gui--enter c "数据服务" "搜索乱序")
+         (wb-gui--enter c "搜索" "接口") (wb-gui--enter c "搜索" "文档"))
+       (lambda (c) (equal (wb-gui--ids c) '(5))))
+      (wb-gui--action
+       "async-search-timeout"
+       (lambda (c) (wb-gui--enter c "数据服务" "请求超时") (wb-gui--enter c "搜索" "接口"))
+       (lambda (c) (and (wb-gui--text-p c "读取失败") (equal (wb-gui--ids c) '(5)))))
+      (wb-gui--action
+       "async-search-cancel"
+       (lambda (c) (wb-gui--click c "重试读取") (wb-gui--click c "取消等待"))
+       (lambda (c) (and (wb-gui--text-p c "读取已取消") (equal (wb-gui--ids c) '(5)))))
+      (wb-gui--action
+       "async-search-recover"
+       (lambda (c) (wb-gui--enter c "数据服务" "正常") (wb-gui--press c "全部"))
+       (lambda (c) (and (equal (wb-gui--ids c) (number-sequence 1 10))
+                        (wb-gui--text-p c "数据已加载"))))
+      (wb-gui--action
+       "async-empty-query" (lambda (c) (wb-gui--enter c "搜索" "不存在的任务"))
+       (lambda (c) (and (null (wb-gui--ids c)) (wb-gui--text-p c "没有匹配的任务"))))
+      (wb-gui--action
+       "async-empty-refresh" (lambda (c) (wb-gui--press c "重试读取"))
+       (lambda (c) (and (null (wb-gui--ids c)) (wb-gui--text-p c "没有匹配的任务")
+                        (wb-gui--text-p c "数据已加载"))))
+      (wb-gui--action
+       "async-empty-restore" (lambda (c) (wb-gui--press c "全部"))
+       (lambda (c) (equal (wb-gui--ids c) (number-sequence 1 10))))))
      :completion
      (lambda (context)
        (and (= (etaf-gui-verifier-context-action-count context)
@@ -740,11 +839,42 @@ Optional KEYS exercises a specific native editing sequence yielding TEXT."
             (equal (wb-gui--ids context) (number-sequence 1 10)))))))
 
 ;;;###autoload
-(defun task-workbench-gui-run (run-directory)
-  "Run Workbench GUI acceptance into prepared RUN-DIRECTORY."
-  (unless (buffer-live-p wb-gui--prepared-buffer)
-    (task-workbench-gui-prepare))
-  (etaf-gui-verifier-run (task-workbench-gui-scenario) run-directory))
+(defun task-workbench-gui-read-recovery-scenario ()
+  "Return the focused selected-detail and asynchronous read recovery scenario.
+Reuse the complete scenario's actions, guards and assertions in a fresh App."
+  (let* ((full (task-workbench-gui-scenario))
+         (ids '("mount" "row-mouse-select" "async-search-supersede"
+                "async-search-timeout" "async-search-cancel" "async-search-recover"
+                "async-empty-query" "async-empty-refresh" "async-empty-restore")))
+    (etaf-gui-verifier-scenario-create
+     :name "task-workbench-read-recovery"
+     :claim "Selected detail retirement, cancelled read recovery and empty results"
+     :initialize (etaf-gui-verifier-scenario-initialize full)
+     :invariants (etaf-gui-verifier-scenario-invariants full)
+     :adapter (etaf-gui-verifier-scenario-adapter full)
+     :actions
+     (mapcar (lambda (id)
+               (or (cl-find id (etaf-gui-verifier-scenario-actions full)
+                            :key #'etaf-gui-verifier-action-id :test #'equal)
+                   (error "Missing Workbench recovery action: %s" id))) ids)
+     :completion
+     (lambda (context)
+       (and (= (length ids) (etaf-gui-verifier-context-action-count context))
+            (not (get-buffer wb-gui--secondary-name))
+            (equal (wb-gui--ids context) (number-sequence 1 10)))))))
+
+;;;###autoload
+(defun task-workbench-gui-run (run-directory &optional flow)
+  "Run Workbench GUI acceptance into prepared RUN-DIRECTORY.
+Nil FLOW runs the complete acceptance.  `read-recovery' runs nine focused
+actions in a fresh App; it does not certify the complete Workbench workflow."
+  (let ((scenario (pcase flow
+                    ('nil (task-workbench-gui-scenario))
+                    ('read-recovery (task-workbench-gui-read-recovery-scenario))
+                    (_ (error "Unknown Workbench GUI flow: %S" flow)))))
+    (unless (buffer-live-p wb-gui--prepared-buffer)
+      (task-workbench-gui-prepare))
+    (etaf-gui-verifier-run scenario run-directory)))
 
 ;;;###autoload
 (defun task-workbench-gui-run-from-environment ()

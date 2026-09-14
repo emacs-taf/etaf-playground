@@ -13,7 +13,7 @@ class ComparisonTests(unittest.TestCase):
     def report(self, value=10):
         return dict(status="passed", schema=1, workload="task-workbench", tasks=100, page_size=10,
                     viewport_width=1413, viewport_height=62, warmups=5, samples=30,
-                    timing="batch-dispatch-to-publication", emacs="test",
+                    timing="batch-dispatch-to-async-settlement", emacs="test",
                     machine="fixture", system="fixture", native=None, error=None,
                     evaluator_hash="fixture", app_compiled=True, runtime_compiled=True,
                     scenarios=[dict(name=name, samples_ms=[value] * 30,
@@ -45,6 +45,7 @@ class ComparisonTests(unittest.TestCase):
 
     def test_changed_environment_failed_workload_and_duplicate_rows_are_rejected(self):
         for key, value in (("machine", "different"), ("evaluator_hash", "changed"),
+                           ("timing", "different-boundary"),
                            ("error", "failed action"), ("status", "running")):
             report = self.report()
             report[key] = value

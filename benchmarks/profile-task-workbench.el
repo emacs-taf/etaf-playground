@@ -59,8 +59,8 @@
                     (or (etaf-workbench-profile--git directory "diff" "HEAD" "--") ""))))))
     '(ecss tp ebox etaf etaf-ui etaf-playground))))
 
-(defun etaf-workbench-profile--print-stages (operations)
-  "Print mean per-action stage totals from OPERATIONS, retaining overlap."
+(defun etaf-workbench-profile--print-stages (operations action-count)
+  "Print per-action stage totals from OPERATIONS for ACTION-COUNT activations."
   (let ((totals (make-hash-table :test #'equal)) rows)
     (dolist (operation operations)
       (seq-doseq (stage (plist-get operation :stages))
@@ -70,7 +70,7 @@
     (maphash (lambda (key value) (push (cons key value) rows)) totals)
     (princ "Stage means per action (overlapping, instrumented):\n")
     (dolist (row (seq-take (sort rows (lambda (a b) (> (cdr a) (cdr b)))) 8))
-      (princ (format "  %8.3f ms  %s\n" (/ (cdr row) (float (length operations)))
+      (princ (format "  %8.3f ms  %s\n" (/ (cdr row) (float action-count))
                      (car row))))))
 
 (defun etaf-workbench-profile-batch ()
@@ -111,7 +111,7 @@ ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
                        :workload_hash (etaf-workbench-benchmark--source-hash
                                        'etaf-workbench-benchmark-batch)
                        :app_hash (etaf-workbench-benchmark--source-hash 'wb-open)))
-         operations profiles (total 0) (depth-limit-samples 0)
+         operations profiles (action-index 0) (total 0) (depth-limit-samples 0)
          (inclusive (make-hash-table :test #'eq))
          (self (make-hash-table :test #'eq))
          (nearest-callers (make-hash-table :test #'eq))
@@ -130,16 +130,18 @@ ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
           (etaf-workbench-benchmark--scenario
            scenario label
            (lambda (buffer runtime target)
+             (cl-incf action-index)
              (with-current-buffer buffer
                (etaf-performance-mode 1)
                (etaf-performance-clear)
                (unwind-protect
                    (progn
-                     (etaf-dispatch-event runtime target 'press)
+                     (etaf-workbench-benchmark--dispatch runtime target)
                      (let ((records (etaf-performance-records)))
-                       (unless (= 1 (length records))
-                         (error "Expected one complete operation per action"))
-                       (push (etaf-workbench-profile--operation (car records)) operations)))
+                       (unless records (error "No completed operation was recorded"))
+                       (dolist (record records)
+                         (push (append (list :action_index action-index)
+                                       (etaf-workbench-profile--operation record)) operations))))
                  (etaf-performance-mode -1))))
            count)
           (etaf-workbench-benchmark--scenario
@@ -147,7 +149,7 @@ ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
            (lambda (_buffer runtime target)
              (profiler-reset)
              (profiler-start 'cpu)
-             (unwind-protect (etaf-dispatch-event runtime target 'press)
+             (unwind-protect (etaf-workbench-benchmark--dispatch runtime target)
                (profiler-stop))
              (let (stacks)
                (maphash
@@ -211,7 +213,7 @@ ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
                                               (> (plist-get a :samples)
                                                  (plist-get b :samples)))))
           (setq report (plist-put report :status "completed"))
-          (etaf-workbench-profile--print-stages operations)
+          (etaf-workbench-profile--print-stages operations count)
           (princ (format "CPU sample weight: %d; inclusive counts overlap, not elapsed time\n" total))
           (princ (format "Stack depth: %d; depth-limit sample weight: %d (%.1f%%)\n"
                          profiler-max-stack-depth depth-limit-samples
