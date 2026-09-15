@@ -12,7 +12,7 @@
 (require 'cl-lib)
 (require 'etaf)
 (require 'etaf-ui)
-(require 'etaf-sqlite)
+(require 'etaf-db)
 (require 'etaf)
 (require 'etaf-playground)
 

@@ -18,8 +18,8 @@ ETAF Playground 是通用的应用构建工作区：左侧编辑同一个应用�
 也会刷新。若 root 或 feature 不遵循命名约定，可在 companion 中调用
 `etaf-playground-register-example` 注册覆盖。
 
-ETAF Playground 0.2.2 声明 ECSS 0.1.0、ETAF 0.2.1、ETAF UI 0.1.0 与 ETAF SQLite
-0.1.0，保证内置 Research Shelf companion 的安装依赖闭包完整。
+ETAF Playground 0.2.2 声明 ECSS 0.1.0、ETAF 0.2.1、ETAF UI 0.1.0 与 ETAF DB
+0.1.0（目前使用其中的 SQLite 后端），保证内置 Research Shelf companion 的安装依赖闭包完整。
 
 预览位置使用标准 Emacs `display-buffer` action，由
 `etaf-playground-display-action` 配置。默认在右侧使用一半 frame：

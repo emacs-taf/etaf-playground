@@ -25,6 +25,10 @@
 
 ### Changed
 
+- Research Shelf loads its SQLite backend through the `etaf-db` package entry.
+  Install `etaf-db` in place of the former `etaf-sqlite` package dependency;
+  the example continues to use the same SQLite Data Source API.
+
 - Task Workbench now loads and saves asynchronously, retains drafts and accepted rows on failure, and offers read-only recovery after committed writes or a lost receipt. Native controls expose cancellation, timeout and out-of-order search scenarios; service health uses the same asynchronous protocol.
 - Workbench GUI acceptance waits for task publication between actions. Batch diagnostics include delayed completion; wall samples include provider waiting and use a new timing boundary, so previous synchronous reports are not comparable. Separate local processing latency certification remains pending.
 
