@@ -12,6 +12,10 @@
 
 ### Fixed
 
+- Research Shelf detail notes use the UI Label's constrained text layout, so
+  long notes wrap inside the inspector after selection and window resizing.
+  Update UI together with the example for Label's Box layout support.
+
 - Workbench actions and component updates no longer print lifecycle messages
   into the minibuffer, keeping ordinary interaction and viewport geometry stable.
 

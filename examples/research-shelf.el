@@ -648,13 +648,12 @@ constructed.  When omitted, initialize it for direct programmatic callers."
                    (format "%s %s" (make-string filled ?█)
                            (make-string (- 10 filled) ?░)))))
           (box :height '(lh 1))
-          (text :color (etaf-theme-token :muted)
-                (expr
-                 (if-let* ((row
-                            (etaf-research-shelf--selected
-                             model)))
-                     (concat "“" (or (plist-get row :note) "No note yet.") "”")
-                   "Your notes and actions will appear here.")))
+          (etaf-label :class "research-shelf-note" :width 'stretch :wrap-mode 'word
+                      :color (etaf-theme-token :muted)
+                      :text
+                      (if-let* ((row (etaf-research-shelf--selected model)))
+                          (concat "“" (or (plist-get row :note) "No note yet.") "”")
+                        "Your notes and actions will appear here."))
           (box :height '(lh 1))
           (etaf-research-shelf-detail-actions)))
 
