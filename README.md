@@ -91,6 +91,8 @@ Service health separately demonstrates asynchronous Resource loading.
 Each row's Actions menu opens editing or requests deletion of a completed task.
 Declining confirmation preserves the task and returns focus to the menu entry.
 A persistent component error boundary remains an ecosystem requirement.
+Workbench exposes `wb-task-N` row Host references through DataGrid's `:row-ref`
+input, where N is the task ID. Interaction drivers can address tasks without inspecting UI internals.
 
 ## Repeatable Emacs 31.1 GUI verification
 

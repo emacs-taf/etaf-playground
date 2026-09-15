@@ -492,6 +492,7 @@ UNCANCELLABLE models work whose completion cannot be prevented."
                         :item-gap '(lh 1)
                         (etaf-data-grid
                          :controller data :columns wb-columns :row-key #'wb-task-id
+                         :row-ref (lambda (task) (intern (format "wb-task-%s" (wb-task-id task))))
                          :on-row-press (lambda (row)
                                          (when (and (not (plist-get (etaf-data-mutation-outcome data) :pending-p))
                                                     (or (equal (etaf-data-selected-item data) row)

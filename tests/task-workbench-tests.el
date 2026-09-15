@@ -27,12 +27,9 @@
     (caar entries)))
 
 (defun wb-test--row (runtime id)
-  "Return the semantic row for task ID in RUNTIME."
-  (car (cl-find-if
-        (lambda (entry)
-          (and (equal id (plist-get (cdr entry) :key))
-               (member "etaf-table-row" (split-string (or (plist-get (cdr entry) :class) "")))))
-        (etaf-runtime-host-props-entries runtime))))
+  "Return the example's explicitly published row reference for task ID."
+  (let ((ref (intern (format "wb-task-%s" id))))
+    (and (etaf-runtime-host-props-for runtime ref) ref)))
 
 (defun wb-test--row-text (runtime id)
   "Read the published text of task ID in RUNTIME."

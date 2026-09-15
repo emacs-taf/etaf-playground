@@ -107,7 +107,14 @@ Preserve application focus unless FOREGROUND is explicitly non-nil."
 
 (defun wb-gui--ids (context)
   "Return CONTEXT's displayed stable task identities."
-  (mapcar (lambda (entry) (plist-get (cdr entry) :key)) (wb-gui--rows context)))
+  (mapcar #'wb-gui--row-id (wb-gui--rows context)))
+
+(defun wb-gui--row-id (entry)
+  "Read the task ID from the example's public row reference ENTRY."
+  (let ((name (symbol-name (car entry))))
+    (unless (string-match "\\`wb-task-\\([0-9]+\\)\\'" name)
+      (error "Unknown Workbench row reference: %s" name))
+    (string-to-number (match-string 1 name))))
 
 (defun wb-gui--selected-id (context)
   "Return CONTEXT's selected task identity, or nil."
@@ -115,7 +122,7 @@ Preserve application focus unless FOREGROUND is explicitly non-nil."
                      (lambda (entry)
                        (member "selected" (wb-gui--classes entry)))
                      (wb-gui--rows context))))
-    (plist-get (cdr entry) :key)))
+    (wb-gui--row-id entry)))
 
 (defun wb-gui--displayed-number (context pattern &optional optional)
   "Read the first captured number in CONTEXT's displayed PATTERN.
@@ -157,9 +164,8 @@ With OPTIONAL, report nil when the viewport does not display the number."
          (row (and row-id
                    (cl-find-if
                     (lambda (entry)
-                      (and (equal (plist-get (cdr entry) :key) row-id)
-                           (member "etaf-table-row"
-                                   (wb-gui--classes entry))))
+                      (and (member "etaf-table-row" (wb-gui--classes entry))
+                           (equal (wb-gui--row-id entry) row-id)))
                     entries)))
          (matches (cl-remove-if-not
                    (lambda (entry)
@@ -239,9 +245,8 @@ cannot establish that Emacs painted a control on the same visual line."
         (let* ((entry
                 (cl-find-if
                  (lambda (entry)
-                   (and (equal identity (plist-get (cdr entry) :key))
-                        (member "etaf-table-row"
-                                (wb-gui--classes entry))))
+                   (and (member "etaf-table-row" (wb-gui--classes entry))
+                        (equal identity (wb-gui--row-id entry))))
                  entries))
                (bounds (and entry (etaf-host-ref-bounds runtime (car entry)))))
           (unless bounds (error "Theme geometry row has no live bounds: %s" identity))
