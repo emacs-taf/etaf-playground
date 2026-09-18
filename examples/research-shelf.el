@@ -196,11 +196,11 @@ user's prior local additions cannot collide with the generated dataset."
     :coral (etaf-research-shelf-coral . :fg)
     :amber (etaf-research-shelf-amber . :fg)
     :soft (etaf-research-shelf-soft . :bg))
-  "Mapping from product roles to the optional TP palette adapter.")
+  "Mapping from product roles to the ETAF semantic palette registry.")
 
 (defun etaf-research-shelf--theme (model)
   "Return MODEL's current semantic product palette."
-  (etaf-theme-from-tp-palettes
+  (etaf-theme-from-palettes
    etaf-research-shelf--palette-bindings
    (if (etaf-value (plist-get model :dark)) 'dark 'light)))
 
