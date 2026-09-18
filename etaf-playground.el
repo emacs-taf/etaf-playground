@@ -19,17 +19,6 @@
 ;; This Commentary is the authoritative export list; implementations and precise
 ;; docstrings remain beside their definitions. The manual contains workflows.
 ;;
-;; Error: etaf-playground-dependency-error
-;; ETAF Playground requires TP 2.0.0 or newer with tp-transaction
-;; Catch this condition with condition-case; failed calls do not return a value.
-;;
-;; Variable: etaf-playground-display-action
-;; Standard `display-buffer' action used for the preview buffer.
-;; The default shows the preview in a right side window using half the frame.
-;; Set `window-width' to a float for a ratio or an integer for a fixed column
-;; count.  Use `display-buffer-pop-up-frame' to place the preview in its own
-;; frame.
-;;
 ;; Function: etaf-playground-mount-example (buffer-name name &optional session mount-options)
 ;;;###autoload (autoload 'etaf-playground-mount-example "etaf-playground" nil nil)
 ;; Mount example NAME into BUFFER-NAME and return its buffer.

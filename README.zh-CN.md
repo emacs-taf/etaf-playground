@@ -59,8 +59,8 @@ examples/research-shelf.el    # DATA / THEME / STATE / VIEW / ROOT 分区
 ```
 
 直接打开 inert `.etaf` 或 `.ecss` source 时只加载轻量编辑 mode；刷新或 mount
-preview 时才加载 ETAF/Ebox/TP runtime。运行 preview 需要 TP 1.0.1 或更高版本，
-以保证 `tp-transaction.el` 与 Host final-accept contract 已安装。
+preview 时才加载 ETAF/Ebox runtime。运行 preview 需要提供 SPI v3 的 Ebox，
+以保证 Ebox publication 与 Host final-accept 契约匹配。
 
 该 companion 注册了 `:reload-on-refresh t`；保存 `.el`、`.etaf` 或 `.ecss` 后刷新
 source，会在下一次 mount 前重新加载完整 consumer。

@@ -57,7 +57,7 @@
                    (secure-hash
                     'sha256
                     (or (etaf-workbench-profile--git directory "diff" "HEAD" "--") ""))))))
-    '(ecss tp ebox etaf etaf-ui etaf-playground))))
+    '(ecss ebox etaf etaf-ui etaf-playground))))
 
 (defun etaf-workbench-profile--print-stages (operations action-count)
   "Print per-action stage totals from OPERATIONS for ACTION-COUNT activations."
@@ -164,7 +164,7 @@ ETAF_WORKBENCH_PROFILE_OUTPUT selects an atomic JSON report outside Git."
                            (lambda (frame)
                              (and (symbolp frame)
                                   (string-match-p
-                                   "\\`\\(?:ebox\\|ecss\\|tp\\|etaf\\|wb\\)-"
+                                   "\\`\\(?:ebox\\|ecss\\|etaf\\|wb\\)-"
                                    (symbol-name frame))))
                            stack)))
                     (cl-incf total samples)

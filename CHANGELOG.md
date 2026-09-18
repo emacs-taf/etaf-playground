@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- Retained publication is now owned by Ebox. Update Ebox and ETAF together;
+  the integration uses SPI v3 and `ebox-publication/v1`. TP is no longer a
+  package dependency. Publication reports use `:publication-*` fields and the
+  `ebox-publication` provider; consumers must migrate the former TP fields.
+
+
 ### Added
 
 - Task rows compose the UI Menu with a confirmation dialog. Edit opens the
@@ -24,6 +32,10 @@
   Add button uses an instance-local Host reference for independent workbenches.
 
 ### Changed
+
+- Research Shelf keeps its light/dark colors in one semantic palette plist and
+  resolves it through ETAF. Theme toggles retain their colors without a global
+  palette registry or renderer-specific channels.
 
 - Research Shelf loads its SQLite backend through the `etaf-db` package entry.
   Install `etaf-db` in place of the former `etaf-sqlite` package dependency;

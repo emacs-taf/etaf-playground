@@ -63,9 +63,8 @@ examples/research-shelf.el    # DATA / THEME / STATE / VIEW / ROOT sections
 ```
 
 Opening an inert `.etaf` or `.ecss` source loads only its lightweight editing
-mode.  The ETAF/Ebox/TP runtime is loaded when a preview is refreshed or
-mounted.  Runtime use requires TP 1.0.1 or newer so `tp-transaction.el` and the
-Host final-accept contract are present.
+mode. The ETAF/Ebox runtime loads when a preview is refreshed or mounted.
+ETAF requires Ebox SPI v3 for coordinated publication and Host final acceptance.
 
 The companion registers `:reload-on-refresh t`, so saving the `.el`, `.etaf`, or
 `.ecss` source and refreshing reloads the complete consumer before the next

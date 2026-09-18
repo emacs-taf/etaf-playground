@@ -9,8 +9,7 @@
     "../ekp",
     "../etaf",
     "../etaf-db",
-    "../etaf-ui",
-    "../tp"
+    "../etaf-ui"
   ],
   "support": [],
   "cases": [
@@ -22,7 +21,7 @@
     {
       "name": "etaf-playground-mounts-static-rule-companion-in-fresh-emacs",
       "file": "tests/etaf-playground-tests.el",
-      "purpose": "Research Shelf mounts, filters and paginates through public APIs with its scoped ECSS companion and an isolated database."
+      "purpose": "Research Shelf mounts, filters, paginates and switches light/dark themes through public APIs with its scoped ECSS companion and an isolated database."
     },
     {
       "name": "task-workbench-draft-validates-saves-cancels-and-isolates-instances",

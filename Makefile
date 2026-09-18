@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := check
 .NOTPARALLEL:
 EMACS ?= emacs
-LOAD_PATH = -L . -L lisp -L scripts -L benchmarks -L examples -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../tp -L ../etaf-db
+LOAD_PATH = -L . -L lisp -L scripts -L benchmarks -L examples -L ../etaf -L ../etaf-ui -L ../ebox -L ../ecss -L ../etaf-db
 EBOX_NATIVE_RELEASE_DIR = $(shell $(EMACS) -Q --batch $(LOAD_PATH) \
 	--eval '(setq load-prefer-newer t)' -l ../ebox/ebox.el \
 	--eval '(princ (expand-file-name (format "../ebox/native/target/%s/release/" (ebox-native-reflow--rust-target))))')
@@ -21,8 +21,7 @@ compile:
 	# before compiling the pair; cleaning dependencies without rebuilding them
 	# silently forced every Component and Ebox layout through the interpreter.
 	$(MAKE) -C ../ecss compile EMACS="$(EMACS)"
-	$(MAKE) -C ../tp compile EMACS="$(EMACS)"
-	$(MAKE) -C ../ebox compile EMACS="$(EMACS)" ECSS_DIR=../ecss TP_DIR=../tp
+	$(MAKE) -C ../ebox compile EMACS="$(EMACS)" ECSS_DIR=../ecss
 	$(MAKE) -C ../etaf compile EMACS="$(EMACS)"
 	$(MAKE) -C ../etaf-ui compile EMACS="$(EMACS)"
 	$(MAKE) -C ../etaf-db compile EMACS="$(EMACS)"
@@ -44,7 +43,7 @@ perf:
 	$(MAKE) perf-evaluator EMACS="$(EMACS)"
 
 perf-prepare: compile
-	$(MAKE) -C ../ebox native-build EMACS="$(EMACS)" ECSS_DIR=../ecss TP_DIR=../tp
+	$(MAKE) -C ../ebox native-build EMACS="$(EMACS)" ECSS_DIR=../ecss
 
 # Run only the already-built product.  This separate target lets an absolute
 # max-latency sample start after compilation CPU activity has settled.
@@ -69,8 +68,7 @@ perf-repeatability: perf-prepare
 # package is loading its compiled dependencies.
 perf-regressions:
 	$(MAKE) -C ../ecss  EMACS="$(EMACS)"
-	$(MAKE) -C ../tp  EMACS="$(EMACS)"
-	$(MAKE) -C ../ebox  EMACS="$(EMACS)" ECSS_DIR=../ecss TP_DIR=../tp
+	$(MAKE) -C ../ebox  EMACS="$(EMACS)" ECSS_DIR=../ecss
 	$(MAKE) -C ../etaf  EMACS="$(EMACS)"
 	$(MAKE) -C ../etaf-ui  EMACS="$(EMACS)"
 	$(MAKE) -C ../etaf-db  EMACS="$(EMACS)"
@@ -122,7 +120,7 @@ acceptance:
 .PHONY: api-check
 api-check:
 	$(EMACS) -Q --batch -L . $(API_PROVIDER_PATH) --eval '(setq load-prefer-newer t)' -l scripts/check-api.el
-API_PROVIDER_PATH = -L ../ecss -L ../tp -L ../ekp -L ../ebox -L ../etaf -L ../etaf-ui -L ../etaf-db -L ../ebox-playground
+API_PROVIDER_PATH = -L ../ecss -L ../ekp -L ../ebox -L ../etaf -L ../etaf-ui -L ../etaf-db -L ../ebox-playground
 
 .PHONY: test
 test: acceptance

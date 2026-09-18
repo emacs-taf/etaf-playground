@@ -61,7 +61,7 @@
 (defun etaf-playground-gui-scenarios--begin-viewport-change
     (context fullscreen &optional width height)
   "Record CONTEXT state before targeting FULLSCREEN, WIDTH, and HEIGHT."
-  (when (tp-transaction-active-p)
+  (when (ebox-transaction-active-p)
     (error "Cannot observe committed viewport geometry inside a TP transaction"))
   (let* ((buffer (etaf-gui-verifier-context-target-buffer context))
          (revision (ebox-surface-buffer-revision buffer))
@@ -99,7 +99,7 @@
   "Prove CONTEXT's window geometry and committed revision match BEFORE.
 This proves an unchanged action, not a new viewport publication."
   (let ((buffer (etaf-gui-verifier-context-target-buffer context)))
-    (and (not (tp-transaction-active-p))
+    (and (not (ebox-transaction-active-p))
          (buffer-live-p buffer)
          (ebox-surface-buffer-mounted-p buffer)
          (eq (selected-window) (plist-get before :window))
@@ -130,7 +130,7 @@ This proves an unchanged action, not a new viewport publication."
            context 'viewport-revision-before)))
     (and (if before
              (etaf-playground-gui-scenarios--viewport-unchanged-p context before)
-           (and (not (tp-transaction-active-p))
+           (and (not (ebox-transaction-active-p))
                 (buffer-live-p buffer)
                 (ebox-surface-buffer-mounted-p buffer)
                 (numberp actual)
@@ -143,7 +143,7 @@ This proves an unchanged action, not a new viewport publication."
                 (> revision previous)
                 (= revision (ebox-surface-buffer-revision buffer))
                 (plist-get report :runtime-published)
-                (not (plist-get report :tp-scope-fallback))))
+                (not (plist-get report :publication-scope-fallback))))
          (etaf-playground-gui-scenarios--frame-target-settled-p context)
          (etaf-playground-gui-scenarios--visible-window-content-p context))))
 
@@ -246,7 +246,7 @@ PREVIEW-P additionally requires the display settings owned by Playground."
         (etaf-playground-gui-scenarios--viewport-settled-p context))
        (etaf-gui-verifier-assert
         "resize-not-scope-fallback"
-        (not (plist-get report :tp-scope-fallback)))))))
+        (not (plist-get report :publication-scope-fallback)))))))
 
 (defun etaf-playground-gui-scenarios--resize-action (id width height)
   "Return resize action ID for pixel WIDTH and HEIGHT."

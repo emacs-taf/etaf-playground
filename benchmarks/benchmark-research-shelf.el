@@ -287,7 +287,7 @@ VERIFY and CLEANUP."
                (etaf-performance-stage-name stage)
                (etaf-performance-stage-status stage)))))
   (let ((categories (etaf-performance-evaluator--trace-categories records)))
-    (dolist (required '(runtime ebox tp sqlite))
+    (dolist (required '(runtime ebox ebox-publication sqlite))
       (unless (memq required categories)
         (error "Trace records lack required %s stage; present=%S"
                required categories)))
@@ -559,8 +559,8 @@ ETAF generation and preserve RUNTIME's mounted surface in BUFFER."
          (unless (and (= (plist-get report :target-viewport-width) target)
                       (eq (plist-get report :projection-kind) 'native-frame)
                       (plist-get report :runtime-published)
-                      (not (plist-get report :tp-full-root))
-                      (not (plist-get report :tp-scope-fallback)))
+                      (not (plist-get report :publication-full-root))
+                      (not (plist-get report :publication-scope-fallback)))
            (error "Viewport-resize: retained native publication failed"))
          (etaf-performance-evaluator--surface-invariant
           runtime buffer "viewport-resize"))))))
@@ -977,7 +977,7 @@ ETAF generation and preserve RUNTIME's mounted surface in BUFFER."
                  (reload-providers
                   (mapcar #'etaf-performance-stage-provider
                           (etaf-performance-operation-stages reload-operation))))
-            (unless (equal row-providers '(tp ebox etaf))
+            (unless (equal row-providers '(ebox-publication ebox etaf))
               (error "Trace row-selection providers are %S" row-providers))
             (unless (memq 'sqlite reload-providers)
               (error "Trace reload lacks SQLite attribution")))

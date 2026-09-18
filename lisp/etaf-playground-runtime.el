@@ -32,20 +32,9 @@
 (require 'subr-x)
 (require 'button)
 
-(define-error 'etaf-playground-dependency-error
-  "ETAF Playground requires TP 2.0.0 or newer with tp-transaction")
-
 (defun etaf-playground--ensure-runtime ()
-  "Load ETAF runtime dependencies or report an actionable TP mismatch."
-  (condition-case condition
-      (require 'etaf)
-    (file-missing
-     (if (member "tp-transaction" condition)
-         (signal 'etaf-playground-dependency-error
-                 (list :required-package '(tp "2.0.0")
-                       :missing-feature 'tp-transaction
-                       :original-condition condition))
-       (signal (car condition) (cdr condition))))))
+  "Load the application runtime through its package entry."
+  (require 'etaf))
 
 (defgroup etaf-playground nil
   "Authoring workspaces for ETAF applications."

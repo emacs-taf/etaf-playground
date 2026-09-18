@@ -84,7 +84,6 @@ run_scenario() {
     "$GENERIC_RUNNER" run "$SCENARIO_ADAPTER" "$SCENARIO_ENTRY" \
         "$@" \
         --run-dir "$SCENARIO_RUN_DIR" \
-        --load-path "$REPOS_DIR/tp" \
         --load-path "$REPOS_DIR/ecss" \
         --load-path "$REPOS_DIR/ebox" \
         --load-path "$REPOS_DIR/etaf" \

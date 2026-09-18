@@ -162,46 +162,24 @@ user's prior local additions cannot collide with the generated dataset."
 ;;; THEME / PALETTE CONTRACT
 ;;; ---------------------------------------------------------------------------
 
-(etaf-theme-define-palette etaf-research-shelf-ink
-  :fg ("#172033" . "#F4F7FF"))
-(etaf-theme-define-palette etaf-research-shelf-paper
-  :bg ("#F7F3EA" . "#111827"))
-(etaf-theme-define-palette etaf-research-shelf-panel
-  :bg ("#FFFDF8" . "#182235"))
-(etaf-theme-define-palette etaf-research-shelf-line
-  :border ("#D9D4C9" . "#34435A"))
-(etaf-theme-define-palette etaf-research-shelf-muted
-  :fg ("#6D7482" . "#AAB5C8"))
-(etaf-theme-define-palette etaf-research-shelf-accent
-  :fg ("#3657D6" . "#8EA7FF"))
-(etaf-theme-define-palette etaf-research-shelf-mint
-  :fg ("#3E9B8F" . "#76D6C3")
-  :bg ("#DCEBDD" . "#1B4721"))
-(etaf-theme-define-palette etaf-research-shelf-coral
-  :fg ("#D86B5D" . "#FF9A8E"))
-(etaf-theme-define-palette etaf-research-shelf-amber
-  :fg ("#C58A3A" . "#F0C36A"))
-(etaf-theme-define-palette etaf-research-shelf-soft
-  :bg ("#F1EEE7" . "#202C42"))
-
-(defconst etaf-research-shelf--palette-bindings
-  '(:ink (etaf-research-shelf-ink . :fg)
-    :paper (etaf-research-shelf-paper . :bg)
-    :panel (etaf-research-shelf-panel . :bg)
-    :line (etaf-research-shelf-line . :border)
-    :muted (etaf-research-shelf-muted . :fg)
-    :accent (etaf-research-shelf-accent . :fg)
-    :mint (etaf-research-shelf-mint . :fg)
-    :mint-bg (etaf-research-shelf-mint . :bg)
-    :coral (etaf-research-shelf-coral . :fg)
-    :amber (etaf-research-shelf-amber . :fg)
-    :soft (etaf-research-shelf-soft . :bg))
-  "Mapping from product roles to the ETAF semantic palette registry.")
+(defconst etaf-research-shelf--palette
+  '(:ink ("#172033" . "#F4F7FF")
+    :paper ("#F7F3EA" . "#111827")
+    :panel ("#FFFDF8" . "#182235")
+    :line ("#D9D4C9" . "#34435A")
+    :muted ("#6D7482" . "#AAB5C8")
+    :accent ("#3657D6" . "#8EA7FF")
+    :mint ("#3E9B8F" . "#76D6C3")
+    :mint-bg ("#DCEBDD" . "#1B4721")
+    :coral ("#D86B5D" . "#FF9A8E")
+    :amber ("#C58A3A" . "#F0C36A")
+    :soft ("#F1EEE7" . "#202C42"))
+  "Semantic product roles with explicit light and dark values.")
 
 (defun etaf-research-shelf--theme (model)
   "Return MODEL's current semantic product palette."
-  (etaf-theme-from-palettes
-   etaf-research-shelf--palette-bindings
+  (etaf-theme-resolve-palette
+   etaf-research-shelf--palette
    (if (etaf-value (plist-get model :dark)) 'dark 'light)))
 
 (defun etaf-research-shelf--theme-defaults (model)

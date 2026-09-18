@@ -16,7 +16,7 @@ class ProfileCommandTests(unittest.TestCase):
             output = Path(directory) / "profile.json"
             command = [os.environ.get("EMACS", "emacs"), "-Q", "--batch"]
             for path in (ROOT, ROOT / "benchmarks", ROOT / "examples",
-                         *(ROOT.parent / name for name in ("etaf", "etaf-ui", "ebox", "ecss", "tp"))):
+                         *(ROOT.parent / name for name in ("etaf", "etaf-ui", "ebox", "ecss"))):
                 command.extend(["-L", str(path)])
             command.extend(["--eval", "(setq load-prefer-newer t native-comp-jit-compilation nil)",
                             "-l", str(ROOT / "benchmarks/profile-task-workbench.el"),
@@ -41,7 +41,7 @@ class ProfileCommandTests(unittest.TestCase):
         self.assertTrue(all(row["status"] == "success" for row in report["operations"]))
         self.assertEqual(len(report["cpu_profiles"]), 1)
         providers = {row["provider"] for row in report["operations"][0]["stages"]}
-        self.assertTrue({"etaf", "ebox", "tp"}.issubset(providers))
+        self.assertTrue({"etaf", "ebox", "ebox-publication"}.issubset(providers))
         stacks = [stack for profile in report["cpu_profiles"] for stack in profile]
         self.assertEqual(report["max_stack_depth"], 256)
         self.assertEqual(report["depth_limit_samples"], sum(
@@ -52,7 +52,7 @@ class ProfileCommandTests(unittest.TestCase):
         nearest = {}
         for stack in stacks:
             caller = next((name for name in stack["frames"]
-                           if re.match(r"^(ebox|ecss|tp|etaf|wb)-", name)), None)
+                           if re.match(r"^(ebox|ecss|etaf|wb)-", name)), None)
             if caller:
                 nearest[caller] = nearest.get(caller, 0) + stack["samples"]
         self.assertEqual({row["function"]: row["samples"]

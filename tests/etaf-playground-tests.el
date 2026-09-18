@@ -23,13 +23,13 @@
       (when (buffer-live-p buffer) (kill-buffer buffer)))))
 
 (ert-deftest etaf-playground-mounts-static-rule-companion-in-fresh-emacs ()
-  "The shipped scoped app mounts, filters and paginates in a fresh process."
+  "The shipped app mounts, filters, paginates and switches themes in a fresh process."
   (let* ((workspace (file-name-directory
                      (directory-file-name
                       (file-name-directory (locate-library "etaf-playground")))))
          (paths (apply #'append
                        (mapcar (lambda (name) (list "-L" (expand-file-name name workspace)))
-                               '("ecss" "tp" "ebox" "etaf" "etaf-ui" "etaf-db"
+                               '("ecss" "ebox" "etaf" "etaf-ui" "etaf-db"
                                  "etaf-playground"))))
          (log (generate-new-buffer " *playground-rule-check*")))
     (unwind-protect
@@ -57,7 +57,9 @@
                                             '((research-shelf-filter-reading . "Showing Reading")
                                               (research-shelf-filter-all . "Showing All")
                                               (research-shelf-page-next . "Page 2 / 22")
-                                              (research-shelf-page-previous . "Page 1 / 22")))
+                                              (research-shelf-page-previous . "Page 1 / 22")
+                                              (research-shelf-theme-toggle . "Dark theme")
+                                              (research-shelf-theme-toggle . "Light theme")))
                                      (let ((generation (etaf-runtime-generation runtime)))
                                        (etaf-dispatch-event runtime (car step) 'press)
                                        (unless (and (> (etaf-runtime-generation runtime) generation)
