@@ -62,7 +62,7 @@
     (context fullscreen &optional width height)
   "Record CONTEXT state before targeting FULLSCREEN, WIDTH, and HEIGHT."
   (when (ebox-transaction-active-p)
-    (error "Cannot observe committed viewport geometry inside a TP transaction"))
+    (error "Cannot observe committed viewport geometry during publication"))
   (let* ((buffer (etaf-gui-verifier-context-target-buffer context))
          (revision (ebox-surface-buffer-revision buffer))
          (unchanged (and (eq (frame-parameter nil 'fullscreen) fullscreen)
@@ -122,7 +122,7 @@ This proves an unchanged action, not a new viewport publication."
          (published (or (plist-get report :target-viewport-width)
                         (plist-get report :viewport-width)))
          (published-height (plist-get report :target-viewport-height))
-         ;; The public buffer revision is TP's committed surface revision.
+         ;; The public buffer revision is Ebox's committed surface revision.
          ;; Ebox's runtime revision is a different, possibly lagging counter.
          (revision (plist-get report :surface-revision))
          (previous
