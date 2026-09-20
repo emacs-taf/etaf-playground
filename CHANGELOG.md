@@ -5,9 +5,8 @@
 ### Changed
 
 - Retained publication is now owned by Ebox. Update Ebox and ETAF together;
-  the integration uses SPI v3 and `ebox-publication/v1`. TP is no longer a
-  package dependency. Publication reports use `:publication-*` fields and the
-  `ebox-publication` provider; consumers must migrate the former TP fields.
+  the integration uses SPI v3 and `ebox-publication/v1`. Publication reports
+  use `:publication-*` fields and the `ebox-publication` provider.
 
 
 ### Added
