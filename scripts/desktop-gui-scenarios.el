@@ -344,7 +344,7 @@ this helper intentionally retains the physical pixel event."
         context 'instances-before (length (etaf-desktop-instances
                                            etaf-desktop-gui--desktop)))
        (etaf-desktop-gui--click-ref
-        context (etaf-desktop-gui--ref-by-label context "Apps"))
+        context (etaf-desktop-gui--ref-by-label context "Applications"))
        (redisplay t)
        (etaf-desktop-gui--click-ref
         context (etaf-desktop-gui--ref-by-label context "Files")))
