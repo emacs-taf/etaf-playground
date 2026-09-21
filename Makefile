@@ -11,7 +11,7 @@ EXAMPLE_ELC := $(EXAMPLES:.el=.elc)
 TEST_FILES := $(wildcard tests/*-tests.el)
 
 .PHONY: all compile examples-read perf perf-prepare perf-evaluator perf-repeatability perf-regressions \
-	perf-check gui-doctor gui-research gui-flex gui-grid gui-all \
+	perf-check gui-doctor gui-research gui-flex gui-grid gui-all gui-desktop \
 	check checkdoc load clean
 
 all: check
@@ -31,7 +31,7 @@ compile:
 		--eval "(setq load-prefer-newer t byte-compile-error-on-warn t byte-compile-warnings '(not obsolete))" \
 		--eval '(load-file "etaf-playground.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(ENTRY_EXAMPLES),"$(file)")))) (load-file file))' \
-		--eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(EXAMPLES),"$(file)") "lisp/etaf-playground-runtime.el" "etaf-playground.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el" "benchmarks/benchmark-task-workbench.el" "benchmarks/profile-task-workbench.el" $(foreach file,$(TEST_FILES),"$(file)")))) (kill-emacs 1))'
+		--eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(EXAMPLES),"$(file)") "lisp/etaf-playground-runtime.el" "etaf-playground.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el" "scripts/desktop-gui-scenarios.el" "benchmarks/benchmark-task-workbench.el" "benchmarks/profile-task-workbench.el" $(foreach file,$(TEST_FILES),"$(file)")))) (kill-emacs 1))'
 
 examples-read: compile
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
@@ -96,12 +96,15 @@ gui-grid:
 gui-all:
 	scripts/run-gui-verification.sh all
 
+gui-desktop:
+	scripts/run-desktop-gui-verification.sh run
+
 load: compile
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(require (quote etaf-playground))' \
 		--eval '(princ "etaf-playground load OK\\n")'
 
 checkdoc:
-	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "benchmarks/benchmark-research-shelf.el" "benchmarks/benchmark-task-workbench.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
+	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "benchmarks/benchmark-research-shelf.el" "benchmarks/benchmark-task-workbench.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el" "scripts/desktop-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
 
 check: structure-check compile acceptance api-check tool-check
 

@@ -102,6 +102,22 @@ contains two text windows and demonstrates the application-owned title drag,
 resize, z-order, minimize and restore policies. Playground only supplies source
 discovery and lifecycle; window state and operations remain in `etaf-desktop`.
 
+For the real GUI acceptance of the Desktop host, use the existing graphical
+Emacs server; the command never starts or stops another Emacs:
+
+```sh
+make gui-desktop
+scripts/run-desktop-gui-verification.sh review /tmp/etaf-desktop-gui.XXXXXX
+```
+
+Pass `--run-dir DIRECTORY` to `run-desktop-gui-verification.sh run` when the
+evidence location must be stable. The adapter mounts a fresh desktop, sends
+rendered title-bar and resize-handle mouse events, switches workspaces, checks
+maximize/minimize/restore and app-error isolation, and exercises the tiling
+layout contract. It writes `manifest.jsonl`, `result.json`, and one window-only
+PNG per checkpoint. A passed result certifies functional assertions; inspect
+every PNG in the run directory before claiming visual acceptance.
+
 ## Repeatable Emacs 31.1 GUI verification
 
 Use the user's running graphical Emacs server for current GUI acceptance.

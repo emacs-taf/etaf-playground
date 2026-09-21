@@ -90,6 +90,20 @@ source，会在下一次 mount 前重新加载完整 consumer。
 z-order、最小化和恢复策略。Playground 只负责 source 发现与生命周期，窗口状态和操作
 仍由 `etaf-desktop` 提供。
 
+桌面宿主的实际 GUI 验收使用已经运行的图形 Emacs server；命令不会启动或关闭另一个
+Emacs：
+
+```sh
+make gui-desktop
+scripts/run-desktop-gui-verification.sh review /tmp/etaf-desktop-gui.XXXXXX
+```
+
+需要固定证据目录时，给 `run-desktop-gui-verification.sh run` 传入
+`--run-dir DIRECTORY`。适配器会挂载全新的桌面，发送来自实际渲染标题栏和调整大小
+把手的鼠标事件，切换工作区，检查最大化／最小化／恢复和应用错误隔离，并执行平铺
+布局契约。运行目录中会写入 `manifest.jsonl`、`result.json` 以及每个检查点的窗口级
+PNG。通过结果只证明功能断言；声明视觉验收前必须逐张检查 PNG。
+
 ## 可重复执行的 Emacs 31.1 GUI 实测
 
 当前 GUI 验收使用用户已经运行的图形 Emacs server：通过 `emacsclient`
