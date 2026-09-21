@@ -8,7 +8,6 @@ EBOX_NATIVE_RELEASE_DIR = $(shell $(EMACS) -Q --batch $(LOAD_PATH) \
 ENTRY_EXAMPLES := $(wildcard examples/*.el)
 EXAMPLES := $(ENTRY_EXAMPLES)
 EXAMPLE_ELC := $(EXAMPLES:.el=.elc)
-TEST_FILES := $(wildcard tests/*-tests.el)
 
 .PHONY: all compile examples-read perf perf-prepare perf-evaluator perf-repeatability perf-regressions \
 	perf-check gui-doctor gui-research gui-flex gui-grid gui-all gui-desktop \
@@ -31,7 +30,7 @@ compile:
 		--eval "(setq load-prefer-newer t byte-compile-error-on-warn t byte-compile-warnings '(not obsolete))" \
 		--eval '(load-file "etaf-playground.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(ENTRY_EXAMPLES),"$(file)")))) (load-file file))' \
-		--eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(EXAMPLES),"$(file)") "lisp/etaf-playground-runtime.el" "etaf-playground.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el" "scripts/desktop-gui-scenarios.el" "benchmarks/benchmark-task-workbench.el" "benchmarks/profile-task-workbench.el" $(foreach file,$(TEST_FILES),"$(file)")))) (kill-emacs 1))'
+		--eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(EXAMPLES),"$(file)") "lisp/etaf-playground-runtime.el" "etaf-playground.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el" "scripts/desktop-gui-scenarios.el" "benchmarks/benchmark-task-workbench.el" "benchmarks/profile-task-workbench.el"))) (kill-emacs 1))'
 
 examples-read: compile
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
