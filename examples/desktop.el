@@ -38,7 +38,6 @@
     (etaf-playground-desktop--register-apps)
     (setq etaf-playground-desktop--controller
           (etaf-desktop-create :name "*ETAF Playground Desktop*"
-                               :canvas-width 900 :canvas-height 20
                                :workspaces '(main dev)))
     (etaf-desktop-launch etaf-playground-desktop--controller
                          'etaf-playground-notes :instance-id "playground-notes-1"
