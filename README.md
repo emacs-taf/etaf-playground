@@ -22,8 +22,9 @@ into the right-hand preview. Saving a source file also refreshes by default.
 `etaf-playground-register-example` is available when a companion needs a
 non-conventional root or feature name.
 
-ETAF Playground 0.2.2 declares ECSS 0.1.0, ETAF 0.2.1, ETAF UI 0.1.0, and ETAF DB
-0.1.0 (currently using its SQLite backend) so the bundled Research Shelf companion has a complete install closure.
+ETAF Playground 0.2.2 declares ECSS 0.1.0, ETAF 0.2.1, ETAF UI 0.1.0, ETAF DB
+0.1.0, and ETAF Desktop 0.1.0 (currently using its SQLite backend only for
+Research Shelf) so the bundled consumers have a complete install closure.
 
 Preview placement uses the standard Emacs `display-buffer` action stored in
 `etaf-playground-display-action`.  The default is a right side window using
@@ -92,6 +93,14 @@ Declining confirmation preserves the task and returns focus to the menu entry.
 A persistent component error boundary remains an ecosystem requirement.
 Workbench exposes `wb-task-N` row Host references through DataGrid's `:row-ref`
 input, where N is the task ID. Interaction drivers can address tasks without inspecting UI internals.
+
+## ETAF Desktop consumer
+
+Evaluate `(etaf-playground-open "desktop")` to mount the independent
+`etaf-desktop` application through the generic Playground workspace. The example
+contains two text windows and demonstrates the application-owned title drag,
+resize, z-order, minimize and restore policies. Playground only supplies source
+discovery and lifecycle; window state and operations remain in `etaf-desktop`.
 
 ## Repeatable Emacs 31.1 GUI verification
 

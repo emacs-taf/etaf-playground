@@ -4,7 +4,7 @@
 
 ;; Author: ETAF contributors
 ;; Version: 0.2.2
-;; Package-Requires: ((emacs "29.1") (ecss "0.1.0") (etaf "0.2.1") (etaf-db "0.1.0") (etaf-ui "0.1.0"))
+;; Package-Requires: ((emacs "29.1") (ecss "0.1.0") (etaf "0.2.1") (etaf-db "0.1.0") (etaf-ui "0.1.0") (etaf-desktop "0.1.0"))
 ;; Keywords: tools, convenience, ui
 
 ;;; Commentary:

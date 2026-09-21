@@ -18,8 +18,9 @@ ETAF Playground 是通用的应用构建工作区：左侧编辑同一个应用�
 也会刷新。若 root 或 feature 不遵循命名约定，可在 companion 中调用
 `etaf-playground-register-example` 注册覆盖。
 
-ETAF Playground 0.2.2 声明 ECSS 0.1.0、ETAF 0.2.1、ETAF UI 0.1.0 与 ETAF DB
-0.1.0（目前使用其中的 SQLite 后端），保证内置 Research Shelf companion 的安装依赖闭包完整。
+ETAF Playground 0.2.2 声明 ECSS 0.1.0、ETAF 0.2.1、ETAF UI 0.1.0、ETAF DB
+0.1.0 与 ETAF Desktop 0.1.0（SQLite 只由 Research Shelf 使用），保证内置
+consumer 的安装依赖闭包完整。
 
 预览位置使用标准 Emacs `display-buffer` action，由
 `etaf-playground-display-action` 配置。默认在右侧使用一半 frame：
@@ -81,6 +82,13 @@ source，会在下一次 mount 前重新加载完整 consumer。
 焦点回到菜单入口。持续组件错误边界仍属于待完成的生态能力。
 工作台通过 DataGrid 的 `:row-ref` 输入，暴露 `wb-task-N` 行宿主引用（N 为任务 ID），
 交互驱动可直接定位任务，无需读取 UI 内部实现。
+
+## ETAF Desktop consumer
+
+执行 `(etaf-playground-open "desktop")`，通过通用 Playground 工作区挂载独立的
+`etaf-desktop` 应用。该示例包含两个文本窗口，展示应用层拥有的标题栏拖动、调整大小、
+z-order、最小化和恢复策略。Playground 只负责 source 发现与生命周期，窗口状态和操作
+仍由 `etaf-desktop` 提供。
 
 ## 可重复执行的 Emacs 31.1 GUI 实测
 
