@@ -385,11 +385,26 @@ this helper intentionally retains the physical pixel event."
                      :width)
           (plist-get (etaf-gui-verifier-context-get context 'resize-before) :width))))
     (etaf-desktop-gui--action
-     "maximize-minimize-restore"
+     "maximize-notes"
      (lambda (context)
-       (etaf-desktop-gui--click-ref context (etaf-desktop-gui--ref-by-label context "Maximize"))
-       (etaf-desktop-gui--click-ref context (etaf-desktop-gui--ref-by-label context "Minimize"))
-       (etaf-desktop-gui--click-ref context (etaf-desktop-gui--ref-by-label context "Notes")))
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-label context "Maximize")))
+     (lambda (_context)
+       (plist-get (etaf-desktop-gui--window-state etaf-desktop-gui--notes-window)
+                  :maximized)))
+    (etaf-desktop-gui--action
+     "minimize-notes"
+     (lambda (context)
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-label context "Minimize")))
+     (lambda (_context)
+       (plist-get (etaf-desktop-gui--window-state etaf-desktop-gui--notes-window)
+                  :minimized)))
+    (etaf-desktop-gui--action
+     "restore-notes-from-taskbar"
+     (lambda (context)
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-label context "Notes")))
      (lambda (_context)
        (let ((state (etaf-desktop-gui--window-state etaf-desktop-gui--notes-window)))
          (and (plist-get state :visible)
