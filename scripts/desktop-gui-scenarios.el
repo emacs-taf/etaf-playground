@@ -398,6 +398,24 @@ demo canvas is rendered in the upper-left corner instead of following its host.
             (string-match-p "Files" (buffer-string))
             (etaf-gui-verifier-context-put context 'expects-mounted t))))
     (etaf-desktop-gui--action
+     "settings-modal-overlays-desktop"
+     (lambda (context)
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-symbol
+                 context 'etaf-workspace-settings)))
+     (lambda (_context)
+       (and (etaf-desktop-settings-open-p etaf-desktop-gui--desktop)
+            (string-match-p "Desktop Settings" (buffer-string))
+            (string-match-p "Notes\\|Files" (buffer-string)))))
+    (etaf-desktop-gui--action
+     "settings-modal-closes-and-restores-surface"
+     (lambda (context)
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-label context "Done")))
+     (lambda (_context)
+       (and (not (etaf-desktop-settings-open-p etaf-desktop-gui--desktop))
+            (string-match-p "Notes\\|Files" (buffer-string)))))
+    (etaf-desktop-gui--action
      "launcher-focuses-running-files"
      (lambda (context)
        (etaf-gui-verifier-context-put
@@ -450,6 +468,71 @@ demo canvas is rendered in the upper-left corner instead of following its host.
        (> (plist-get (etaf-desktop-gui--window-state etaf-desktop-gui--notes-window)
                      :width)
           (plist-get (etaf-gui-verifier-context-get context 'resize-before) :width))))
+    (etaf-desktop-gui--action
+     "resize-notes-all-edges-and-corners"
+     (lambda (context)
+       (let ((id etaf-desktop-gui--notes-window))
+         (cl-labels
+             ((drag-edge
+               (edge dx dy check)
+               (let* ((before (etaf-desktop-gui--window-state id))
+                      (ref (etaf-desktop-gui--ref-by-symbol
+                            context
+                            (intern (format "etaf-desktop-resize-%s-%s"
+                                            id edge)))))
+                 (etaf-desktop-gui--drag-ref context ref dx dy)
+                 (redisplay t)
+                 (let ((after (etaf-desktop-gui--window-state id)))
+                   (unless (funcall check before after)
+                     (error "Desktop %s resize did not update geometry: %S -> %S"
+                            edge before after))))))
+           (drag-edge 'left 12 0
+                      (lambda (before after)
+                        (and (> (plist-get after :x) (plist-get before :x))
+                             (< (plist-get after :width)
+                                (plist-get before :width)))))
+           (drag-edge 'right 12 0
+                      (lambda (before after)
+                        (> (plist-get after :width)
+                           (plist-get before :width))))
+           (drag-edge 'top 0 (* 2 (max 1 (frame-char-height)))
+                      (lambda (before after)
+                        (and (> (plist-get after :y) (plist-get before :y))
+                             (< (plist-get after :height)
+                                (plist-get before :height)))))
+           (drag-edge 'bottom 0 (* 2 (max 1 (frame-char-height)))
+                      (lambda (before after)
+                        (> (plist-get after :height)
+                           (plist-get before :height))))
+           (drag-edge 'top-left 8 (max 1 (frame-char-height))
+                      (lambda (before after)
+                        (and (> (plist-get after :x) (plist-get before :x))
+                             (> (plist-get after :y) (plist-get before :y))
+                             (< (plist-get after :width)
+                                (plist-get before :width))
+                             (< (plist-get after :height)
+                                (plist-get before :height)))))
+           (drag-edge 'top-right 8 (max 1 (frame-char-height))
+                      (lambda (before after)
+                        (and (> (plist-get after :y) (plist-get before :y))
+                             (> (plist-get after :width)
+                                (plist-get before :width))
+                             (< (plist-get after :height)
+                                (plist-get before :height)))))
+           (drag-edge 'bottom-left 8 (max 1 (frame-char-height))
+                      (lambda (before after)
+                        (and (> (plist-get after :x) (plist-get before :x))
+                             (< (plist-get after :width)
+                                (plist-get before :width))
+                             (> (plist-get after :height)
+                                (plist-get before :height)))))
+           (drag-edge 'bottom-right 8 (max 1 (frame-char-height))
+                      (lambda (before after)
+                        (and (> (plist-get after :width)
+                                (plist-get before :width))
+                             (> (plist-get after :height)
+                                (plist-get before :height))))))))
+     (lambda (_context) t))
     (etaf-desktop-gui--action
      "maximize-notes"
      (lambda (context)
