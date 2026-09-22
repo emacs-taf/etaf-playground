@@ -25,6 +25,8 @@
 (require 'etaf-ui)
 (require 'etaf-desktop-layout nil t)
 
+(declare-function ebox-viewport-window-width "ebox-viewport" (window))
+
 (defconst etaf-desktop-gui--buffer "*ETAF Desktop GUI Acceptance*"
   "Dedicated target buffer used by the Desktop GUI scenario.")
 
@@ -103,7 +105,6 @@
   (etaf-desktop-gui--register-apps)
   (setq etaf-desktop-gui--desktop
         (etaf-desktop-create :name etaf-desktop-gui--buffer
-                             :canvas-width 900 :canvas-height 20
                              :workspaces '(main dev)))
   (let* ((notes (etaf-desktop-launch etaf-desktop-gui--desktop
                                      etaf-desktop-gui--notes-app
@@ -288,6 +289,22 @@ that is rendered inside that window's own visible range."
          (string-match-p "Notes\\|Files\\|Chat"
                          (buffer-substring-no-properties (point-min) (point-max))))))
 
+(defun etaf-desktop-gui--fills-window-p ()
+  "Return non-nil when the default canvas owns the visible target window.
+
+The controller reports the safe Ebox viewport width and the number of canvas
+rows between the one-row workspace bar and one-row taskbar.  Comparing those
+public dimensions with the mounted window catches a regression where a fixed
+demo canvas is rendered in the upper-left corner instead of following its host.
+"
+  (let* ((window (selected-window))
+         (state (etaf-desktop-state etaf-desktop-gui--desktop))
+         (width (ebox-viewport-window-width window))
+         (height (window-body-height window)))
+    (and (numberp width)
+         (= (plist-get state :canvas-width) width)
+         (= (+ 2 (plist-get state :canvas-height)) height))))
+
 (defun etaf-desktop-gui--invariants (context)
   "Return generic Desktop invariants for each verifier checkpoint." 
   (let ((mounted (etaf-gui-verifier-context-get context 'expects-mounted)))
@@ -376,6 +393,7 @@ that is rendered inside that window's own visible range."
          (etaf-gui-verifier-context-select-buffer context buffer)))
      (lambda (context)
        (and (etaf-desktop-gui--mounted-p context)
+            (etaf-desktop-gui--fills-window-p)
             (string-match-p "Notes" (buffer-string))
             (string-match-p "Files" (buffer-string))
             (etaf-gui-verifier-context-put context 'expects-mounted t))))
