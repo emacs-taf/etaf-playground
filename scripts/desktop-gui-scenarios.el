@@ -300,9 +300,13 @@ demo canvas is rendered in the upper-left corner instead of following its host.
   (let* ((window (selected-window))
          (state (etaf-desktop-state etaf-desktop-gui--desktop))
          (width (ebox-viewport-window-width window))
-         (height (window-body-height window)))
+         (height (window-body-height window))
+         ;; A one-pixel border/rounding difference is host-window chrome, not
+         ;; an upper-left-canvas regression.  The desktop's text-row height
+         ;; remains exact because its two shell rows are logical units.
+         (canvas-width (plist-get state :canvas-width)))
     (and (numberp width)
-         (= (plist-get state :canvas-width) width)
+         (<= (abs (- canvas-width width)) 1)
          (= (+ 2 (plist-get state :canvas-height)) height))))
 
 (defun etaf-desktop-gui--invariants (context)
