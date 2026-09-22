@@ -152,6 +152,17 @@ Signal an error mentioning DESCRIPTION when no displayed target exists."
                            (etaf-desktop-gui--props-entries context))))
     (or (car entry) (error "Missing rendered Desktop target: %s" description))))
 
+(defun etaf-desktop-gui--ref-by-symbol (context symbol)
+  "Return the rendered Host reference named SYMBOL.
+
+Labels are ambiguous across the shell: a launcher entry and a taskbar entry
+can share an application title, so the launcher action addresses the
+application's own launcher reference instead of the first matching label."
+  (let ((entry (cl-find symbol (etaf-desktop-gui--props-entries context)
+                        :key #'car :test #'equal)))
+    (or (car entry)
+        (error "Missing rendered Desktop target: %s" symbol))))
+
 (defun etaf-desktop-gui--ref-by-label (context label)
   "Find a rendered Host with accessible LABEL." 
   (etaf-desktop-gui--find-ref
@@ -215,6 +226,29 @@ this helper intentionally retains the physical pixel event."
   "Return public state of fixture window ID." 
   (etaf-desktop-window-state etaf-desktop-gui--desktop id))
 
+(defun etaf-desktop-gui--ref-by-label-within (context label window-ref)
+  "Find the rendered Host labelled LABEL inside WINDOW-REF's bounds.
+
+Shell labels repeat across windows, so a window action addresses the button
+that is rendered inside that window's own visible range."
+  (let* ((runtime (etaf-desktop-gui--runtime context))
+         (buffer (etaf-runtime-buffer runtime))
+         (outer (ignore-errors (ebox-host-ref-bounds buffer window-ref))))
+    (unless outer
+      (error "Desktop window is not rendered: %s" window-ref))
+    (or (cl-loop for (ref . props) in (etaf-desktop-gui--props-entries context)
+                 when (and (or (equal label (plist-get props :aria-label))
+                               (equal label (plist-get props :label))
+                               (equal label (plist-get props :text)))
+                           (let ((bounds (ignore-errors
+                                          (ebox-host-ref-bounds buffer ref))))
+                             (and bounds
+                                  (<= (car outer) (car bounds))
+                                  (<= (cdr bounds) (cdr outer)))))
+                 return ref)
+        (error "Desktop window %s has no visible %s control"
+               window-ref label))))
+
 (defun etaf-desktop-gui--title-ref (context title)
   "Find the title-bar Host for TITLE using its rendered label text." 
   (let ((runtime (etaf-desktop-gui--runtime context)))
@@ -230,11 +264,19 @@ this helper intentionally retains the physical pixel event."
                                (- (point) (length title))))))
           (unless position (error "Rendered Desktop title is missing: %s" title))
           ;; A title click must still use a public Host position.  Resolve the
-          ;; nearest visible Host at that point rather than a private node.
-          (or (cl-loop for (ref . _props) in
-                       (etaf-runtime-host-props-entries runtime)
-                       when (equal position (etaf-host-ref-position runtime ref))
-                       return ref)
+          ;; smallest visible Host covering that point rather than a private
+          ;; node; the title text itself owns no reference.
+          (or (car (car (sort
+                         (cl-loop for (ref . _props) in
+                                  (etaf-runtime-host-props-entries runtime)
+                                  for bounds = (ignore-errors
+                                                (ebox-host-ref-bounds
+                                                 (etaf-runtime-buffer runtime) ref))
+                                  when (and bounds
+                                            (<= (car bounds) position)
+                                            (< position (cdr bounds)))
+                                  collect (cons ref (- (cdr bounds) (car bounds))))
+                         (lambda (a b) (< (cdr a) (cdr b))))))
               (error "Rendered Desktop title has no public Host: %s" title))))))
 
 (defun etaf-desktop-gui--mounted-p (context)
@@ -338,7 +380,7 @@ this helper intentionally retains the physical pixel event."
             (string-match-p "Files" (buffer-string))
             (etaf-gui-verifier-context-put context 'expects-mounted t))))
     (etaf-desktop-gui--action
-     "launcher-open-and-launch-files"
+     "launcher-focuses-running-files"
      (lambda (context)
        (etaf-gui-verifier-context-put
         context 'instances-before (length (etaf-desktop-instances
@@ -347,10 +389,14 @@ this helper intentionally retains the physical pixel event."
         context (etaf-desktop-gui--ref-by-label context "Applications"))
        (redisplay t)
        (etaf-desktop-gui--click-ref
-        context (etaf-desktop-gui--ref-by-label context "Files")))
+        context (etaf-desktop-gui--ref-by-symbol
+                 context (intern (format "etaf-desktop-launcher-%s"
+                                         etaf-desktop-gui--files-app)))))
      (lambda (context)
-       (> (length (etaf-desktop-instances etaf-desktop-gui--desktop))
-          (etaf-gui-verifier-context-get context 'instances-before))))
+       (and (= (length (etaf-desktop-instances etaf-desktop-gui--desktop))
+               (etaf-gui-verifier-context-get context 'instances-before))
+            (equal (etaf-desktop-active-window etaf-desktop-gui--desktop)
+                   etaf-desktop-gui--files-window))))
     (etaf-desktop-gui--action
      "focus-files-by-title-click"
      (lambda (context)
@@ -378,8 +424,10 @@ this helper intentionally retains the physical pixel event."
        (let ((before (etaf-desktop-gui--window-state etaf-desktop-gui--notes-window)))
          (etaf-gui-verifier-context-put context 'resize-before before)
          (etaf-desktop-gui--drag-ref
-          context (etaf-desktop-gui--ref-by-class
-                   context "etaf-window-resize-handle right") 48 0)))
+          context (etaf-desktop-gui--ref-by-symbol
+                   context (intern (format "etaf-desktop-resize-%s-right"
+                                           etaf-desktop-gui--notes-window)))
+          48 0)))
      (lambda (context)
        (> (plist-get (etaf-desktop-gui--window-state etaf-desktop-gui--notes-window)
                      :width)
@@ -388,7 +436,10 @@ this helper intentionally retains the physical pixel event."
      "maximize-notes"
      (lambda (context)
        (etaf-desktop-gui--click-ref
-        context (etaf-desktop-gui--ref-by-label context "Maximize")))
+        context (etaf-desktop-gui--ref-by-label-within
+                 context "Maximize"
+                 (intern (format "etaf-desktop-window-%s"
+                                 etaf-desktop-gui--notes-window)))))
      (lambda (_context)
        (plist-get (etaf-desktop-gui--window-state etaf-desktop-gui--notes-window)
                   :maximized)))
@@ -396,7 +447,10 @@ this helper intentionally retains the physical pixel event."
      "minimize-notes"
      (lambda (context)
        (etaf-desktop-gui--click-ref
-        context (etaf-desktop-gui--ref-by-label context "Minimize")))
+        context (etaf-desktop-gui--ref-by-label-within
+                 context "Minimize"
+                 (intern (format "etaf-desktop-window-%s"
+                                 etaf-desktop-gui--notes-window)))))
      (lambda (_context)
        (plist-get (etaf-desktop-gui--window-state etaf-desktop-gui--notes-window)
                   :minimized)))
@@ -406,10 +460,12 @@ this helper intentionally retains the physical pixel event."
        (etaf-desktop-gui--click-ref
         context (etaf-desktop-gui--ref-by-label context "Notes")))
      (lambda (_context)
+       ;; A minimized maximized window returns maximized, exactly as the
+       ;; taskbar restore contract promises.
        (let ((state (etaf-desktop-gui--window-state etaf-desktop-gui--notes-window)))
          (and (plist-get state :visible)
               (not (plist-get state :minimized))
-              (not (plist-get state :maximized))))))
+              (plist-get state :maximized)))))
     (etaf-desktop-gui--action
      "workspace-switch"
      (lambda (context)

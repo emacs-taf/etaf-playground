@@ -86,6 +86,9 @@ frame."
 ;; keeps byte compilation from treating the protected binding as lexical.
 (defvar read-eval)
 
+(declare-function ebox-viewport-window-width "ebox-viewport" (window))
+(defvar ebox-viewport-width)
+(defvar ebox-viewport-height)
 (declare-function ebox-call-with-render-burst
                   "ebox-buffer-backend" (function &rest arguments))
 (declare-function etaf-action-redefine-run "etaf-actions" (function))
@@ -485,10 +488,19 @@ SESSION supplies authoritative source buffers.  MOUNT-OPTIONS is forwarded to
     ;; Root factories and lifecycle callbacks are application code.  Run them
     ;; with the preview selected so a consumer using `face-remap' or another
     ;; buffer-local display API cannot accidentally style the source editor
-    ;; which invoked `etaf-playground-refresh'.
-    (with-current-buffer buffer
-      (etaf-mount buffer (etaf-playground-read-pair name session)
-                  mount-options))
+    ;; which invoked `etaf-playground-refresh'.  A preview that is already
+    ;; displayed renders against its own window viewport, so a viewport-sized
+    ;; consumer (for example the desktop canvas) fills that window rather
+    ;; than whichever window is selected at the time.
+    (let* ((window (or (get-buffer-window buffer)
+                       (and (etaf-playground-session-p session)
+                            (window-live-p (etaf-playground-session-preview-window session))
+                            (etaf-playground-session-preview-window session))))
+           (ebox-viewport-width (and window (ebox-viewport-window-width window)))
+           (ebox-viewport-height (and window (window-body-height window))))
+      (with-current-buffer buffer
+        (etaf-mount buffer (etaf-playground-read-pair name session)
+                    mount-options)))
     (with-current-buffer buffer
       (setq-local etaf-playground-current-example name)
       ;; Publication may restore renderer-owned buffer settings.  The generated

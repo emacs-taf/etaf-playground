@@ -19,6 +19,15 @@
 
 ### Fixed
 
+- The preview mounts against its own window: a viewport-sized consumer (the
+  desktop canvas) now fills the preview window instead of measuring whichever
+  window was selected.
+
+- The desktop GUI adapter addresses launcher entries, resize cells and window
+  controls by their own references and bounds, so repeated labels in the shell
+  cannot send an action to another window.  Taskbar restore also asserts the
+  restored presentation a minimized maximized window actually keeps.
+
 - Playground companions are now tracked by the source file the framework
   evaluated. A package feature that happens to share a companion's name (for
   example the `etaf-desktop` provider) no longer suppresses the companion's
