@@ -64,9 +64,7 @@
   (let ((desktop (etaf-playground-desktop--ensure)))
     (etaf-view (etaf-playground-desktop--root :desktop desktop))))
 
-(etaf-playground-register-example
- "desktop" :root #'etaf-playground-desktop-root
- :feature 'etaf-playground-desktop)
+(etaf-playground-register-example "desktop" :root #'etaf-playground-desktop-root)
 
 (provide 'etaf-playground-desktop)
 ;;; desktop.el ends here

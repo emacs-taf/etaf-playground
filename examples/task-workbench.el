@@ -531,7 +531,7 @@ UNCANCELLABLE models work whose completion cannot be prevented."
   "Create the Workbench View from inert STATIC-FORM props."
   (etaf-node (car static-form) (cdr static-form) nil))
 
-(etaf-playground-register-example "task-workbench" :root #'wb-root :feature 'task-workbench)
+(etaf-playground-register-example "task-workbench" :root #'wb-root)
 
 (defun wb-open (&optional buffer-name)
   "Open an independent workbench in BUFFER-NAME or the default buffer."

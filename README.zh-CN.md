@@ -15,7 +15,7 @@ ETAF Playground 是通用的应用构建工作区：左侧编辑同一个应用�
 `ETAF`、`EL`、`ECSS` 是可点击按钮；`C-c 1/2/3`（也支持
 `C-c C-1/C-2/C-3`）分别切换 `.etaf`、`.el`、`.ecss`。在 `.etaf`、`.el` 或
 `.ecss` 窗口按 `C-c C-c` 会把当前 source 渲染到右侧预览；默认保存 source
-也会刷新。若 root 或 feature 不遵循命名约定，可在 companion 中调用
+也会刷新。若 root 不遵循命名约定，可在 companion 中调用
 `etaf-playground-register-example` 注册覆盖。
 
 ETAF Playground 0.2.2 声明 ECSS 0.1.0、ETAF 0.2.1、ETAF UI 0.1.0、ETAF DB

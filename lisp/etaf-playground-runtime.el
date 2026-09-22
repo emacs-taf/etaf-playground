@@ -21,7 +21,7 @@
 ;;   examples/NAME.ecss   optional `((SELECTOR PROPERTY VALUE ...))'
 ;;
 ;; The default root convention is `etaf-NAME-root'.  A companion may call
-;; `etaf-playground-register-example' to provide a different root or feature.
+;; `etaf-playground-register-example' to provide a different root.
 ;; Root factories receive the validated `.etaf' form and, when they accept a
 ;; second argument, the validated `.ecss' style form.
 
@@ -109,7 +109,13 @@ frame."
   previous-window-configuration)
 
 (defvar etaf-playground--registrations (make-hash-table :test #'equal)
-  "Companion-provided root and feature overrides, keyed by example name.")
+  "Companion-provided root overrides, keyed by example name.")
+
+(defvar etaf-playground--loaded-companions (make-hash-table :test #'equal)
+  "Companion `.el' files already evaluated by this Playground.
+
+Membership records what this framework loaded, so a companion whose package
+name matches another loaded library is still evaluated and registered.")
 
 (defvar etaf-playground--sessions (make-hash-table :test #'equal)
   "Live Playground sessions keyed by example name.")
@@ -119,7 +125,7 @@ frame."
 
 This compatibility variable is generated from the example directory.  It is
 not a business catalog and contains no application metadata beyond file paths
-and the root/feature naming convention.")
+and the root naming convention.")
 
 (defvar etaf-playground-example-names nil
   "Names discovered from `etaf-playground-example-directory'.")
@@ -155,24 +161,18 @@ and the root/feature naming convention.")
     (name &rest options)
   "Register companion overrides for example NAME.
 
-OPTIONS accepts `:root' or `:root-component' and `:feature' or
-`:companion-feature'.  `:reload-on-refresh' is useful for a companion that
-must reload evaluated application behavior.  Registration
-belongs in an example companion, not in the framework, and is optional when
-the default `etaf-NAME-root' and `etaf-NAME' conventions are used."
+OPTIONS accepts `:root' or `:root-component'.  `:reload-on-refresh' is
+useful for a companion that must reload evaluated application behavior.
+Registration belongs in an example companion, not in the framework, and is
+optional when the default `etaf-NAME-root' convention is used."
   (unless (stringp name)
     (error "ETAF Playground example name must be a string: %S" name))
   (let ((root (or (plist-get options :root)
                   (plist-get options :root-component)))
-        (feature (or (plist-get options :feature)
-                     (plist-get options :companion-feature)))
         (reload-on-refresh (plist-get options :reload-on-refresh)))
     (when (and root (not (or (symbolp root) (functionp root))))
       (error "Invalid ETAF Playground root factory: %S" root))
-    (when (and feature (not (symbolp feature)))
-      (error "Invalid ETAF Playground companion feature: %S" feature))
     (puthash name (list :root-component root
-                        :companion-feature feature
                         :reload-on-refresh reload-on-refresh)
              etaf-playground--registrations)
     name))
@@ -180,10 +180,6 @@ the default `etaf-NAME-root' and `etaf-NAME' conventions are used."
 (defun etaf-playground--default-root-symbol (name)
   "Return the conventional root factory symbol for NAME."
   (intern (format "etaf-%s-root" name)))
-
-(defun etaf-playground--default-feature-symbol (name)
-  "Return the conventional companion feature symbol for NAME."
-  (intern (format "etaf-%s" name)))
 
 (defun etaf-playground--example-spec (name directory)
   "Build a generic file specification for NAME in DIRECTORY."
@@ -197,10 +193,7 @@ the default `etaf-NAME-root' and `etaf-NAME' conventions are used."
           :el-file el-file
           :ecss-file (and (file-readable-p ecss-file) ecss-file)
           :root-component (or (plist-get registration :root-component)
-                              (etaf-playground--default-root-symbol name))
-          :companion-feature
-          (or (plist-get registration :companion-feature)
-              (etaf-playground--default-feature-symbol name)))))
+                              (etaf-playground--default-root-symbol name)))))
 
 (defun etaf-playground-refresh-examples (&optional directory)
   "Discover valid `.etaf'/`.el' pairs in DIRECTORY.
@@ -381,32 +374,32 @@ including nil for an explicitly empty sheet.  Components validate declarations."
 
 An open source buffer is evaluated so unsaved editor changes participate in
 the next preview refresh.  A direct mount without SESSION loads the file from
-disk."
+disk.  The framework remembers the companion files it evaluated itself; an
+unrelated library whose feature shares the companion's package name never
+suppresses a companion's registration."
   (let* ((file (plist-get spec :el-file))
          (registration (etaf-playground--registration
                        (plist-get spec :pair)))
-         (feature (or (plist-get registration :companion-feature)
-                      (plist-get spec :companion-feature)))
          (buffer (and session
-                      (etaf-playground--source-buffer session ".el"))))
-    (let ((reload-buffer-p
-           (and (buffer-live-p buffer)
-                (or (buffer-modified-p buffer)
-                    (etaf-playground-session-companion-dirty-p session)
-                    (plist-get registration :reload-on-refresh))))
-          (loaded-p (and (symbolp feature) (featurep feature))))
-      (if reload-buffer-p
-          (with-current-buffer buffer
-            (save-restriction
-              (widen)
-              (etaf-component-redefine-run
-               (lambda ()
-                 (etaf-action-redefine-run
-                  (lambda () (eval-buffer nil))))))
-            (setf (etaf-playground-session-companion-dirty-p session) nil)
-            (setq-local etaf-playground-companion-dirty-p nil))
-        (unless loaded-p
-          (load (file-name-sans-extension file) nil nil nil))))
+                      (etaf-playground--source-buffer session ".el")))
+         (file-key (file-truename file)))
+    (if (and (buffer-live-p buffer)
+             (or (buffer-modified-p buffer)
+                 (etaf-playground-session-companion-dirty-p session)
+                 (plist-get registration :reload-on-refresh)))
+        (with-current-buffer buffer
+          (save-restriction
+            (widen)
+            (etaf-component-redefine-run
+             (lambda ()
+               (etaf-action-redefine-run
+                (lambda () (eval-buffer nil))))))
+          (puthash file-key t etaf-playground--loaded-companions)
+          (setf (etaf-playground-session-companion-dirty-p session) nil)
+          (setq-local etaf-playground-companion-dirty-p nil))
+      (unless (gethash file-key etaf-playground--loaded-companions)
+        (load (file-name-sans-extension file) nil nil nil)
+        (puthash file-key t etaf-playground--loaded-companions)))
     spec))
 
 (defun etaf-playground--root-factory (spec)

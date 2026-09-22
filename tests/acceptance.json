@@ -25,6 +25,11 @@
       "purpose": "Research Shelf mounts, filters, paginates and switches light/dark themes through public APIs with its scoped ECSS companion and an isolated database."
     },
     {
+      "name": "etaf-playground-mounts-desktop-with-provider-feature-loaded",
+      "file": "tests/etaf-playground-desktop-tests.el",
+      "purpose": "Mounting the desktop example works when the etaf-desktop provider feature is already loaded, so the companion still registers and builds its root instead of falling back to a missing etaf-desktop-root."
+    },
+    {
       "name": "etaf-playground-consumes-etaf-desktop-application",
       "file": "tests/etaf-playground-desktop-tests.el",
       "purpose": "The Playground mounts the independent ETAF Desktop application as a consumer and releases it through the public workspace lifecycle."

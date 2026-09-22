@@ -19,6 +19,14 @@
 
 ### Fixed
 
+- Playground companions are now tracked by the source file the framework
+  evaluated. A package feature that happens to share a companion's name (for
+  example the `etaf-desktop` provider) no longer suppresses the companion's
+  registration, so `C-c C-c` on the desktop example renders instead of
+  reporting a missing `etaf-desktop-root`. `etaf-playground-register-example`
+  no longer accepts `:feature`/`:companion-feature`; registration only
+  overrides the root factory.
+
 - Research Shelf detail notes use the UI Label's constrained text layout, so
   long notes wrap inside the inspector after selection and window resizing.
   Update UI together with the example for Label's Box layout support.

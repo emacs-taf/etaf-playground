@@ -20,7 +20,7 @@ has clickable `ETAF`, `EL`, and `ECSS` buttons. `C-c 1/2/3` (or
 `C-c C-1/C-2/C-3`) switches the source; `C-c C-c` renders the current source
 into the right-hand preview. Saving a source file also refreshes by default.
 `etaf-playground-register-example` is available when a companion needs a
-non-conventional root or feature name.
+non-conventional root name.
 
 ETAF Playground 0.2.2 declares ECSS 0.1.0, ETAF 0.2.1, ETAF UI 0.1.0, ETAF DB
 0.1.0, and ETAF Desktop 0.1.0 (currently using its SQLite backend only for

@@ -41,11 +41,10 @@
 ;;;###autoload (autoload 'etaf-playground-register-example "etaf-playground" nil nil)
 ;; Register companion overrides for example NAME.
 ;;
-;; OPTIONS accepts `:root' or `:root-component' and `:feature' or
-;; `:companion-feature'.  `:reload-on-refresh' is useful for a companion that
-;; must reload evaluated application behavior.  Registration
-;; belongs in an example companion, not in the framework, and is optional when
-;; the default `etaf-NAME-root' and `etaf-NAME' conventions are used.
+;; OPTIONS accepts `:root' or `:root-component'.  `:reload-on-refresh' is
+;; useful for a companion that must reload evaluated application behavior.
+;; Registration belongs in an example companion, not in the framework, and is
+;; optional when the default `etaf-NAME-root' convention is used.
 ;;
 
 ;;; Code:

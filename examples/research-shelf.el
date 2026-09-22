@@ -838,7 +838,6 @@ slot has a reusable built-in fallback for direct composition."
 (etaf-playground-register-example
  "research-shelf"
  :root #'etaf-research-shelf-root
- :feature 'etaf-research-shelf
  :reload-on-refresh t)
 
 ;;;###autoload
