@@ -352,15 +352,26 @@ this helper intentionally retains the physical pixel event."
                            (cons (+ (car xy) dx) (+ (cdr xy) dy))
                            (or (nth 3 data) 1)))
            (press (list 'down-mouse-1 data))
+           ;; An empty nonblocking read lets the motion publish before release.
            (events (list (list 'mouse-movement end-data)
+                         nil
                          (list 'drag-mouse-1 (event-start press) end-data)))
+           ;; Native motion draining may put a boundary event back.  Keep this
+           ;; fixture queue separate from unrelated pending command input.
+           (unread-command-events nil)
            (command (key-binding (vector press) nil nil position)))
       (unless (commandp command)
         (error "No drag command is bound at Desktop Host %S" ref))
       (cl-letf (((symbol-function 'read-event)
-                 (lambda (&rest _)
-                   (or (pop events) (error "Desktop drag ended without release")))))
-        (funcall command press)))))
+                 (lambda (&optional _prompt _inherit seconds)
+                   (cond
+                    (unread-command-events (pop unread-command-events))
+                    (events (pop events))
+                    ((equal seconds 0) nil)
+                    (t (error "Desktop drag ended without release"))))))
+        (funcall command press))
+      (when (or events unread-command-events)
+        (error "Desktop drag returned before consuming release")))))
 
 (defun etaf-desktop-gui--window-state (id)
   "Return public state of fixture window ID." 
