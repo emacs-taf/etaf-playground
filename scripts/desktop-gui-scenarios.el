@@ -610,12 +610,125 @@ demo canvas is rendered in the upper-left corner instead of following its host.
         0 (* 2 (max 1 (frame-char-height)))))
      (lambda (context)
        (and (eq (etaf-desktop-layout-mode etaf-desktop-gui--desktop 'main) 'tiling)
+            (not (etaf-desktop-window-maximized-p
+                  etaf-desktop-gui--desktop etaf-desktop-gui--notes-window))
+            (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
+              (and (string-match-p "ETAF Notes application" (buffer-string))
+                   (string-match-p "ETAF Files application" (buffer-string))))
             (let ((tree (etaf-desktop-layout-tree etaf-desktop-gui--desktop 'main)))
               (and tree (eq (car tree) :split)
                    (not (equal tree
                                (etaf-gui-verifier-context-get
-                                context 'tiling-tree-before))))))))))
-  )
+                                context 'tiling-tree-before))))))))
+    (etaf-desktop-gui--action
+     "focus-files-tile-by-title"
+     (lambda (context)
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--title-ref context "Files")))
+     (lambda (_context)
+       (equal etaf-desktop-gui--files-window
+              (etaf-desktop-active-window etaf-desktop-gui--desktop))))
+    (etaf-desktop-gui--action
+     "layout-control-roundtrip"
+     (lambda (context)
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-symbol context 'etaf-workspace-layout))
+       (unless (eq 'floating
+                   (etaf-desktop-layout-mode etaf-desktop-gui--desktop 'main))
+         (error "Desktop layout control did not switch to floating"))
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-symbol context 'etaf-workspace-layout)))
+     (lambda (context)
+       (and (eq 'tiling (etaf-desktop-layout-mode etaf-desktop-gui--desktop 'main))
+            (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
+              (and (string-match-p "ETAF Notes application" (buffer-string))
+                   (string-match-p "ETAF Files application" (buffer-string)))))))
+    (etaf-desktop-gui--action
+     "close-notes-and-focus-files"
+     (lambda (context)
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--title-ref context "Notes"))
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-label-within
+                 context "Close"
+                 (intern (format "etaf-desktop-window-%s"
+                                 etaf-desktop-gui--notes-window)))))
+     (lambda (context)
+       (and (equal etaf-desktop-gui--files-window
+                   (etaf-desktop-active-window etaf-desktop-gui--desktop))
+            (not (cl-find etaf-desktop-gui--notes-window
+                          (etaf-desktop-windows etaf-desktop-gui--desktop)
+                          :key (lambda (window) (plist-get window :id))
+                          :test #'equal))
+            (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
+              (string-match-p "ETAF Files application" (buffer-string))))))
+    (etaf-desktop-gui--action
+     "post-close-workspace-isolation"
+     (lambda (context)
+       (etaf-gui-verifier-context-put context 'post-close-ready nil)
+       (run-at-time
+        1 nil
+        (lambda ()
+          (etaf-gui-verifier-context-put context 'post-close-ready t))))
+     (lambda (context)
+       (and (etaf-gui-verifier-context-get context 'post-close-ready)
+            (eq 'main (etaf-desktop-active-workspace etaf-desktop-gui--desktop))
+            (let* ((instance (etaf-desktop-instance
+                              etaf-desktop-gui--desktop
+                              (etaf-gui-verifier-context-get context 'broken-instance)))
+                   (error-window (car (plist-get instance :windows))))
+              (eq 'dev (plist-get
+                        (etaf-desktop-window-state
+                         etaf-desktop-gui--desktop error-window)
+                        :workspace)))
+            (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
+              (and (string-match-p "ETAF Files application" (buffer-string))
+                   (not (string-match-p "intentional Desktop GUI launch failure"
+                                        (buffer-string)))
+                   (not (string-match-p "ETAF app error" (buffer-string))))))))
+    (etaf-desktop-gui--action
+     "error-window-joins-tiling-with-title"
+     (lambda (context)
+       (let* ((instance (etaf-desktop-launch
+                         etaf-desktop-gui--desktop etaf-desktop-gui--broken-app))
+              (id (car (plist-get instance :windows)))
+              (runtime (etaf-desktop-gui--runtime context))
+              (chrome (intern (format "etaf-desktop-chrome-%s" id)))
+              (position (etaf-host-ref-position runtime chrome)))
+         (etaf-gui-verifier-context-put context 'new-error-window id)
+         (unless (and position
+                      (with-current-buffer
+                          (etaf-gui-verifier-context-target-buffer context)
+                        (save-excursion
+                          (goto-char position)
+                          (string-match-p
+                           "ETAF app error"
+                           (buffer-substring-no-properties
+                            (line-beginning-position) (line-end-position))))))
+           (error "Tiled error window title row is covered"))
+         (etaf-desktop-focus-window
+          etaf-desktop-gui--desktop etaf-desktop-gui--files-window)
+         (etaf-desktop-gui--click-ref
+          context
+          (etaf-desktop-gui--title-ref
+           context "ETAF app error: etaf-desktop-gui-broken"))))
+     (lambda (context)
+       (let* ((id (etaf-gui-verifier-context-get context 'new-error-window))
+              (files (etaf-desktop-gui--window-state
+                      etaf-desktop-gui--files-window))
+              (error-window (etaf-desktop-gui--window-state id)))
+         (and (eq 'main (etaf-desktop-active-workspace
+                         etaf-desktop-gui--desktop))
+              (equal id (etaf-desktop-active-window
+                         etaf-desktop-gui--desktop))
+              (= (1+ (+ (plist-get files :y) (plist-get files :height)))
+                 (plist-get error-window :y))
+              (with-current-buffer
+                  (etaf-gui-verifier-context-target-buffer context)
+                (and (string-match-p "ETAF Files application" (buffer-string))
+                     (string-match-p "intentional Desktop GUI launch failure"
+                                     (buffer-string))))))))
+)))
 
 (defun etaf-desktop-gui-run (run-directory)
   "Run Desktop GUI scenario asynchronously into RUN-DIRECTORY." 
