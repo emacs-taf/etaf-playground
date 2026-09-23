@@ -217,7 +217,7 @@ cannot establish that Emacs painted a control on the same visual line."
                      runtime (wb-gui--control context (car target) (cadr target)))))
             (append
              (mapcar #'list '("新增任务" "深色" "定位新增按钮" "全部" "未完成"
-                             "已完成" "搜索" "每页条数 10 ✎" "显示说明"
+                             "已完成" "搜索" "每页条数 10" "显示说明"
                              "刷新 / 重试" "模拟失败"))
              (mapcar (lambda (id) (list "完成" id)) (number-sequence 1 10)))))))
     (unless (and (display-graphic-p frame)
@@ -736,7 +736,7 @@ The symbol cancel quits the menu.  Record actual native completion choices."
       (wb-gui--action "filter-all" (lambda (c) (wb-gui--press c "全部"))
                       (lambda (c) (equal (wb-gui--ids c) (number-sequence 2 11))))
       (wb-gui--action "minibuffer-page-size"
-                      (lambda (c) (wb-gui--enter c "每页条数 10 ✎" "2"))
+                      (lambda (c) (wb-gui--enter c "每页条数 10" "2"))
                       (lambda (c) (and (equal (wb-gui--ids c) '(2 3))
                                        (wb-gui--text-p c "Page 1 / 50"))))
       (wb-gui--action

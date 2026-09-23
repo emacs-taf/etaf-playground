@@ -114,7 +114,10 @@ Pass `--run-dir DIRECTORY` to `run-desktop-gui-verification.sh run` when the
 evidence location must be stable. The adapter mounts a fresh desktop, sends
 rendered title-bar and resize-handle mouse events, switches workspaces, checks
 maximize/minimize/restore and app-error isolation, and exercises the tiling
-layout contract. It writes `manifest.jsonl`, `result.json`, and one window-only
+layout contract. Settings checkpoints check the centered compact panel,
+unchanged desktop background and row heights, Layout-tab spacing edits through
+the real minibuffer, persisted values, reset and focus return on dismissal.
+It writes `manifest.jsonl`, `result.json`, and one window-only
 PNG per checkpoint. A passed result certifies functional assertions; inspect
 every PNG in the run directory before claiming visual acceptance.
 
@@ -316,8 +319,8 @@ applicable gates from all three lanes.
 The bundled Research Shelf example installs a deterministic 256-record SQLite
 fixture with 12 records per page. Bind `etaf-research-shelf-fixture-size` and
 `etaf-research-shelf-page-size` for smaller tests or larger pressure runs. Its
-application UI is only a consumer of the generic workspace; activate `Rows N
-✎` to enter any value from 1 through 100.
+application UI is only a consumer of the generic workspace; activate `Rows N`
+to enter any value from 1 through 100.
 
 ## Development
 

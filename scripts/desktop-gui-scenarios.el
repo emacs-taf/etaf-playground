@@ -23,7 +23,6 @@
 (require 'etaf)
 (require 'etaf-desktop)
 (require 'etaf-ui)
-(require 'etaf-desktop-layout nil t)
 
 (declare-function ebox-viewport-window-width "ebox-viewport" (window))
 
@@ -200,6 +199,146 @@ application's own launcher reference instead of the first matching label."
       (execute-kbd-macro (vector (list 'down-mouse-1 data)
                                  (list 'mouse-1 data))))))
 
+(defun etaf-desktop-gui--enter-number (context label value)
+  "Activate LABEL and type integer VALUE through CONTEXT's real minibuffer."
+  (let ((text (number-to-string value)) received)
+    (let ((minibuffer-exit-hook
+           (cons (lambda ()
+                   (setq received (minibuffer-contents-no-properties)))
+                 minibuffer-exit-hook)))
+      (minibuffer-with-setup-hook
+          (lambda ()
+            (delete-minibuffer-contents)
+            (setq unread-command-events
+                  (append (listify-key-sequence (vconcat text (kbd "RET")))
+                          unread-command-events)))
+        (etaf-desktop-gui--click-ref
+         context (etaf-desktop-gui--ref-by-label context label))))
+    (unless (equal text received)
+      (error "Desktop %s input did not receive %s" label text))))
+
+(defun etaf-desktop-gui--face-paint (position)
+  "Return native face paint at POSITION without generated face identities."
+  (let ((faces (get-char-property position 'face)))
+    (cl-labels
+        ((paint (face &optional seen)
+           (cond
+            ((null face) nil)
+            ((and (listp face) (keywordp (car face))) face)
+            ((listp face) (mapcar (lambda (item) (paint item seen)) face))
+            ((and (not (memq face seen)) (assq face face-remapping-alist))
+             (mapcar (lambda (item) (paint item (cons face seen)))
+                     (cdr (assq face face-remapping-alist))))
+            ((facep face)
+             (mapcar (lambda (attribute)
+                       (cons attribute (face-attribute face attribute nil t)))
+                     '(:background :foreground :height :family))))))
+      (paint faces))))
+
+(defun etaf-desktop-gui--canvas-margin (context)
+  "Observe the unobscured left canvas margin's pixels and paint in CONTEXT.
+The top workspace bar and bottom taskbar contain focusable controls, so they
+are excluded.  A centered modal leaves this margin visible on every row."
+  (redisplay t)
+  (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
+    (let ((window (selected-window)) rows)
+      (save-excursion
+        (goto-char (point-min))
+        (forward-line 1)
+        (dotimes (_ (plist-get (etaf-desktop-state etaf-desktop-gui--desktop)
+                              :canvas-height))
+          (let* ((position (line-beginning-position))
+                 (data (and (pos-visible-in-window-p position window)
+                            (posn-at-point position window))))
+            (unless data (error "Desktop canvas margin is clipped"))
+            (push (list (posn-x-y data)
+                        (etaf-desktop-gui--face-paint position)) rows))
+          (forward-line 1)))
+      (list :start (window-start window) :hscroll (window-hscroll window)
+            :rows (nreverse rows)))))
+
+(defun etaf-desktop-gui--settings-background-stable-p (context)
+  "Require CONTEXT's settings modal to preserve canvas paint and row heights."
+  (equal (etaf-gui-verifier-context-get context 'settings-canvas-before)
+         (etaf-desktop-gui--canvas-margin context)))
+
+(defun etaf-desktop-gui--settings-geometry (context)
+  "Observe CONTEXT's settings panel dimensions and displayed coordinates."
+  (redisplay t)
+  (let* ((runtime (etaf-desktop-gui--runtime context))
+         (ref (etaf-desktop-gui--ref-by-class context "etaf-floating-panel"))
+         (props (etaf-runtime-host-props-for runtime ref))
+         (bounds (etaf-host-ref-bounds runtime ref))
+         (start (and bounds (car bounds)))
+         (end (and bounds (1- (cdr bounds))))
+         (window (selected-window))
+         (first (and start (pos-visible-in-window-p start window)
+                     (posn-at-point start window)))
+         (last (and end (pos-visible-in-window-p end window)
+                    (posn-at-point end window)))
+         (title-bounds
+          (and bounds
+               (save-excursion
+                 (goto-char start)
+                 (when (search-forward "Desktop Settings" (cdr bounds) t)
+                   (cons (- (point) (length "Desktop Settings")) (point)))))))
+    (unless (and first last title-bounds)
+      (error "Desktop settings panel or title is clipped"))
+    (list :width (plist-get props :width) :height (plist-get props :height)
+          :gap (plist-get props :item-gap) :padding (plist-get props :padding)
+          :first (posn-x-y first) :last (posn-x-y last)
+          :rows (1+ (- (line-number-at-pos end) (line-number-at-pos start)))
+          :title-rows (1+ (- (line-number-at-pos (1- (cdr title-bounds)))
+                            (line-number-at-pos (car title-bounds)))))))
+
+(defun etaf-desktop-gui--settings-compact-p (context)
+  "Require a centered 64-character by 22-row compact settings panel."
+  (let* ((geometry (etaf-desktop-gui--settings-geometry context))
+         (window (selected-window))
+         (char-width (max 1 (frame-char-width)))
+         (line-height (max 1 (frame-char-height)))
+         (viewport-width (ebox-viewport-window-width window))
+         (viewport-height (window-body-height window))
+         (width (min (* 64 char-width) (- viewport-width (* 2 char-width))))
+         (height (min 22 (- viewport-height 4)))
+         (left (floor (/ (- viewport-width width) 2)))
+         (top (* line-height (floor (/ (- viewport-height height) 2))))
+         (first (plist-get geometry :first))
+         (last (plist-get geometry :last)))
+    (etaf-gui-verifier-context-put context 'settings-geometry geometry)
+    (and (equal (list 'px width) (plist-get geometry :width))
+         (equal (list 'lh height) (plist-get geometry :height))
+         (equal '(lh 0) (plist-get geometry :gap))
+         (equal '((lh 0) (ch 1)) (plist-get geometry :padding))
+         (= height (plist-get geometry :rows))
+         (= 1 (plist-get geometry :title-rows))
+         (<= (abs (- (car first) left)) char-width)
+         (<= (abs (- (cdr first) top)) line-height)
+         (<= (abs (- (- (cdr last) (cdr first))
+                     (* (1- height) line-height))) line-height)
+         (etaf-desktop-gui--settings-background-stable-p context))))
+
+(defun etaf-desktop-gui--settings-gaps-p (context outer inner)
+  "Require OUTER and INNER in public settings and CONTEXT's rendered controls."
+  (let ((settings (etaf-desktop-settings etaf-desktop-gui--desktop))
+        (runtime (etaf-desktop-gui--runtime context)))
+    (and (= outer (plist-get settings :tile-outer-gap))
+         (= inner (plist-get settings :tile-inner-gap))
+         (cl-every
+          (lambda (entry)
+            (let* ((label (car entry))
+                   (ref (etaf-desktop-gui--ref-by-label context label))
+                   (bounds (etaf-host-ref-bounds runtime ref))
+                   (position (etaf-host-ref-position runtime ref)))
+              (and position (pos-visible-in-window-p position)
+                   bounds
+                   (string-match-p (regexp-quote
+                                    (format "%s %d" label (cdr entry)))
+                                   (buffer-substring-no-properties
+                                    (car bounds) (cdr bounds))))))
+          (list (cons "Outer gap" outer) (cons "Inner gap" inner)))
+         (etaf-desktop-gui--settings-compact-p context))))
+
 (defun etaf-desktop-gui--drag-ref (context ref dx dy)
   "Send a native drag from Host REF by pixel DX and DY.
 The Ebox/ETAF gesture adapter converts DY to text rows at the product boundary;
@@ -326,7 +465,7 @@ demo canvas is rendered in the upper-left corner instead of following its host.
         (not (string-match-p "could not render\\|runtime error\\|Wrong type argument"
                              (buffer-substring-no-properties (point-min) (point-max)))))))))
 
-(defun etaf-desktop-gui--adapter (_context)
+(defun etaf-desktop-gui--adapter (context)
   "Return JSON-safe public state facts for CONTEXT." 
   (let ((desktop etaf-desktop-gui--desktop))
     (list
@@ -338,6 +477,20 @@ demo canvas is rendered in the upper-left corner instead of following its host.
            (if (fboundp 'etaf-desktop-layout-mode)
                (format "%s" (etaf-desktop-layout-mode desktop))
              "floating"))
+     (cons 'settings_open (and (etaf-desktop-settings-open-p desktop) t))
+     (cons 'tile_outer_gap (plist-get (etaf-desktop-settings desktop) :tile-outer-gap))
+     (cons 'tile_inner_gap (plist-get (etaf-desktop-settings desktop) :tile-inner-gap))
+     (cons 'settings_geometry
+           (when-let* ((geometry (etaf-gui-verifier-context-get
+                                  context 'settings-geometry)))
+             (list (cons 'width (format "%S" (plist-get geometry :width)))
+                   (cons 'height (format "%S" (plist-get geometry :height)))
+                   (cons 'first (vconcat (list (car (plist-get geometry :first))
+                                              (cdr (plist-get geometry :first)))))
+                   (cons 'last (vconcat (list (car (plist-get geometry :last))
+                                             (cdr (plist-get geometry :last)))))
+                   (cons 'rows (plist-get geometry :rows))
+                   (cons 'title_rows (plist-get geometry :title-rows)))))
      (cons 'windows
            (vconcat
             (mapcar (lambda (window)
@@ -402,23 +555,67 @@ demo canvas is rendered in the upper-left corner instead of following its host.
             (string-match-p "Files" (buffer-string))
             (etaf-gui-verifier-context-put context 'expects-mounted t))))
     (etaf-desktop-gui--action
-     "settings-modal-overlays-desktop"
+     "settings-modal-is-compact-and-preserves-desktop"
      (lambda (context)
+       (etaf-gui-verifier-context-put
+        context 'settings-canvas-before (etaf-desktop-gui--canvas-margin context))
        (etaf-desktop-gui--click-ref
         context (etaf-desktop-gui--ref-by-symbol
                  context 'etaf-workspace-settings)))
-     (lambda (_context)
+     (lambda (context)
        (and (etaf-desktop-settings-open-p etaf-desktop-gui--desktop)
             (string-match-p "Desktop Settings" (buffer-string))
-            (string-match-p "Notes\\|Files" (buffer-string)))))
+            (string-match-p "Notes\\|Files" (buffer-string))
+            (etaf-desktop-gui--settings-compact-p context))))
+    (etaf-desktop-gui--action
+     "settings-layout-tab-shows-default-gaps"
+     (lambda (context)
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-symbol context 'settings-tab-layout)))
+     (lambda (context) (etaf-desktop-gui--settings-gaps-p context 1 1)))
+    (etaf-desktop-gui--action
+     "settings-gaps-accept-minimum-native-input"
+     (lambda (context)
+       (etaf-desktop-gui--enter-number context "Outer gap" 0)
+       (etaf-desktop-gui--enter-number context "Inner gap" 1))
+     (lambda (context) (etaf-desktop-gui--settings-gaps-p context 0 1)))
+    (etaf-desktop-gui--action
+     "settings-gaps-accept-maximum-native-input"
+     (lambda (context)
+       (etaf-desktop-gui--enter-number context "Outer gap" 4)
+       (etaf-desktop-gui--enter-number context "Inner gap" 4))
+     (lambda (context) (etaf-desktop-gui--settings-gaps-p context 4 4)))
     (etaf-desktop-gui--action
      "settings-modal-closes-and-restores-surface"
      (lambda (context)
        (etaf-desktop-gui--click-ref
         context (etaf-desktop-gui--ref-by-label context "Done")))
-     (lambda (_context)
+     (lambda (context)
        (and (not (etaf-desktop-settings-open-p etaf-desktop-gui--desktop))
-            (string-match-p "Notes\\|Files" (buffer-string)))))
+            (string-match-p "Notes\\|Files" (buffer-string))
+            (etaf-desktop-gui--settings-background-stable-p context))))
+    (etaf-desktop-gui--action
+     "settings-gaps-persist-when-reopened"
+     (lambda (context)
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-symbol context 'etaf-workspace-settings))
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-symbol context 'settings-tab-layout)))
+     (lambda (context) (etaf-desktop-gui--settings-gaps-p context 4 4)))
+    (etaf-desktop-gui--action
+     "settings-reset-restores-default-gaps"
+     (lambda (context)
+       (etaf-desktop-gui--click-ref
+        context (etaf-desktop-gui--ref-by-label context "Reset settings")))
+     (lambda (context) (etaf-desktop-gui--settings-gaps-p context 1 1)))
+    (etaf-desktop-gui--action
+     "settings-dismiss-returns-focus-and-preserves-desktop"
+     (lambda (_context) (execute-kbd-macro (kbd "<escape>")))
+     (lambda (context)
+       (and (not (etaf-desktop-settings-open-p etaf-desktop-gui--desktop))
+            (equal 'etaf-workspace-settings
+                   (etaf-focused-host-ref (etaf-desktop-gui--runtime context)))
+            (etaf-desktop-gui--settings-background-stable-p context))))
     (etaf-desktop-gui--action
      "launcher-focuses-running-files"
      (lambda (context)

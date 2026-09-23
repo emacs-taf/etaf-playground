@@ -101,7 +101,9 @@ scripts/run-desktop-gui-verification.sh review /tmp/etaf-desktop-gui.XXXXXX
 需要固定证据目录时，给 `run-desktop-gui-verification.sh run` 传入
 `--run-dir DIRECTORY`。适配器会挂载全新的桌面，发送来自实际渲染标题栏和调整大小
 把手的鼠标事件，切换工作区，检查最大化／最小化／恢复和应用错误隔离，并执行平铺
-布局契约。运行目录中会写入 `manifest.jsonl`、`result.json` 以及每个检查点的窗口级
+布局契约。设置检查点验证紧凑居中的面板、保持不变的桌面背景和行高，并通过实际
+minibuffer 编辑 Layout 页的平铺间距，检查关闭后的值保留、重置以及退出时的焦点恢复。
+运行目录中会写入 `manifest.jsonl`、`result.json` 以及每个检查点的窗口级
 PNG。通过结果只证明功能断言；声明视觉验收前必须逐张检查 PNG。
 
 ## 可重复执行的 Emacs 31.1 GUI 实测
@@ -244,7 +246,7 @@ redisplay 返回不能证明操作系统已经呈现画面，批处理结果也�
 仓库中的 Research Shelf 只是上述通用工作区的一个 consumer。它默认安装确定性的
 256 条 SQLite fixture，每页显示 12 条；测试或压测时可以绑定
 `etaf-research-shelf-fixture-size` 和 `etaf-research-shelf-page-size` 调整规模，
-界面中激活 `Rows N ✎` 可以输入 1–100。
+界面中激活 `Rows N` 可以输入 1–100。
 
 ## 开发
 
