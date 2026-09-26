@@ -291,7 +291,7 @@ UNCANCELLABLE models work whose completion cannot be prevented."
     :disabled (or (wb-busy-p data) (wb-submission-locked-p data submitted))
     :on-change (lambda (next) (wb-edit-field draft original task :title next)))
    (etaf-select
-    :label "状态" :value (plist-get task :done)
+    :ref 'wb-task-status :label "状态" :value (plist-get task :done)
     :disabled (or (wb-busy-p data) (wb-submission-locked-p data submitted))
     :options '((nil . "进行中") (t . "已完成"))
     :on-change (lambda (next) (wb-edit-field draft original task :done next)))
@@ -356,7 +356,7 @@ UNCANCELLABLE models work whose completion cannot be prevented."
   (column :item-gap '(lh 1)
    (etaf-label :role 'status :aria-label "任务数据状态"
                :aria-busy (wb-busy-p data) :text (wb-data-message data))
-   (etaf-select :label "数据服务" :bind mode
+   (etaf-select :ref 'wb-data-mode :label "数据服务" :bind mode
                 :options '((normal . "正常") (read-error . "读取失败")
                            (write-error . "保存失败") (refresh-error . "写入后刷新失败")
                            (out-of-order . "搜索乱序") (timeout . "请求超时")

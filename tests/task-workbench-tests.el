@@ -10,19 +10,21 @@
 (require 'etaf)
 (require 'ebox)
 
+(defun wb-test--controls (runtime label &optional scope)
+  "Return RUNTIME's visible LABEL controls, optionally inside Host SCOPE."
+  (let ((bounds (and scope (etaf-host-ref-bounds runtime scope))))
+    (cl-remove-if-not
+     (lambda (entry)
+       (and (equal label (plist-get (cdr entry) :aria-label))
+            (or (null bounds)
+                (let ((position (etaf-host-ref-position runtime (car entry))))
+                  (and position (<= (car bounds) position) (< position (cdr bounds)))))))
+     (etaf-runtime-host-props-entries runtime))))
+
 (defun wb-test--control (runtime label &optional row-id)
   "Return RUNTIME's unique LABEL control, optionally inside ROW-ID."
-  (let ((entries (cl-remove-if-not
-                  (lambda (entry) (equal label (plist-get (cdr entry) :aria-label)))
-                  (etaf-runtime-host-props-entries runtime))))
-    (when row-id
-      (let ((bounds (etaf-host-ref-bounds runtime (wb-test--row runtime row-id))))
-        (setq entries
-              (cl-remove-if-not
-               (lambda (entry)
-                 (let ((position (etaf-host-ref-position runtime (car entry))))
-                   (and position (<= (car bounds) position) (< position (cdr bounds)))))
-               entries))))
+  (let ((entries (wb-test--controls runtime label
+                                    (and row-id (wb-test--row runtime row-id)))))
     (should (= 1 (length entries)))
     (caar entries)))
 
@@ -54,10 +56,22 @@
   (with-current-buffer buffer
     (string-match-p (regexp-quote text) (buffer-substring-no-properties (point-min) (point-max)))))
 
-(defun wb-test--choose (runtime label value)
-  "Choose VALUE in the visible selection control LABEL of RUNTIME."
-  (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) value)))
-    (wb-test--press runtime label)))
+(defun wb-test--choose (runtime field value)
+  "Choose VALUE in the selection control whose public ref is FIELD.
+Inline chips lie inside FIELD; a dropdown FIELD opens a Popover of options."
+  (ert-info ((format "Choose %S in %S" value field))
+    (let ((chips (wb-test--controls runtime value field)))
+      (if chips
+          (progn (should (= 1 (length chips)))
+                 (etaf-dispatch-event runtime (caar chips) 'press))
+        (etaf-dispatch-event runtime field 'press)
+        (wb-test--press runtime value)))))
+
+(defun wb-test--field-p (buffer label value)
+  "Return non-nil when BUFFER displays field LABEL with VALUE."
+  (with-current-buffer buffer
+    (string-match-p (concat (regexp-quote label) " +" (regexp-quote value))
+                    (buffer-substring-no-properties (point-min) (point-max)))))
 
 (defun wb-test--enter (runtime label value)
   "Enter VALUE in the visible text control LABEL of RUNTIME."
@@ -85,11 +99,10 @@
             (should-not (with-current-buffer first (string-match-p "已修改 ·" (buffer-string))))
             (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "中文表单草稿")))
               (wb-test--press runtime "标题"))
-            (should (string-match-p "标题 中文表单草稿"
+            (should (string-match-p "标题 +中文表单草稿"
                                     (ebox-render (plist-get (etaf-runtime-snapshot runtime) :input))))
-            (should (with-current-buffer first (string-match-p "标题 中文表单草稿" (buffer-string))))
-            (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "已完成")))
-              (wb-test--press runtime "状态"))
+            (should (wb-test--field-p first "标题" "中文表单草稿"))
+            (wb-test--choose runtime 'wb-task-status "已完成")
             (should (string-match-p "设计组件接口" (wb-test--row-text runtime 1)))
             (should (string-match-p "☐" (wb-test--row-text runtime 1)))
             (should-not (with-current-buffer second (string-match-p "中文表单草稿" (buffer-string))))
@@ -136,7 +149,7 @@
   "Late search completion cannot replace newer, cancelled or disposed results."
   (wb-test--with-app
     (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
-    (wb-test--choose runtime "数据服务" "搜索乱序")
+    (wb-test--choose runtime 'wb-data-mode "搜索乱序")
     (wb-test--enter runtime "搜索" "接口")
     (with-current-buffer buffer
       (let* ((live (buffer-string))
@@ -156,17 +169,17 @@
     (wb-test--deliver-late 0.35)
     (should (wb-test--text-p buffer "读取已取消"))
     (should (string-match-p "补充文档" (wb-test--row-text runtime 5)))
-    (wb-test--choose runtime "数据服务" "请求超时")
+    (wb-test--choose runtime 'wb-data-mode "请求超时")
     (wb-test--press runtime "重试读取")
     (wb-test--wait (lambda () (wb-test--text-p buffer "timed out")))
     (wb-test--press runtime "重试读取")
     (wb-test--press runtime "取消等待")
     (should (wb-test--text-p buffer "读取已取消"))
-    (wb-test--choose runtime "数据服务" "正常")
+    (wb-test--choose runtime 'wb-data-mode "正常")
     (wb-test--press runtime "全部")
     (wb-test--wait (lambda () (wb-test--text-p buffer "共 100 条 · 当前页 10 条")))
     (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
-    (should (wb-test--text-p buffer "标题 设计组件接口"))
+    (should (wb-test--field-p buffer "标题" "设计组件接口"))
     (wb-test--enter runtime "搜索" "不存在的任务")
     (wb-test--wait (lambda () (wb-test--text-p buffer "共 0 条")))
     (should (wb-test--text-p buffer "没有匹配的任务"))
@@ -176,7 +189,7 @@
     (should (wb-test--text-p buffer "没有匹配的任务"))
     (wb-test--press runtime "全部")
     (wb-test--wait (lambda () (wb-test--text-p buffer "共 100 条 · 当前页 10 条")))
-    (wb-test--choose runtime "数据服务" "请求超时")
+    (wb-test--choose runtime 'wb-data-mode "请求超时")
     (wb-test--enter runtime "搜索" "文档")
     (etaf-unmount runtime)
     (wb-test--deliver-late 2.1)
@@ -187,16 +200,16 @@
   (wb-test--with-app
     (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
     (wb-test--enter runtime "标题" "重试后的标题")
-    (wb-test--choose runtime "数据服务" "保存失败")
+    (wb-test--choose runtime 'wb-data-mode "保存失败")
     (wb-test--press runtime "保存修改")
     (should (wb-test--text-p buffer "正在保存"))
     (should-error (wb-test--press runtime "保存修改") :type 'etaf-event-error)
     (wb-test--wait (lambda () (wb-test--text-p buffer "保存失败，草稿已保留")))
     (should-not (wb-test--text-p buffer "读取失败"))
-    (should (wb-test--text-p buffer "标题 重试后的标题"))
+    (should (wb-test--field-p buffer "标题" "重试后的标题"))
     (should (string-match-p "设计组件接口" (wb-test--row-text runtime 1)))
     (should (wb-test--text-p buffer "已保存版本 0"))
-    (wb-test--choose runtime "数据服务" "正常")
+    (wb-test--choose runtime 'wb-data-mode "正常")
     (wb-test--press runtime "保存修改")
     (wb-test--wait (lambda () (not (wb-test--text-p buffer "已修改 ·"))))
     (should (string-match-p "重试后的标题" (wb-test--row-text runtime 1)))
@@ -207,31 +220,31 @@
   (wb-test--with-app
     (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
     (wb-test--enter runtime "标题" "已提交的新标题")
-    (wb-test--choose runtime "数据服务" "写入后刷新失败")
+    (wb-test--choose runtime 'wb-data-mode "写入后刷新失败")
     (wb-test--press runtime "保存修改")
     (wb-test--wait (lambda () (wb-test--text-p buffer "已写入；刷新未完成")))
     (should-error (wb-test--press runtime "保存修改") :type 'etaf-event-error)
     (should (string-match-p "设计组件接口" (wb-test--row-text runtime 1)))
-    (wb-test--choose runtime "数据服务" "正常")
+    (wb-test--choose runtime 'wb-data-mode "正常")
     (wb-test--press runtime "重试读取")
     (wb-test--wait (lambda () (not (wb-test--text-p buffer "已修改 ·"))))
     (should (string-match-p "已提交的新标题" (wb-test--row-text runtime 1)))
     (should (wb-test--text-p buffer "已保存版本 1"))
-    (wb-test--choose runtime "数据服务" "请求超时")
+    (wb-test--choose runtime 'wb-data-mode "请求超时")
     (wb-test--enter runtime "搜索" "新标题")
     (wb-test--wait (lambda () (wb-test--text-p buffer "读取失败")))
     (should-not (wb-test--text-p buffer "已写入；刷新未完成"))
     (wb-test--press runtime "重试读取")
     (wb-test--press runtime "取消等待")
     (should (wb-test--text-p buffer "读取已取消"))
-    (wb-test--choose runtime "数据服务" "正常")
+    (wb-test--choose runtime 'wb-data-mode "正常")
     (wb-test--press runtime "全部")
     (wb-test--wait (lambda () (wb-test--text-p buffer "数据已加载")))
     (should (wb-test--text-p buffer "共 100 条 · 当前页 10 条"))
     (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
     (should (wb-test--text-p buffer "已保存版本 1"))
     (wb-test--enter runtime "标题" "回执丢失的标题")
-    (wb-test--choose runtime "数据服务" "保存回执丢失")
+    (wb-test--choose runtime 'wb-data-mode "保存回执丢失")
     (wb-test--press runtime "保存修改")
     (wb-test--wait (lambda () (wb-test--text-p buffer "写入结果未知")))
     (should-error (wb-test--press runtime "保存修改") :type 'etaf-event-error)
@@ -255,7 +268,7 @@
             (wb-test--enter other "标题" "另一实例的草稿")
             (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
             (wb-test--enter runtime "标题" "关闭后完成的保存")
-            (wb-test--choose runtime "数据服务" "请求超时")
+            (wb-test--choose runtime 'wb-data-mode "请求超时")
             (wb-test--press runtime "保存修改")
             (should (wb-test--text-p buffer "正在保存"))
             (kill-buffer buffer)
@@ -263,7 +276,7 @@
             (should-not (etaf-runtime-mounted-p runtime))
             (should-not (buffer-live-p buffer))
             (should (eq other (etaf-runtime-for-buffer other-buffer)))
-            (should (wb-test--text-p other-buffer "标题 另一实例的草稿"))
+            (should (wb-test--field-p other-buffer "标题" "另一实例的草稿"))
             (should (wb-test--text-p other-buffer "共 100 条 · 当前页 10 条"))
             (should (string-match-p "设计组件接口" (wb-test--row-text other 1))))
         (when (and other (etaf-runtime-mounted-p other)) (etaf-unmount other))
@@ -274,11 +287,11 @@
   (wb-test--with-app
     (etaf-dispatch-event runtime (wb-test--row runtime 1) 'press)
     (wb-test--enter runtime "标题" "中文交互草稿")
-    (wb-test--choose runtime "状态" "已完成")
+    (wb-test--choose runtime 'wb-task-status "已完成")
     (wb-test--press runtime "保存修改")
     (wb-test--wait (lambda () (not (wb-test--text-p buffer "已修改 ·"))))
     (wb-test--enter runtime "标题" "设计组件接口")
-    (wb-test--choose runtime "状态" "进行中")
+    (wb-test--choose runtime 'wb-task-status "进行中")
     (wb-test--press runtime "保存修改")
     (wb-test--wait (lambda () (not (wb-test--text-p buffer "已修改 ·"))))
     (wb-test--press runtime "完成" 1)
@@ -297,7 +310,7 @@
     (wb-test--press runtime "全部")
     (wb-test--wait (lambda () (wb-test--text-p buffer "共 99 条 · 当前页 10 条")))
     (etaf-dispatch-event runtime (wb-test--row runtime 2) 'press)
-    (should (wb-test--text-p buffer "标题 编写使用示例"))))
+    (should (wb-test--field-p buffer "标题" "编写使用示例"))))
 
 (ert-deftest task-workbench-row-menu-edits-and-confirms-deletion ()
   "Row menus protect incomplete tasks and preserve data when a dialog is declined."
@@ -306,7 +319,7 @@
                (lambda (_prompt choices &rest _)
                  (should (equal choices '("编辑"))) "编辑")))
       (wb-test--press runtime "操作" 1))
-    (should (wb-test--text-p buffer "标题 设计组件接口"))
+    (should (wb-test--field-p buffer "标题" "设计组件接口"))
     (should (equal (etaf-focused-host-ref runtime) (wb-test--control runtime "操作" 1)))
     (cl-letf (((symbol-function 'completing-read)
                (lambda (_prompt choices &rest _)
