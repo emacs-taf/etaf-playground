@@ -26,9 +26,10 @@
   (let ((bounds (etaf-host-ref-bounds runtime target)))
     (with-current-buffer buffer
       (let ((text (buffer-substring-no-properties (car bounds) (cdr bounds))))
-        (unless (string-match-p "[☑☐]" text)
+        (unless (or (string-match-p (regexp-quote "[x]") text)
+                    (string-match-p (regexp-quote "[ ]") text))
           (error "Workbench checkbox has no readable state"))
-        (not (null (string-match-p "☑" text)))))))
+        (not (null (string-match-p (regexp-quote "[x]") text)))))))
 
 (defun etaf-workbench-benchmark--wait (runtime)
   "Wait for RUNTIME's observable task request to settle, pumping native timers."

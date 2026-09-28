@@ -142,7 +142,7 @@ With OPTIONAL, report nil when the viewport does not display the number."
   (let* ((runtime (wb-gui--runtime context))
          (bounds (etaf-host-ref-bounds runtime (wb-gui--control context "完成" row-id))))
     (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
-      (string-match-p "☑" (buffer-substring-no-properties (car bounds) (cdr bounds))))))
+      (string-match-p (regexp-quote "[x]") (buffer-substring-no-properties (car bounds) (cdr bounds))))))
 
 (defun wb-gui--scroll-regions (context)
   "Return CONTEXT's displayed scroll owners in document order."
