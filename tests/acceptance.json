@@ -20,6 +20,11 @@
       "purpose": "An unknown example fails explicitly without publishing preview content."
     },
     {
+      "name": "etaf-playground-mounts-preloaded-research-companion",
+      "file": "tests/etaf-playground-tests.el",
+      "purpose": "A directly loaded source or compiled Research Shelf companion mounts repeatedly without duplicate Action registration and its Reload control remains functional."
+    },
+    {
       "name": "etaf-playground-mounts-static-rule-companion-in-fresh-emacs",
       "file": "tests/etaf-playground-tests.el",
       "purpose": "Research Shelf mounts, filters, paginates and switches light/dark themes through public APIs with its scoped ECSS companion and an isolated database."

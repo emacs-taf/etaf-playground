@@ -22,6 +22,30 @@
             (should (= (buffer-size) 0))))
       (when (buffer-live-p buffer) (kill-buffer buffer)))))
 
+(ert-deftest etaf-playground-mounts-preloaded-research-companion ()
+  "A directly loaded companion keeps its Actions usable across preview mounts."
+  (let* ((user-emacs-directory (make-temp-file "preloaded-preview-" t))
+         (root (file-name-directory (locate-library "etaf-playground")))
+         (buffer (generate-new-buffer " *preloaded-preview*")))
+    (unwind-protect
+        (progn
+          ;; Use the same source/compiled selection as an ordinary application
+          ;; preload.  The package check compiles the shipped companion first.
+          (load (expand-file-name "examples/research-shelf" root) nil t)
+          (dotimes (_ 2)
+            (etaf-playground-mount-example (buffer-name buffer) "research-shelf")
+            (let ((runtime (etaf-runtime-for-buffer buffer)))
+              (should (not (null runtime)))
+              (etaf-dispatch-event runtime 'research-shelf-reload 'press)
+              (with-current-buffer buffer
+                (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+                  (should (string-match-p "256 items · SQLite-backed" text))
+                  (should (string-match-p "Library reloaded" text)))))))
+      (when-let* ((runtime (etaf-runtime-for-buffer buffer)))
+        (etaf-unmount runtime))
+      (when (buffer-live-p buffer) (kill-buffer buffer))
+      (delete-directory user-emacs-directory t))))
+
 (ert-deftest etaf-playground-mounts-static-rule-companion-in-fresh-emacs ()
   "The shipped app mounts, filters, paginates and switches themes in a fresh process."
   (let* ((workspace (file-name-directory

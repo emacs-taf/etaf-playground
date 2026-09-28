@@ -115,10 +115,10 @@ frame."
   "Companion-provided root overrides, keyed by example name.")
 
 (defvar etaf-playground--loaded-companions (make-hash-table :test #'equal)
-  "Companion `.el' files already evaluated by this Playground.
+  "Companion source files whose definitions are available to this Playground.
 
-Membership records what this framework loaded, so a companion whose package
-name matches another loaded library is still evaluated and registered.")
+Membership identifies actual files loaded by this framework or Emacs, so an
+unrelated library with the same feature name cannot suppress registration.")
 
 (defvar etaf-playground--sessions (make-hash-table :test #'equal)
   "Live Playground sessions keyed by example name.")
@@ -376,10 +376,10 @@ including nil for an explicitly empty sheet.  Components validate declarations."
   "Evaluate or load SPEC's `.el' companion.
 
 An open source buffer is evaluated so unsaved editor changes participate in
-the next preview refresh.  A direct mount without SESSION loads the file from
-disk.  The framework remembers the companion files it evaluated itself; an
-unrelated library whose feature shares the companion's package name never
-suppresses a companion's registration."
+the next preview refresh.  A direct mount without SESSION reuses the same
+source or compiled companion already loaded by Emacs.  An unrelated library
+whose feature shares the companion's package name never suppresses a
+companion's registration."
   (let* ((file (plist-get spec :el-file))
          (registration (etaf-playground--registration
                        (plist-get spec :pair)))
@@ -401,7 +401,16 @@ suppresses a companion's registration."
           (setf (etaf-playground-session-companion-dirty-p session) nil)
           (setq-local etaf-playground-companion-dirty-p nil))
       (unless (gethash file-key etaf-playground--loaded-companions)
-        (load (file-name-sans-extension file) nil nil nil)
+        (let ((loaded-files
+               (list file-key
+                     (file-truename
+                      (concat (file-name-sans-extension file) ".elc")))))
+          (unless (cl-some
+                   (lambda (entry)
+                     (and (stringp (car entry))
+                          (member (file-truename (car entry)) loaded-files)))
+                   load-history)
+            (load (file-name-sans-extension file) nil nil nil)))
         (puthash file-key t etaf-playground--loaded-companions)))
     spec))
 

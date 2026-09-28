@@ -69,7 +69,9 @@ ETAF requires Ebox SPI v3 for coordinated publication and Host final acceptance.
 
 The companion registers `:reload-on-refresh t`, so saving the `.el`, `.etaf`, or
 `.ecss` source and refreshing reloads the complete consumer before the next
-mount.
+mount. Direct preview mounts reuse the same source or compiled companion
+already loaded in Emacs, including companions preloaded by an application or
+benchmark. An unrelated library with the same feature name is a separate file.
 
 ## Task Workbench
 

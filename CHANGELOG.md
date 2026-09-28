@@ -19,6 +19,10 @@
 
 ### Fixed
 
+- A preview reuses an already loaded source or compiled example companion.
+  Preloading Research Shelf before mounting no longer registers its Actions
+  twice, while unrelated libraries with the same feature name remain distinct.
+
 - The preview mounts against its own window: a viewport-sized consumer (the
   desktop canvas) now fills the preview window instead of measuring whichever
   window was selected.
