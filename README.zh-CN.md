@@ -95,16 +95,31 @@ Emacs：
 
 ```sh
 make gui-desktop
+scripts/run-desktop-gui-verification.sh run --scenario demo
 scripts/run-desktop-gui-verification.sh review /tmp/etaf-desktop-gui.XXXXXX
 ```
 
 需要固定证据目录时，给 `run-desktop-gui-verification.sh run` 传入
-`--run-dir DIRECTORY`。适配器会挂载全新的桌面，发送来自实际渲染标题栏和调整大小
-把手的鼠标事件，切换工作区，检查最大化／最小化／恢复和应用错误隔离，并执行平铺
-布局契约。设置检查点验证紧凑居中的面板、保持不变的桌面背景和行高，并通过实际
-minibuffer 编辑 Layout 页的平铺间距，检查关闭后的值保留、重置以及退出时的焦点恢复。
-运行目录中会写入 `manifest.jsonl`、`result.json` 以及每个检查点的窗口级
-PNG。通过结果只证明功能断言；声明视觉验收前必须逐张检查 PNG。
+`--run-dir DIRECTORY`。默认选择 `--scenario shell`，`make gui-desktop` 也采用
+该场景。它的 26 个检查点使用静态文本应用，检查实际渲染标题栏和调整大小把手的
+鼠标事件、工作区、窗口生命周期、应用错误隔离、平铺和设置。设置检查包括紧凑面板、
+稳定的背景和行高、通过 minibuffer 编辑间距、值保留、重置及退出时的焦点恢复。
+
+`--scenario demo` 挂载维护中的六应用 Desktop demo：Notes、Tasks、Calculator、
+Clock、Chat 和 Monitor。它在 Clock 定时器运行时检查真实应用控件和窗口／工作区
+切换，包括最小化和恢复 Clock。所有默认桌面快捷键通过 buffer keymap 进入；
+左右与上下分割器通过原生拖动绑定执行分步移动、释放、逆向和边界操作，同时检查
+双窗几何、平铺交换和分割比例保留。静态 shell 场景不覆盖这些应用交互；Desktop
+验收需运行两个场景。
+
+两个场景都在挂载前于实际目标 buffer 测量普通正文行，保留用户字体和行间距。
+检查点拒绝高于该基线的物理行；焦点切换与 Settings 的每个页签还检查未移动窗口
+Host 的像素 Y 保持不变。允许较薄的边框行，不提高正文行高上限。
+
+运行器支持 `EMACSCLIENT`，并用 `GUI_TIMEOUT` 限制单次运行时长（默认 180 秒）。
+每个全新证据目录会写入 `manifest.jsonl`、`result.json` 和检查点的窗口级 PNG。
+通过结果只证明所选场景的功能断言；声明视觉验收前必须逐张检查 PNG。
+通过结果和外部超时限制都不证明交互延迟达标。
 
 ## 可重复执行的 Emacs 31.1 GUI 实测
 

@@ -109,19 +109,38 @@ Emacs server; the command never starts or stops another Emacs:
 
 ```sh
 make gui-desktop
+scripts/run-desktop-gui-verification.sh run --scenario demo
 scripts/run-desktop-gui-verification.sh review /tmp/etaf-desktop-gui.XXXXXX
 ```
 
 Pass `--run-dir DIRECTORY` to `run-desktop-gui-verification.sh run` when the
-evidence location must be stable. The adapter mounts a fresh desktop, sends
-rendered title-bar and resize-handle mouse events, switches workspaces, checks
-maximize/minimize/restore and app-error isolation, and exercises the tiling
-layout contract. Settings checkpoints check the centered compact panel,
-unchanged desktop background and row heights, Layout-tab spacing edits through
-the real minibuffer, persisted values, reset and focus return on dismissal.
-It writes `manifest.jsonl`, `result.json`, and one window-only
-PNG per checkpoint. A passed result certifies functional assertions; inspect
-every PNG in the run directory before claiming visual acceptance.
+evidence location must be stable. `--scenario shell` is the default, including
+for `make gui-desktop`. Its 26 checkpoints use static text applications to check
+rendered title-bar and resize-handle mouse events, workspaces, window lifecycle,
+app-error isolation, tiling and settings. Settings checks include the compact
+panel, stable background and row heights, minibuffer spacing edits, persisted
+values, reset and focus return.
+
+`--scenario demo` instead mounts the maintained six-app Desktop demo: Notes,
+Tasks, Calculator, Clock, Chat and Monitor. It checks real app controls and
+window/workspace transitions with the Clock timer active, including minimizing
+and restoring the Clock. It sends every default desktop shortcut through the
+buffer keymap and exercises horizontal and vertical splitters through their
+native drag bindings, including separate motion turns, reversal, limits, tile
+swaps and retained split ratios. The shell fixture does not cover those
+application interactions; run both scenarios for Desktop acceptance.
+
+Both scenarios measure a standard text row in the actual target buffer before
+mounting, retaining the user's font and line spacing. Checkpoints reject taller
+physical rows; focus changes and every Settings tab also check that stationary
+window Hosts keep their pixel Y positions. Shorter border rows do not raise the
+standard text-height limit.
+
+The runner honors `EMACSCLIENT` and bounds each run with `GUI_TIMEOUT` (180
+seconds by default). Each fresh evidence directory receives `manifest.jsonl`,
+`result.json`, and window-only checkpoint PNGs. A passed result certifies the
+scenario's functional assertions; inspect every PNG before claiming visual
+acceptance. Neither a pass nor the external timeout certifies interaction latency.
 
 ## Repeatable Emacs 31.1 GUI verification
 

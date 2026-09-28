@@ -13,7 +13,7 @@ EMACSCLIENT_BIN=${EMACSCLIENT:-emacsclient}
 GUI_TIMEOUT=${GUI_TIMEOUT:-180}
 
 usage() {
-    echo "usage: $0 doctor | run [--run-dir DIRECTORY] | review DIRECTORY" >&2
+    echo "usage: $0 doctor | run [--scenario shell|demo] [--run-dir DIRECTORY] | review DIRECTORY" >&2
     exit 2
 }
 
@@ -55,8 +55,17 @@ doctor() {
 
 run_scenario() {
     RUN_DIR=""
+    SCENARIO=shell
     while [ "$#" -gt 0 ]; do
         case "$1" in
+            --scenario)
+                [ "$#" -ge 2 ] || usage
+                case "$2" in
+                    shell|demo) SCENARIO=$2 ;;
+                    *) echo "unknown Desktop GUI scenario: $2" >&2; usage ;;
+                esac
+                shift 2
+                ;;
             --run-dir)
                 [ "$#" -ge 2 ] || usage
                 RUN_DIR=$2
@@ -78,19 +87,19 @@ run_scenario() {
     # Load once into the existing server and schedule a timer.  The command
     # returns before the ordered verifier actions run, allowing redisplay and
     # native mouse keymaps to process every checkpoint.
-    python3 - "$EMACSCLIENT_BIN" "$ADAPTER" "$RUN_DIR" <<'PY'
+    python3 - "$EMACSCLIENT_BIN" "$ADAPTER" "$RUN_DIR" "$SCENARIO" <<'PY'
 import subprocess
 import sys
 import json
 
-client, adapter, run_dir = sys.argv[1:]
+client, adapter, run_dir, scenario = sys.argv[1:]
 root = __import__('pathlib').Path(adapter).parents[2]
 load_paths = [root / name for name in
               ("ecss", "ebox", "etaf", "etaf/scripts", "etaf-ui",
                "etaf-desktop", "etaf-playground", "etaf-playground/scripts")]
 paths_form = "(dolist (path '(%s)) (add-to-list 'load-path path))" % \
     " ".join(json.dumps(str(p)) for p in load_paths)
-form = f"(progn {paths_form} (load {json.dumps(adapter)} nil t t) (etaf-desktop-gui-run {json.dumps(run_dir)}))"
+form = f"(progn {paths_form} (load {json.dumps(adapter)} nil t t) (etaf-desktop-gui-run {json.dumps(run_dir)} '{scenario}))"
 try:
     result = subprocess.run([client, "--eval", form], capture_output=True,
                             text=True, timeout=15)
