@@ -15,6 +15,46 @@
   "support": [],
   "cases": [
     {
+      "name": "pathfinding-editing-tools-protect-and-move-endpoints",
+      "file": "tests/pathfinding-tests.el",
+      "purpose": "All four editing tools act through published cells, protect distinct endpoints and clear walls when moving an endpoint."
+    },
+    {
+      "name": "pathfinding-bfs-and-astar-find-the-same-shortest-detour",
+      "file": "tests/pathfinding-tests.el",
+      "purpose": "A* and BFS find the same known five-step detour, avoid the obstacle and expose their explored counts."
+    },
+    {
+      "name": "pathfinding-default-maze-produces-a-contiguous-shortest-route",
+      "file": "tests/pathfinding-tests.el",
+      "purpose": "Both algorithms solve the shipped maze with equal shortest distances and a contiguous non-branching visible route."
+    },
+    {
+      "name": "pathfinding-unreachable-finishes-and-reset-preserves-terrain",
+      "file": "tests/pathfinding-tests.el",
+      "purpose": "An unreachable map terminates explicitly; reset preserves terrain and endpoints, and the preset restores its barriers."
+    },
+    {
+      "name": "pathfinding-animation-pauses-resumes-edits-and-isolates-mounts",
+      "file": "tests/pathfinding-tests.el",
+      "purpose": "Actual animation timers advance, pause and resume; live edits and algorithm changes restart safely without affecting a peer instance."
+    },
+    {
+      "name": "pathfinding-hidden-and-replaced-mounts-stop-old-animation",
+      "file": "tests/pathfinding-tests.el",
+      "purpose": "Hidden boards automatically pause and an obsolete timer cannot publish into a replacement mount."
+    },
+    {
+      "name": "pathfinding-keyboard-controls-and-coordinate-navigation",
+      "file": "tests/pathfinding-tests.el",
+      "purpose": "The command loop routes arrows, RET, TAB, play/pause, step, reset and close to the documented visible controls."
+    },
+    {
+      "name": "pathfinding-animation-step-is-one-local-publication",
+      "file": "tests/pathfinding-tests.el",
+      "purpose": "The public performance report proves one bounded local text/paint publication per warm animation step with no full-root or scope fallback."
+    },
+    {
       "name": "etaf-playground-mount-rejects-unknown-example",
       "file": "tests/etaf-playground-tests.el",
       "purpose": "An unknown example fails explicitly without publishing preview content."

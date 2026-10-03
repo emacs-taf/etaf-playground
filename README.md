@@ -73,6 +73,60 @@ mount. Direct preview mounts reuse the same source or compiled companion
 already loaded in Emacs, including companions preloaded by an application or
 benchmark. An unrelated library with the same feature name is a separate file.
 
+## Interactive pathfinding laboratory
+
+Evaluate `(etaf-playground-open "pathfinding")` to edit its source and preview,
+or `(etaf-playground-mount-example "*Pathfinding*" "pathfinding")` for a standalone
+preview. Loading `examples/pathfinding.el` also provides `M-x etaf-pathfinding-open`.
+Update `etaf-ui` with this example: it consumes the public `etaf-tile-grid`.
+
+The 24-column, 14-row board visualizes A* and BFS, their search frontier, explored
+cells and shortest route. A* uses a binary heap and Manhattan distance; BFS uses
+a FIFO queue. Both use four-way, unit-cost moves. Their shortest distances agree,
+although tied routes may differ. This is incremental **rendering**, not D* or
+incremental replanning: editing terrain rebuilds the current search snapshot.
+
+| Capability | UI | Key |
+| --- | --- | --- |
+| Start/resume, pause | Top action row | `p` toggles |
+| Expand one node or illuminate one route cell | Single Step | `n` |
+| Reset search without changing terrain | Reset Search | `r` |
+| Choose A*/BFS and slow/normal/fast | Algorithm/Speed chips | TAB, RET |
+| Toggle walls, erase, move start/goal | Tool chips, then cells | Arrows, RET |
+| Restore barriers or clear them | Preset/Clear buttons | TAB, RET |
+| Close this instance and release animation | Current buffer | `q` |
+
+`S`/`G` mark protected endpoints, `#` walls, `@` the current node and `+` the
+route. Color also distinguishes frontier and explored cells. Endpoints cannot
+overlap; moving one clears its destination wall. During animation, an edit or
+algorithm change restarts from the current start while preserving running/paused
+intent. A terminal run can be started again. Maps are bounded ephemeral memory,
+not a database. Adjust the inert `.etaf` dimensions within 6–24 rows and 6–40
+columns; a larger board needs a wider window or scrolling. The standard board
+fits 60 columns; short windows scroll with the normal renderer keys/wheel.
+
+Each tile owns a reactive color/text boundary. A step batches only changed tiles
+and fixed-area counters; it does not recreate the board. The mount owns one
+one-shot timer, with 5/15/30 steps per second as upper target rates (no catch-up
+bursts). Hidden boards pause. Completion, close and source refresh release pending
+work; a fixed step cap protects against runaway animation. Instances are isolated.
+
+`make check` includes shortest-path, editing, actual timer, keyboard and local
+publication acceptance. `make gui-pathfinding SERVER=<existing-owned-server>`
+schedules 23 real GUI actions, including wide/medium/narrow/short layouts, and
+prints a fresh evidence directory. Review its PNGs as well as `result.json`.
+For the maintained performance workloads, use the workspace's shared driver:
+
+```sh
+python3 scripts/performance.py run --mode gui --server <existing-owned-server> \
+  --scenario-file etaf-playground/benchmarks/performance-scenarios.el \
+  --scenario 'pathfinding.*' --sets 3 --samples 30 --warmups 5
+```
+
+Background functional/latency evidence does not certify foreground input latency
+or a video frame rate. See `docs/manual.md` in the workspace root for the
+measurement tool contract.
+
 ## Task Workbench
 
 Evaluate `(etaf-playground-open "task-workbench")` for source and preview, or

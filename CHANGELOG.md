@@ -11,6 +11,12 @@
 
 ### Added
 
+- Interactive Pathfinding visualizes BFS and A* through the shared TileGrid,
+  with editable terrain/endpoints, start/pause/step, speed choices, counters and
+  progressive shortest-route paint. Animation is mount-owned and automatically
+  stops on hidden/closed/replaced boards. Public acceptance, GUI layout/control
+  scenarios and shared-driver performance workloads accompany the example.
+
 - Task rows compose the UI Menu with a confirmation dialog. Edit opens the
   existing form, incomplete tasks cannot be deleted, and declining confirmation
   preserves both data and focus. Draft-discard prompts use the same dialog.
