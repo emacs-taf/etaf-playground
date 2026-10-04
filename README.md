@@ -86,8 +86,15 @@ a FIFO queue. Both use four-way, unit-cost moves. Their shortest distances agree
 although tied routes may differ. This is incremental **rendering**, not D* or
 incremental replanning: editing terrain rebuilds the current search snapshot.
 
+The screen teaches in plain language. A three-line intro names the colors and
+the one difference between the algorithms, a live line narrates the current
+phase (candidates, backtracking, completion), and after each run the counters
+remember how many cells A* and BFS explored, so switching algorithms is an
+immediate comparison. No prior knowledge of the algorithms is assumed.
+
 | Capability | UI | Key |
 | --- | --- | --- |
+| See what the algorithm is doing | Live narration under the board | — |
 | Start/resume, pause | Top action row | `p` toggles |
 | Expand one node or illuminate one route cell | Single Step | `n` |
 | Reset search without changing terrain | Reset Search | `r` |
@@ -113,7 +120,7 @@ work; a fixed step cap protects against runaway animation. Instances are isolate
 
 `make check` includes shortest-path, editing, actual timer, keyboard and local
 publication acceptance. `make gui-pathfinding SERVER=<existing-owned-server>`
-schedules 23 real GUI actions, including wide/medium/narrow/short layouts, and
+schedules 24 real GUI actions, including wide/medium/narrow/short layouts, and
 prints a fresh evidence directory. Review its PNGs as well as `result.json`.
 For the maintained performance workloads, use the workspace's shared driver:
 

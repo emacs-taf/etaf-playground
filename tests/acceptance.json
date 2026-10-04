@@ -15,6 +15,11 @@
   "support": [],
   "cases": [
     {
+      "name": "pathfinding-plain-language-copy-narrates-and-compares",
+      "file": "tests/pathfinding-tests.el",
+      "purpose": "The intro, live narration and cross-algorithm memory explain candidate/visited/answer colors, each search phase and how many cells each algorithm explored."
+    },
+    {
       "name": "pathfinding-editing-tools-protect-and-move-endpoints",
       "file": "tests/pathfinding-tests.el",
       "purpose": "All four editing tools act through published cells, protect distinct endpoints and clear walls when moving an endpoint."

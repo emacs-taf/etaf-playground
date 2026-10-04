@@ -100,6 +100,11 @@
      (pf-gui--action "initial-board" #'ignore
                      (lambda (c) (and (equal (pf-gui--cell c 2 2) "S")
                                       (equal (pf-gui--cell c 11 21) "G"))))
+     (pf-gui--action "teaching-copy" #'ignore
+                     (lambda (c)
+                       (and (string-match-p "候选" (pf-gui--text c))
+                            (string-match-p "单步" (pf-gui--text c 'pf-hint))
+                            (string-match-p "跑完" (pf-gui--text c 'pf-compare)))))
      (pf-gui--action "keyboard-single-step" (lambda (_c) (execute-kbd-macro (kbd "n")))
                      (lambda (c) (= 1 (pf-gui--counter c "探索"))))
      (pf-gui--action "paint-wall-with-ret" (lambda (c) (pf-gui--press c 'pf-cell-0-0))

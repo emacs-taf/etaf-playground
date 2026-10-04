@@ -165,7 +165,7 @@
 ;;; MODEL: board truth and visual refs, headless and independent per mount.
 (cl-defstruct (pathfinding--model (:constructor pathfinding--make-model))
   rows columns walls cells start goal search current
-  algorithm tool speed status summary detail notice)
+  algorithm tool speed status summary detail hint compare record notice)
 
 (defun pathfinding--model-create (rows columns)
   "Create a bounded in-memory board of ROWS by COLUMNS."
@@ -176,6 +176,7 @@
                  :start (+ (* columns 2) 2) :goal (+ (* columns (- rows 3)) (- columns 3))
                  :algorithm (etaf-ref 'astar) :tool (etaf-ref 'wall) :speed (etaf-ref 15)
                  :status (etaf-ref 'ready) :summary (etaf-ref "") :detail (etaf-ref "")
+                 :hint (etaf-ref "") :compare (etaf-ref "")
                  :notice (etaf-ref "点击格子添障碍；再点一次擦除。"))))
     (pathfinding--preset model)
     (pathfinding--reset model)
@@ -202,17 +203,38 @@
               (t state))))
 
 (defun pathfinding--update-summary (model)
-  "Publish MODEL's fixed-width counters, separate from its control structure."
-  (let ((search (pathfinding--model-search model)))
+  "Publish MODEL's counters, plain-language hint and cross-algorithm memory."
+  (let* ((search (pathfinding--model-search model))
+         (phase (pathfinding--search-phase search))
+         (expanded (pathfinding--search-expanded search))
+         (record (pathfinding--model-record model))
+         (astar (alist-get 'astar record))
+         (bfs (alist-get 'bfs record)))
     (setf (etaf-value (pathfinding--model-summary model))
-          (format "探索 %4d 格    前沿 %4d 格"
-                  (pathfinding--search-expanded search) (pathfinding--search-frontier search))
+          (format "探索 %4d 格    前沿 %4d 格" expanded
+                  (pathfinding--search-frontier search))
           (etaf-value (pathfinding--model-detail model))
           (format "路径 %4s 步    阶段 %s"
                   (or (pathfinding--search-distance search) "--")
-                  (pcase (pathfinding--search-phase search)
+                  (pcase phase
                     ('trace "点亮路线") ('found "找到最短路径")
-                    ('unreachable "没有可达路径") (_ "搜索中"))))))
+                    ('unreachable "没有可达路径") (_ "搜索中")))
+          (etaf-value (pathfinding--model-hint model))
+          (cond
+           ((eq phase 'unreachable) "起点被墙围住了，终点摸不到。擦掉几堵墙再试。")
+           ((eq phase 'found) "完成：黄色就是最短路线。换另一种算法跑，看格数差多少。")
+           ((eq phase 'trace) "碰到终点了，正沿记录倒推回来，把路线一格格点亮。")
+           ((and (> expanded 0)
+                 (eq (etaf-value (pathfinding--model-status model)) 'paused))
+            "已暂停：蓝色是候选，深色是走过的；按「单步」细看。")
+           ((> expanded 0) "正在从起点向外扩散：蓝色是候选，深色是走过的。")
+           (t "按「开始/继续」自动跑；想细看就按「单步」。"))
+          (etaf-value (pathfinding--model-compare model))
+          (if (or astar bfs)
+              (format "跑完的结果：A* %s · BFS %s"
+                      (if astar (format "%d 格" astar) "未跑")
+                      (if bfs (format "%d 格" bfs) "未跑"))
+            "跑完后这里显示两种算法各探索多少格。"))))
 
 (defun pathfinding--reset (model)
   "Reset only MODEL's search; keep terrain, endpoints, algorithm and speed."
@@ -243,7 +265,12 @@
           (pathfinding--paint model (car change) (cdr change)))
         (when (memq (pathfinding--search-phase search) '(found unreachable))
           (setf (etaf-value (pathfinding--model-status model))
-                (pathfinding--search-phase search)))
+                (pathfinding--search-phase search))
+          (setf (pathfinding--model-record model)
+                (cons (cons (pathfinding--search-algorithm search)
+                            (pathfinding--search-expanded search))
+                      (assq-delete-all (pathfinding--search-algorithm search)
+                                       (pathfinding--model-record model)))))
         (pathfinding--update-summary model)))))
 
 ;;; APP: timer, keyboard and lifecycle; never run work from View evaluation.
@@ -303,12 +330,14 @@
        ((not (get-buffer-window buffer t))
         (etaf-batch
           (setf (etaf-value (pathfinding--model-status model)) 'paused
-                (etaf-value (pathfinding--model-notice model)) "棋盘隐藏，已暂停；回来后按 p 继续。")))
+                (etaf-value (pathfinding--model-notice model)) "棋盘隐藏，已暂停；回来后按 p 继续。")
+          (pathfinding--update-summary model)))
        ((>= (cl-incf (plist-get session :ticks))
             (* 3 (length (pathfinding--model-cells model))))
         (etaf-batch
           (setf (etaf-value (pathfinding--model-status model)) 'paused
-                (etaf-value (pathfinding--model-notice model)) "达到安全步数上限，已暂停；请重置搜索。")))
+                (etaf-value (pathfinding--model-notice model)) "达到安全步数上限，已暂停；请重置搜索。")
+          (pathfinding--update-summary model)))
        (t
         ;; A failed publication is a visible failure, never an infinite timer.
         (condition-case problem
@@ -339,12 +368,16 @@
       ('start
        (when (memq (etaf-value (pathfinding--model-status model)) '(found unreachable))
          (pathfinding--restart session "已开始新一轮搜索。"))
-       (setf (etaf-value (pathfinding--model-status model)) 'running)
+       (etaf-batch
+         (setf (etaf-value (pathfinding--model-status model)) 'running)
+         (pathfinding--update-summary model))
        (pathfinding--arm session))
       ('pause
        (pathfinding--stop-timer session)
        (unless (memq (etaf-value (pathfinding--model-status model)) '(found unreachable))
-         (setf (etaf-value (pathfinding--model-status model)) 'paused)))
+         (etaf-batch
+           (setf (etaf-value (pathfinding--model-status model)) 'paused)
+           (pathfinding--update-summary model))))
       ('step
        (pathfinding--action session 'pause)
        (pathfinding--advance model))
@@ -500,7 +533,13 @@
           :color (plist-get pathfinding--palette :ui-fg)
           :background-color (plist-get pathfinding--palette :ui-bg)
     (text :font-weight 'bold "寻路实验台")
-    (etaf-label :width 'stretch :wrap-mode 'word :text "搜索前沿会扩散；你可以随时改变地图。")
+    (column :item-gap '(lh 0)
+      (etaf-label :width 'stretch :wrap-mode 'word
+                  :text "这个实验台让你看着算法怎么找路，随时可以改地图。")
+      (etaf-label :width 'stretch :wrap-mode 'word
+                  :text "蓝色 = 待检查的候选，深色 = 走过的，黄色 = 答案。")
+      (etaf-label :width 'stretch :wrap-mode 'word :variant 'muted
+                  :text "A* 优先试看起来更近的格子，BFS 四面八方均匀扩散。"))
     (pathfinding--controls :session session :model model)
     (column :width '(ch 48) :wrap-mode 'none
       (box :width '(ch 48) :height '(lh 1)
@@ -512,15 +551,19 @@
       (box :width '(ch 48) :height '(lh 1)
         (text :ref 'pf-summary (expr (etaf-value (pathfinding--model-summary model)))))
       (box :width '(ch 48) :height '(lh 1)
-        (text :ref 'pf-detail (expr (etaf-value (pathfinding--model-detail model))))))
+        (text :ref 'pf-detail (expr (etaf-value (pathfinding--model-detail model)))))
+      (box :width '(ch 48) :height '(lh 1)
+        (text :ref 'pf-compare (expr (etaf-value (pathfinding--model-compare model))))))
     (pathfinding--board :session session :model model)
     (flex :flex-wrap 'wrap :gap '((lh 0) (ch 1))
       (text :background-color (cdr (assq 'start pathfinding--colors)) " S 起点 ")
       (text :background-color (cdr (assq 'goal pathfinding--colors)) " G 终点 ")
       (text :background-color (cdr (assq 'wall pathfinding--colors)) " # 障碍 ")
-      (text :background-color (cdr (assq 'frontier pathfinding--colors)) " 前沿 ")
-      (text :background-color (cdr (assq 'visited pathfinding--colors)) " 已探索 ")
-      (text :background-color (cdr (assq 'path pathfinding--colors)) " + 路径 "))
+      (text :background-color (cdr (assq 'frontier pathfinding--colors)) " 前沿·待查 ")
+      (text :background-color (cdr (assq 'visited pathfinding--colors)) " 已探索·走过 ")
+      (text :background-color (cdr (assq 'path pathfinding--colors)) " + 路径·答案 "))
+    (box :width '(ch 58) :height '(lh 1) :wrap-mode 'none :overflow 'hidden
+      (text :ref 'pf-hint (expr (etaf-value (pathfinding--model-hint model)))))
     (etaf-label :width 'stretch :wrap-mode 'word :text (pathfinding--model-notice model))
     (etaf-label :width 'stretch :wrap-mode 'word :variant 'muted
                 :text "p 开始/暂停 · n 单步 · r 重置 · q 关闭")

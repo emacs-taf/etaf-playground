@@ -17,6 +17,10 @@
   stops on hidden/closed/replaced boards. Public acceptance, GUI layout/control
   scenarios and shared-driver performance workloads accompany the example.
 
+- The Pathfinding laboratory teaches in plain language: a three-line intro,
+  a live narration line for the current phase, clarified legend labels, and a
+  per-instance memory of how many cells each algorithm explored.
+
 - Task rows compose the UI Menu with a confirmation dialog. Edit opens the
   existing form, incomplete tasks cannot be deleted, and declining confirmation
   preserves both data and focus. Draft-discard prompts use the same dialog.
