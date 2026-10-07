@@ -31,7 +31,7 @@ compile:
 		--eval "(setq load-prefer-newer t byte-compile-error-on-warn t byte-compile-warnings '(not obsolete))" \
 		--eval '(load-file "etaf-playground.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(ENTRY_EXAMPLES),"$(file)")))) (load-file file))' \
-		--eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(EXAMPLES),"$(file)") "lisp/etaf-playground-runtime.el" "etaf-playground.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el" "scripts/desktop-gui-scenarios.el" "benchmarks/benchmark-task-workbench.el" "benchmarks/profile-task-workbench.el"))) (kill-emacs 1))'
+		--eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(EXAMPLES),"$(file)") "lisp/etaf-playground-runtime.el" "etaf-playground.el" "scripts/playground-gui-scenarios.el" "scripts/desktop-gui-scenarios.el"))) (kill-emacs 1))'
 
 examples-read: compile
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
@@ -105,7 +105,7 @@ load: compile
 		--eval '(princ "etaf-playground load OK\\n")'
 
 checkdoc:
-	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "benchmarks/benchmark-research-shelf.el" "benchmarks/benchmark-task-workbench.el" "scripts/playground-gui-scenarios.el" "scripts/task-workbench-gui-scenarios.el" "scripts/desktop-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
+	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "benchmarks/benchmark-research-shelf.el" "scripts/playground-gui-scenarios.el" "scripts/desktop-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
 
 check: structure-check compile acceptance api-check tool-check
 
@@ -130,29 +130,6 @@ API_PROVIDER_PATH = -L ../ecss -L ../ekp -L ../ebox -L ../etaf -L ../etaf-ui -L 
 .PHONY: test
 test: acceptance
 
-.PHONY: perf-workbench
-perf-workbench:
-	@wb_log=$$(mktemp "$${TMPDIR:-/tmp}/etaf-workbench.XXXXXX"); \
-	wb_status=0; \
-	scripts/with-performance-lock.sh "$(EMACS)" -Q --batch $(LOAD_PATH) \
-		--eval '(setq load-prefer-newer t native-comp-jit-compilation nil)' \
-		-l benchmarks/benchmark-task-workbench.el \
-		-f etaf-workbench-benchmark-batch 2>"$$wb_log" || wb_status=$$?; \
-	printf 'log=%s\n' "$$wb_log"; \
-	exit $$wb_status
-
 .PHONY: tool-check
 tool-check:
 	EMACS="$(EMACS)" python3 -m unittest discover -s tests/tools -p 'test_*.py'
-
-.PHONY: profile-workbench
-profile-workbench:
-	@wb_log=$$(mktemp "$${TMPDIR:-/tmp}/etaf-workbench-profile.XXXXXX"); \
-	wb_status=0; \
-	ETAF_WORKBENCH_PROFILE_SCENARIO="$(or $(SCENARIO),row-toggle)" \
-	scripts/with-performance-lock.sh "$(EMACS)" -Q --batch $(LOAD_PATH) \
-		--eval '(setq load-prefer-newer t native-comp-jit-compilation nil)' \
-		-l benchmarks/profile-task-workbench.el \
-		-f etaf-workbench-profile-batch 2>"$$wb_log" || wb_status=$$?; \
-	printf 'log=%s\n' "$$wb_log"; \
-	exit $$wb_status

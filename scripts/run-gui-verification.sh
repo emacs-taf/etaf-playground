@@ -17,7 +17,7 @@ usage() {
     echo "  $0 doctor" >&2
     echo "  $0 review RUN_DIR" >&2
     echo "  $0 all [--run-dir DIRECTORY]" >&2
-    echo "  $0 task-workbench|research-shelf|flex-reference|grid-reference [--run-dir DIRECTORY]" >&2
+    echo "  $0 research-shelf|flex-reference|grid-reference [--run-dir DIRECTORY]" >&2
     exit 2
 }
 
@@ -55,12 +55,6 @@ parse_run_dir() {
 
 prepare_fixture() {
     case $SCENARIO_NAME in
-        task-workbench)
-            SCENARIO_FIXTURE=""
-            SCENARIO_ADAPTER="$PLAYGROUND_SCRIPT_DIR/task-workbench-gui-scenarios.el"
-            SCENARIO_ENTRY=task-workbench-gui-run-from-environment
-            SCENARIO_INITIALIZER=task-workbench-gui-prepare
-            ;;
         research-shelf)
             SCENARIO_FIXTURE=""
             ;;
@@ -112,12 +106,12 @@ case $COMMAND in
     all)
         parse_run_dir "$@"
         ALL_RUN_ROOT=$SCENARIO_RUN_DIR
-        for SCENARIO_ITEM in task-workbench research-shelf flex-reference grid-reference; do
+        for SCENARIO_ITEM in research-shelf flex-reference grid-reference; do
             "$0" "$SCENARIO_ITEM" --run-dir "$ALL_RUN_ROOT/$SCENARIO_ITEM"
         done
         echo "PLAYGROUND-GUI ALL CAPTURED root=$ALL_RUN_ROOT"
         ;;
-    task-workbench|research-shelf|flex-reference|grid-reference)
+    research-shelf|flex-reference|grid-reference)
         SCENARIO_NAME=$COMMAND
         parse_run_dir "$@"
         run_scenario
