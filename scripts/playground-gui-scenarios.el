@@ -11,19 +11,19 @@
 (require 'emacs-gui-verifier)
 (require 'ebox-playground)
 (require 'etaf-playground)
-(require 'benchmark-research-shelf)
 (require 'ebox)
 
 (defvar etaf-research-shelf-database-file)
 (defvar etaf-research-shelf-fixture-size)
 (defvar etaf-research-shelf-page-size)
 
-(defun etaf-playground-gui-scenarios--report (context)
-  "Return CONTEXT target's public Ebox report, or nil before mount."
-  (let ((buffer (etaf-gui-verifier-context-target-buffer context)))
-    (when (and (buffer-live-p buffer)
-               (ebox-surface-buffer-mounted-p buffer))
-      (ebox-buffer-update-report buffer))))
+(defun etaf-playground-gui-scenarios--mounted-p (buffer)
+  "Return non-nil when BUFFER is live and holds an Ebox mount."
+  (and (buffer-live-p buffer) (ebox-buffer-mount buffer) t))
+
+(defun etaf-playground-gui-scenarios--revision (buffer)
+  "Return the number of flushes that wrote BUFFER's mount."
+  (ebox-mount-flush-count buffer))
 
 (defun etaf-playground-gui-scenarios--visible-window-content-p (context)
   "Return non-nil when CONTEXT's selected window shows nonblank text."
@@ -52,8 +52,7 @@
 (defun etaf-playground-gui-scenarios--mounted-settled-p (context)
   "Return non-nil when CONTEXT has a mounted, visibly rendered surface."
   (let ((buffer (etaf-gui-verifier-context-target-buffer context)))
-    (and (buffer-live-p buffer)
-         (ebox-surface-buffer-mounted-p buffer)
+    (and (etaf-playground-gui-scenarios--mounted-p buffer)
          (eq (frame-parameter nil 'fullscreen)
              (etaf-gui-verifier-context-get context 'target-fullscreen))
          (etaf-playground-gui-scenarios--visible-window-content-p context))))
@@ -61,17 +60,15 @@
 (defun etaf-playground-gui-scenarios--begin-viewport-change
     (context fullscreen &optional width height)
   "Record CONTEXT state before targeting FULLSCREEN, WIDTH, and HEIGHT."
-  (when (ebox-transaction-active-p)
-    (error "Cannot observe committed viewport geometry during publication"))
   (let* ((buffer (etaf-gui-verifier-context-target-buffer context))
-         (revision (ebox-surface-buffer-revision buffer))
+         (revision (etaf-playground-gui-scenarios--revision buffer))
          (unchanged (and (eq (frame-parameter nil 'fullscreen) fullscreen)
                          (or (not (numberp width)) (= (frame-text-width) width))
                          (or (not (numberp height)) (= (frame-text-height) height)))))
     (etaf-gui-verifier-context-put
      context 'viewport-revision-before
-     ;; A frame already at the requested geometry has no resize to publish.
-     ;; Real geometry changes still require a new committed revision.
+     ;; A frame already at the requested geometry has no resize to write.
+     ;; Real geometry changes still require a new flush.
      (unless unchanged revision))
     (etaf-gui-verifier-context-put
      context 'viewport-noop-before
@@ -96,12 +93,10 @@
          (or (not (numberp height)) (= (frame-text-height) height)))))
 
 (defun etaf-playground-gui-scenarios--viewport-unchanged-p (context before)
-  "Prove CONTEXT's window geometry and committed revision match BEFORE.
-This proves an unchanged action, not a new viewport publication."
+  "Prove CONTEXT's window geometry and flush count match BEFORE.
+This proves an unchanged action, not a new viewport layout."
   (let ((buffer (etaf-gui-verifier-context-target-buffer context)))
-    (and (not (ebox-transaction-active-p))
-         (buffer-live-p buffer)
-         (ebox-surface-buffer-mounted-p buffer)
+    (and (etaf-playground-gui-scenarios--mounted-p buffer)
          (eq (selected-window) (plist-get before :window))
          (numberp (plist-get before :width))
          (equal (ebox-viewport-window-width (selected-window))
@@ -111,49 +106,38 @@ This proves an unchanged action, not a new viewport publication."
          (equal (frame-text-height) (plist-get before :frame-height))
          (numberp (plist-get before :revision))
          (> (plist-get before :revision) 0)
-         (= (ebox-surface-buffer-revision buffer) (plist-get before :revision)))))
+         (= (etaf-playground-gui-scenarios--revision buffer)
+            (plist-get before :revision)))))
 
 (defun etaf-playground-gui-scenarios--viewport-settled-p (context)
-  "Return non-nil when CONTEXT's resize published or its no-op stayed unchanged."
+  "Return non-nil when CONTEXT's resize was laid out or its no-op stayed unchanged."
   (let* ((before (etaf-gui-verifier-context-get context 'viewport-noop-before))
-         (report (unless before (etaf-playground-gui-scenarios--report context)))
          (buffer (etaf-gui-verifier-context-target-buffer context))
+         (mounted (etaf-playground-gui-scenarios--mounted-p buffer))
+         (viewport (and mounted (ebox-mount-viewport buffer)))
          (actual (ebox-viewport-window-width (selected-window)))
-         (published (or (plist-get report :target-viewport-width)
-                        (plist-get report :viewport-width)))
-         (published-height (plist-get report :target-viewport-height))
-         ;; The public buffer revision is Ebox's committed surface revision.
-         ;; Ebox's runtime revision is a different, possibly lagging counter.
-         (revision (plist-get report :surface-revision))
+         (revision (and mounted (etaf-playground-gui-scenarios--revision buffer)))
          (previous
           (etaf-gui-verifier-context-get
            context 'viewport-revision-before)))
     (and (if before
              (etaf-playground-gui-scenarios--viewport-unchanged-p context before)
-           (and (not (ebox-transaction-active-p))
-                (buffer-live-p buffer)
-                (ebox-surface-buffer-mounted-p buffer)
+           (and mounted
                 (numberp actual)
-                (numberp published)
-                (= actual published)
-                (numberp published-height)
-                (= (window-body-height (selected-window)) published-height)
+                (equal (car viewport) actual)
+                (equal (cdr viewport) (window-body-height (selected-window)))
                 (integerp revision)
                 (integerp previous)
-                (> revision previous)
-                (= revision (ebox-surface-buffer-revision buffer))
-                (plist-get report :runtime-published)
-                (not (plist-get report :publication-scope-fallback))))
+                (> revision previous)))
          (etaf-playground-gui-scenarios--frame-target-settled-p context)
          (etaf-playground-gui-scenarios--visible-window-content-p context))))
 
 (cl-defun etaf-playground-gui-scenarios--invariants
     (context &optional (preview-p t))
-  "Return shared Ebox/ETAF publication invariants for CONTEXT.
+  "Return shared Ebox/ETAF mount invariants for CONTEXT.
 PREVIEW-P additionally requires the display settings owned by Playground."
   (let* ((buffer (etaf-gui-verifier-context-target-buffer context))
-         (mounted (and (buffer-live-p buffer)
-                       (ebox-surface-buffer-mounted-p buffer)))
+         (mounted (etaf-playground-gui-scenarios--mounted-p buffer))
          (canvas-settings
           (and mounted preview-p
                (with-current-buffer buffer
@@ -190,17 +174,15 @@ PREVIEW-P additionally requires the display settings owned by Playground."
 
 (defun etaf-playground-gui-scenarios--adapter (context)
   "Return Playground-specific JSON data for CONTEXT."
-  (let* ((report (etaf-playground-gui-scenarios--report context))
-         (buffer (etaf-gui-verifier-context-target-buffer context))
+  (let* ((buffer (etaf-gui-verifier-context-target-buffer context))
+         (mounted (etaf-playground-gui-scenarios--mounted-p buffer))
          (runtime (and (buffer-live-p buffer)
-                       (etaf-runtime-for-buffer buffer)))
-         (stage (plist-get report :stage)))
+                       (etaf-runtime-for-buffer buffer))))
     (list
-     (cons 'generation (if runtime (etaf-runtime-generation runtime) 0))
+     (cons 'revision (if runtime (etaf-runtime-revision runtime) 0))
+     (cons 'flushes (if mounted (etaf-playground-gui-scenarios--revision buffer) 0))
      (cons 'viewport_width
-           (or (plist-get report :target-viewport-width)
-               (plist-get report :viewport-width)
-               0))
+           (or (and mounted (car (ebox-mount-viewport buffer))) 0))
      (cons 'frame_text_width (frame-text-width))
      (cons 'frame_text_height (frame-text-height))
      (cons 'fullscreen
@@ -212,8 +194,7 @@ PREVIEW-P additionally requires the display settings owned by Playground."
      (cons 'target_frame_height
            (or (etaf-gui-verifier-context-get
                 context 'target-frame-height)
-               0))
-     (cons 'stage (if stage (symbol-name stage) "none")))))
+               0)))))
 
 (defun etaf-playground-gui-scenarios--resize (context width height)
   "Resize CONTEXT's selected frame to pixel WIDTH and HEIGHT."
@@ -223,7 +204,7 @@ PREVIEW-P additionally requires the display settings owned by Playground."
     (set-frame-size nil width height t)))
 
 (defun etaf-playground-gui-scenarios--windowed-action ()
-  "Return an action that leaves fullscreen and publishes its viewport."
+  "Return an action that leaves fullscreen and lays out its viewport."
   (etaf-gui-verifier-action-create
    :id "leave-fullscreen"
    :execute
@@ -234,19 +215,12 @@ PREVIEW-P additionally requires the display settings owned by Playground."
    :assertions #'etaf-playground-gui-scenarios--resize-assertions))
 
 (defun etaf-playground-gui-scenarios--resize-assertions (context)
-  "Return exact viewport publication or unchanged-action assertions for CONTEXT."
-  (if (etaf-gui-verifier-context-get context 'viewport-noop-before)
-      (list (etaf-gui-verifier-assert
+  "Return exact viewport layout or unchanged-action assertions for CONTEXT."
+  (list (etaf-gui-verifier-assert
+         (if (etaf-gui-verifier-context-get context 'viewport-noop-before)
              "viewport-unchanged"
-             (etaf-playground-gui-scenarios--viewport-settled-p context)))
-    (let ((report (etaf-playground-gui-scenarios--report context)))
-      (list
-       (etaf-gui-verifier-assert
-        "viewport-published"
-        (etaf-playground-gui-scenarios--viewport-settled-p context))
-       (etaf-gui-verifier-assert
-        "resize-not-scope-fallback"
-        (not (plist-get report :publication-scope-fallback)))))))
+           "viewport-laid-out")
+         (etaf-playground-gui-scenarios--viewport-settled-p context))))
 
 (defun etaf-playground-gui-scenarios--resize-action (id width height)
   "Return resize action ID for pixel WIDTH and HEIGHT."
@@ -260,7 +234,7 @@ PREVIEW-P additionally requires the display settings owned by Playground."
    :screenshot t))
 
 (defun etaf-playground-gui-scenarios--maximize-action ()
-  "Return a stable full-workarea viewport publication action."
+  "Return a stable full-workarea viewport layout action."
   (etaf-gui-verifier-action-create
    :id "maximize-frame"
    :execute
@@ -280,8 +254,9 @@ PREVIEW-P additionally requires the display settings owned by Playground."
        (window-start))
    (not
     (equal
-     (etaf-gui-verifier-context-get context 'scroll-report)
-     (etaf-playground-gui-scenarios--report context)))))
+     (etaf-gui-verifier-context-get context 'scroll-flushes)
+     (etaf-playground-gui-scenarios--revision
+      (etaf-gui-verifier-context-target-buffer context))))))
 
 (defun etaf-playground-gui-scenarios--scroll-settled-p (context)
   "Return non-nil when CONTEXT's scroll progressed to visible content."
@@ -297,8 +272,9 @@ PREVIEW-P additionally requires the display settings owned by Playground."
      (etaf-gui-verifier-context-put context 'scroll-window-start
                                     (window-start))
      (etaf-gui-verifier-context-put
-     context 'scroll-report
-      (etaf-playground-gui-scenarios--report context))
+      context 'scroll-flushes
+      (etaf-playground-gui-scenarios--revision
+       (etaf-gui-verifier-context-target-buffer context)))
      (with-current-buffer (etaf-gui-verifier-context-target-buffer context)
        (goto-char (window-start)))
      (funcall command))
@@ -342,8 +318,8 @@ product-specific postcondition in the evidence stream."
             (etaf-runtime-for-buffer
              (etaf-gui-verifier-context-target-buffer context))))
        (etaf-gui-verifier-context-put
-        context (intern (concat id "-generation"))
-        (etaf-runtime-generation runtime))
+        context (intern (concat id "-revision"))
+        (etaf-runtime-revision runtime))
        (with-current-buffer
            (etaf-gui-verifier-context-target-buffer context)
          (etaf-focus runtime reference)
@@ -354,9 +330,9 @@ product-specific postcondition in the evidence stream."
             (etaf-runtime-for-buffer
              (etaf-gui-verifier-context-target-buffer context))))
        (and runtime
-            (> (etaf-runtime-generation runtime)
+            (> (etaf-runtime-revision runtime)
                (etaf-gui-verifier-context-get
-                context (intern (concat id "-generation")) -1))
+                context (intern (concat id "-revision")) -1))
             (funcall postcondition context)
             (etaf-playground-gui-scenarios--visible-window-content-p
              context))))
@@ -367,10 +343,10 @@ product-specific postcondition in the evidence stream."
              (etaf-gui-verifier-context-target-buffer context))))
        (list
         (etaf-gui-verifier-assert
-         "generation-advanced"
-         (> (etaf-runtime-generation runtime)
+         "revision-advanced"
+         (> (etaf-runtime-revision runtime)
             (etaf-gui-verifier-context-get
-             context (intern (concat id "-generation")) -1)))
+             context (intern (concat id "-revision")) -1)))
         (etaf-gui-verifier-assert
          "activated-host-focused"
          (equal reference (etaf-focused-host-ref runtime)))
@@ -533,8 +509,7 @@ product-specific postcondition in the evidence stream."
            (list
             (etaf-gui-verifier-assert
              "preview-mounted"
-             (and (buffer-live-p preview)
-                  (ebox-surface-buffer-mounted-p preview))))))
+             (etaf-playground-gui-scenarios--mounted-p preview)))))
        :screenshot t)
       (etaf-playground-gui-scenarios--windowed-action)
       (etaf-playground-gui-scenarios--resize-action
@@ -552,8 +527,6 @@ product-specific postcondition in the evidence stream."
 ;;;###autoload
 (defun etaf-playground-gui-scenarios-run-from-environment ()
   "Build one concrete adapter from environment and run the generic engine."
-  (unless (plist-get (ebox-native-reflow-runtime-report) :layout-ready-p)
-    (error "Prepared Ebox native module is unavailable"))
   (let* ((scenario (or (getenv "ETAF_GUI_SCENARIO")
                        (error "ETAF_GUI_SCENARIO is not configured")))
          (run-directory (or (getenv "ETAF_GUI_RUN_DIR")

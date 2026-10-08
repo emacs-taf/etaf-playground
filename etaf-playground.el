@@ -25,9 +25,7 @@
 ;;
 ;; This is the low-level consumer API.  `etaf-playground-open-example' adds the
 ;; source editors and side-by-side workspace around it.  MOUNT-OPTIONS is
-;; forwarded to `etaf-mount', including an optional initial viewport.  Source
-;; loading, root construction, ETAF publication, and Ebox rendering share one
-;; public framework render burst so GC cannot split an interactive mount.
+;; forwarded to `etaf-mount', including an optional initial viewport.
 ;;
 ;; Function: etaf-playground-open (&optional target)
 ;;;###autoload (autoload 'etaf-playground-open "etaf-playground" nil t)

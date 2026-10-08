@@ -24,7 +24,7 @@
 (require 'etaf-desktop)
 (require 'etaf-ui)
 
-(declare-function ebox-viewport-window-width "ebox-viewport" (window))
+(declare-function ebox-viewport-window-width "ebox" (window))
 
 (defconst etaf-desktop-gui--buffer "*ETAF Desktop GUI Acceptance*"
   "Dedicated target buffer used by the Desktop GUI scenario.")
@@ -1558,8 +1558,9 @@ while still requiring the ratio policy and the shared pane edges to agree."
 
 (defun etaf-desktop-gui--demo-scroll-target (context title)
   "Find TITLE's overflowing body and an actual visible descendant content cell.
-The author selector yields its public region ID; semantic Host ancestry
-selects a cell inside that body's content rather than window padding."
+The author selector yields the scrolling Ebox node; semantic Host ancestry
+selects a cell inside that body's content rather than window padding.  The
+scroll range is read by clamping a maximal offset and restoring the original."
   (let* ((runtime (etaf-desktop-gui--runtime context))
          (buffer (etaf-runtime-buffer runtime))
          (window (etaf-desktop-gui--demo-window title))
@@ -1567,19 +1568,19 @@ selects a cell inside that body's content rather than window padding."
          (matches (ebox-selector-query-buffer
                    buffer (format "[id=%S] .etaf-desktop-demo-app-body"
                                   (format "%s" (plist-get window :id)))))
-         (owner (and (= (length matches) 1) (plist-get (car matches) :region-id)))
-         (state (and owner (ebox-scroll-state owner)))
-         (extent (length (plist-get state :content-lines)))
-         (height (or (plist-get state :content-height) 0))
+         (owner (and (= (length matches) 1) (car matches)))
+         (offset (and owner (ebox-node-scroll-offset owner)))
+         (maximum (and owner
+                       (prog1 (ebox-node-set-scroll owner most-positive-fixnum)
+                         (ebox-node-set-scroll owner offset))))
          (target (etaf-desktop-gui--ref-within
                   context body
                   (lambda (props) (etaf-desktop-gui--class-p props "etaf-label"))
                   "visible scroll content label")))
-    (unless (and state (> height 0) (> extent height))
-      (error "%s has no overflowing scroll owner: region=%s content=%s viewport=%s"
-             title owner extent height))
-    (list :owner owner :target target :offset (or (plist-get state :scroll-offset) 0)
-          :maximum (- extent height) :content-lines extent :viewport-lines height)))
+    (unless (and maximum (> maximum 0))
+      (error "%s has no overflowing scroll owner: matches=%d maximum=%s"
+             title (length matches) maximum))
+    (list :owner owner :target target :offset offset :maximum maximum)))
 
 (defun etaf-desktop-gui--demo-wheel (context direction)
   "Send DIRECTION to the actual native keymap at the stored body content cell."
@@ -1603,10 +1604,9 @@ REVERSE requires the original offset.  Smooth wheel delivery must finish;
 returning from a wheel callback alone is not evidence that pixels settled."
   (let* ((target (etaf-gui-verifier-context-get context 'demo-scroll-target))
          (owner (plist-get target :owner))
-         (state (ebox-scroll-state owner))
-         (offset (plist-get state :scroll-offset))
+         (offset (and (ebox-node-buffer owner) (ebox-node-scroll-offset owner)))
          (last (etaf-gui-verifier-context-get context 'demo-scroll-quiet-offset)))
-    (unless (and state (integerp offset))
+    (unless (integerp offset)
       (error "The real demo scroll owner disappeared during wheel delivery"))
     (unless (equal last offset)
       (etaf-gui-verifier-context-put context 'demo-scroll-quiet-offset offset)
@@ -1905,15 +1905,15 @@ returning from a wheel callback alone is not evidence that pixels settled."
         #'etaf-desktop-gui--demo-shortcut-lifecycle
         (lambda (_context) (= 6 (length (etaf-desktop-windows etaf-desktop-gui--desktop)))))
        (etaf-desktop-gui--demo-wait-action
-        "demo-close-clock-leaves-no-periodic-publications"
+        "demo-close-clock-leaves-no-periodic-updates"
         (lambda (context)
           (etaf-desktop-gui--demo-taskbar context "Clock")
           (etaf-desktop-gui--demo-click context "Clock" "Close")
-          (etaf-gui-verifier-context-put context 'closed-generation
-                                         (etaf-runtime-generation (etaf-desktop-gui--runtime context))))
+          (etaf-gui-verifier-context-put context 'closed-revision
+                                         (etaf-runtime-revision (etaf-desktop-gui--runtime context))))
         (lambda (context)
-          (= (etaf-gui-verifier-context-get context 'closed-generation)
-             (etaf-runtime-generation (etaf-desktop-gui--runtime context)))))
+          (= (etaf-gui-verifier-context-get context 'closed-revision)
+             (etaf-runtime-revision (etaf-desktop-gui--runtime context)))))
        (etaf-desktop-gui--action
         "demo-destroy-and-reopen"
         (lambda (context)

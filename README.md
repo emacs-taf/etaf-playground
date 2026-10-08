@@ -65,7 +65,6 @@ examples/research-shelf.el    # DATA / THEME / STATE / VIEW / ROOT sections
 
 Opening an inert `.etaf` or `.ecss` source loads only its lightweight editing
 mode. The ETAF/Ebox runtime loads when a preview is refreshed or mounted.
-ETAF requires Ebox SPI v3 for coordinated publication and Host final acceptance.
 
 The companion registers `:reload-on-refresh t`, so saving the `.el`, `.etaf`, or
 `.ecss` source and refreshing reloads the complete consumer before the next
@@ -198,37 +197,23 @@ missing recording, wrong buffer, split window, stale frame, or missing temporal
 review remains fail-closed.
 
 Run `make check EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs`.
-Run `make perf` for the fixed 1413×62 batch latency gate. Every scenario performs
-five unmeasured warmups followed by 30 measured samples; both p95 and max must
-remain at or below 50ms, including Theme and post-resize interactions.
 
-For repeated absolute-latency runs, use `make perf-prepare` once after source
-changes, let compilation activity settle, then run `make perf-evaluator` without
-rebuilding the dependency graph.
+## Performance
 
-## Performance evidence lanes
+`benchmarks/performance-scenarios.el` registers the Research Shelf interactions
+with the workspace performance tool. Each scenario mounts the example against a
+fresh SQLite fixture and repeats one public event: row selection, theme toggle,
+filter, page change and resize. Batch runs use a fixed 1413×62 viewport; GUI
+runs follow the displaying window.
 
-Performance evidence has three separate lanes correlated by one
-repository/environment/scenario/fixture/build identity:
+```sh
+make perf-list
+make perf-check PERF_ARGS='--samples 30 --sets 3 --output-dir /tmp/shelf-perf'
+```
 
-- The batch latency lane runs the retained Research Shelf 1413×62 evaluator
-  with 5 unmeasured warmups and 30 measured samples. Its p95/max 50ms checks
-  diagnose regressions in that batch fixture. Batch verifier duration measures
-  batch Lisp work, not GUI first paint.
-- The trace lane runs a separate instrumented representative invocation. Its
-  cost classes, work counters, turns, allocation, and GC data are not inserted
-  into the timed latency distribution.
-- The GUI lane checks the real Emacs interaction sequence and reviewed images.
-  Current acceptance also requires three independent foreground GUI sample sets
-  with per-operation p95 and max at or below 50ms, from action callback through
-  forced redisplay. This gate remains outstanding. Use the measurement boundary
-  in the [ETAF GUI measurement guide](https://gitea.gklazycat.heiyu.space/emacs-taf/etaf/src/branch/main/docs/manual.md#measuring-an-existing-gui-action),
-  preserving warmups, GC and all samples. Returning
-  from redisplay does not certify compositor presentation.
-
-Evidence from one lane supports only that lane's conclusion. A
-performance-complete or user-visible-non-regression claim requires the
-applicable gates from all three lanes.
+Row selection, theme and resize must fit one 16 ms frame. Filter and page
+replace a whole page of keyed rows and have a 33 ms budget. The targets call the workspace's `scripts/performance.py`; its manual
+describes GUI mode, baselines and diagnosis passes.
 
 The bundled Research Shelf example installs a deterministic 256-record SQLite
 fixture with 12 records per page. Bind `etaf-research-shelf-fixture-size` and

@@ -4,12 +4,23 @@
 
 ### Changed
 
-- Retained publication is now owned by Ebox. Update Ebox and ETAF together;
-  the integration uses SPI v3 and `ebox-publication/v1`. Publication reports
-  use `:publication-*` fields and the `ebox-publication` provider.
-
+- Previews run on the fine-grained ETAF runtime and the retained Ebox mount.
+  Update Ebox and ETAF together. The publication SPI, render-burst
+  observation and publication-scope reports no longer exist; GUI scenarios
+  observe updates through `etaf-runtime-revision`, `ebox-mount-flush-count`
+  and `ebox-mount-viewport`.
 
 ### Added
+
+- `benchmarks/performance-scenarios.el` registers the Research Shelf row
+  selection, theme, filter, page and resize interactions with the workspace
+  `scripts/performance.py`. Run them with `make perf-list` and
+  `make perf-check`.
+
+### Removed
+
+- `make perf`, `make perf-prepare`, `make perf-evaluator`, the batch Research
+  Shelf evaluator and `scripts/with-performance-lock.sh`. Use `make perf-check`.
 
 ### Fixed
 

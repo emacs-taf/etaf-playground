@@ -3,15 +3,12 @@
 EMACS ?= emacs
 EMACSCLIENT ?= emacsclient
 LOAD_PATH = -L . -L lisp -L scripts -L benchmarks -L examples -L ../etaf -L ../etaf-ui -L ../etaf-desktop -L ../ebox -L ../ecss -L ../etaf-db
-EBOX_NATIVE_RELEASE_DIR = $(shell $(EMACS) -Q --batch $(LOAD_PATH) \
-	--eval '(setq load-prefer-newer t)' -l ../ebox/ebox.el \
-	--eval '(princ (expand-file-name (format "../ebox/native/target/%s/release/" (ebox-native-reflow--rust-target))))')
+PYTHON ?= python3
 ENTRY_EXAMPLES := $(wildcard examples/*.el)
 EXAMPLES := $(ENTRY_EXAMPLES)
 EXAMPLE_ELC := $(EXAMPLES:.el=.elc)
 
-.PHONY: all compile examples-read perf perf-prepare perf-evaluator perf-repeatability perf-regressions \
-	perf-check gui-doctor gui-research gui-flex gui-grid gui-all gui-desktop \
+.PHONY: all compile examples-read perf-list perf-check gui-doctor gui-research gui-flex gui-grid gui-all gui-desktop \
 	check checkdoc load clean
 
 all: check
@@ -31,7 +28,7 @@ compile:
 		--eval "(setq load-prefer-newer t byte-compile-error-on-warn t byte-compile-warnings '(not obsolete))" \
 		--eval '(load-file "etaf-playground.el")' \
 		--eval '(dolist (file (quote ($(foreach file,$(ENTRY_EXAMPLES),"$(file)")))) (load-file file))' \
-		--eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(EXAMPLES),"$(file)") "lisp/etaf-playground-runtime.el" "etaf-playground.el" "scripts/playground-gui-scenarios.el" "scripts/desktop-gui-scenarios.el"))) (kill-emacs 1))'
+		--eval '(unless (cl-every (function byte-compile-file) (quote ($(foreach file,$(EXAMPLES),"$(file)") "lisp/etaf-playground-runtime.el" "etaf-playground.el" "scripts/playground-gui-scenarios.el" "scripts/desktop-gui-scenarios.el" "benchmarks/performance-scenarios.el"))) (kill-emacs 1))'
 
 examples-read: compile
 	$(EMACS) -Q --batch $(LOAD_PATH) --eval '(setq load-prefer-newer t)' \
@@ -39,47 +36,11 @@ examples-read: compile
 		--eval '(dolist (file (quote ($(foreach file,$(ENTRY_EXAMPLES),"$(file)")))) (load (file-name-sans-extension file) nil nil nil))' \
 		--eval '(princ "ETAF example modules load OK\\n")'
 
-perf:
-	$(MAKE) perf-prepare EMACS="$(EMACS)"
-	$(MAKE) perf-evaluator EMACS="$(EMACS)"
-
-perf-prepare: compile
-	$(MAKE) -C ../ebox native-build EMACS="$(EMACS)" ECSS_DIR=../ecss
-
-# Run only the already-built product.  This separate target lets an absolute
-# max-latency sample start after compilation CPU activity has settled.
-perf-evaluator:
-	scripts/with-performance-lock.sh env \
-	EBOX_NATIVE_REFLOW_MODULE_PATH="$(EBOX_NATIVE_RELEASE_DIR)" \
-	"$(EMACS)" -Q --batch $(LOAD_PATH) \
-		--eval '(setq load-prefer-newer t native-comp-jit-compilation nil)' \
-		--eval '(setq ebox-native-reflow-module-path (getenv "EBOX_NATIVE_REFLOW_MODULE_PATH"))' \
-		-l benchmarks/benchmark-research-shelf.el \
-		-f etaf-performance-evaluator-batch
-
-# A final hard-max claim must survive three complete independent sample sets.
-# The lock above prevents parallel reviewers from benchmarking one another.
-perf-repeatability: perf-prepare
-	$(MAKE) perf-evaluator EMACS="$(EMACS)"
-	$(MAKE) perf-evaluator EMACS="$(EMACS)"
-	$(MAKE) perf-evaluator EMACS="$(EMACS)"
-
-# Run package regressions in dependency order.  Keeping them in one recipe
-# prevents parallel make from cleaning/recompiling a sibling while another
-# package is loading its compiled dependencies.
-perf-regressions:
-	$(MAKE) -C ../ecss  EMACS="$(EMACS)"
-	$(MAKE) -C ../ebox  EMACS="$(EMACS)" ECSS_DIR=../ecss
-	$(MAKE) -C ../etaf  EMACS="$(EMACS)"
-	$(MAKE) -C ../etaf-ui  EMACS="$(EMACS)"
-	$(MAKE) -C ../etaf-db  EMACS="$(EMACS)"
-	$(MAKE)  EMACS="$(EMACS)"
-
-# Measure absolute latency before the CPU-heavy regression graph.  Regressions
-# still gate the same target, but cannot thermally contaminate product samples.
+PERF_TOOL ?= ../scripts/performance.py
+perf-list:
+	$(PYTHON) "$(PERF_TOOL)" list --root . --scenario-file benchmarks/performance-scenarios.el --scenario 'etaf-playground.*'
 perf-check:
-	$(MAKE) perf-repeatability EMACS="$(EMACS)"
-	$(MAKE) perf-regressions EMACS="$(EMACS)"
+	$(PYTHON) "$(PERF_TOOL)" run --root . --scenario-file benchmarks/performance-scenarios.el --mode batch --scenario 'etaf-playground.*' $(PERF_ARGS)
 
 gui-doctor:
 	scripts/run-gui-verification.sh doctor
@@ -105,7 +66,7 @@ load: compile
 		--eval '(princ "etaf-playground load OK\\n")'
 
 checkdoc:
-	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "benchmarks/benchmark-research-shelf.el" "scripts/playground-gui-scenarios.el" "scripts/desktop-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
+	$(EMACS) -Q --batch --eval '(progn (require (quote checkdoc)) (dolist (file (append (list "etaf-playground.el" "benchmarks/performance-scenarios.el" "scripts/playground-gui-scenarios.el" "scripts/desktop-gui-scenarios.el") (directory-files-recursively "tests" "\\.el$$") (directory-files-recursively "examples" "\\.el$$"))) (checkdoc-file file)))'
 
 check: structure-check compile acceptance api-check tool-check
 

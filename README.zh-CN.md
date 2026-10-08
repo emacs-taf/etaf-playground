@@ -60,8 +60,7 @@ examples/research-shelf.el    # DATA / THEME / STATE / VIEW / ROOT 分区
 ```
 
 直接打开 inert `.etaf` 或 `.ecss` source 时只加载轻量编辑 mode；刷新或 mount
-preview 时才加载 ETAF/Ebox runtime。运行 preview 需要提供 SPI v3 的 Ebox，
-以保证 Ebox publication 与 Host final-accept 契约匹配。
+preview 时才加载 ETAF/Ebox runtime。
 
 该 companion 注册了 `:reload-on-refresh t`；保存 `.el`、`.etaf` 或 `.ecss` 后刷新
 source，会在下一次 mount 前重新加载完整 consumer。
@@ -167,13 +166,21 @@ scripts/run-gui-verification.sh review /private/tmp/etaf-playground-gui.XXXXXX
 split window、陈旧 frame 或没有完成时序审查都会保持 fail-closed。
 
 验证命令：`make check EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs`。
-批处理回归：`make perf`（Research Shelf 的 1413×62 viewport，选行/主题延迟）。
 
-当前 GUI 验收还要求三组独立的前台实测，每项操作从回调开始到强制 redisplay
-返回的 p95 和 max 均不超过 50ms；该门禁尚未通过。使用
-[ETAF GUI 测量指南（英文）](https://gitea.gklazycat.heiyu.space/emacs-taf/etaf/src/branch/main/docs/manual.md#measuring-an-existing-gui-action)
-中的测量入口，保留预热、GC 记录和全部样本。
-redisplay 返回不能证明操作系统已经呈现画面，批处理结果也不能替代 GUI 门禁。
+## 性能
+
+`benchmarks/performance-scenarios.el` 把 Research Shelf 的交互注册到工作区性能工具。
+每个场景针对新建的 SQLite fixture mount 示例，重复一个公开事件：选行、切换主题、
+筛选、翻页和缩放。批处理使用固定的 1413×62 viewport，GUI 模式跟随显示窗口。
+
+```sh
+make perf-list
+make perf-check PERF_ARGS='--samples 30 --sets 3 --output-dir /tmp/shelf-perf'
+```
+
+选行、主题和缩放必须在一帧 16 ms 内完成；筛选和翻页会替换整页键控行，预算为
+33 ms。这两个目标调用工作区的 `scripts/performance.py`，GUI 模式、基线和诊断
+pass 见其手册。
 
 仓库中的 Research Shelf 只是上述通用工作区的一个 consumer。它默认安装确定性的
 256 条 SQLite fixture，每页显示 12 条；测试或压测时可以绑定

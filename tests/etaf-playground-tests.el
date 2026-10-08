@@ -33,7 +33,9 @@
           ;; preload.  The package check compiles the shipped companion first.
           (load (expand-file-name "examples/research-shelf" root) nil t)
           (dotimes (_ 2)
-            (etaf-playground-mount-example (buffer-name buffer) "research-shelf")
+            ;; A desktop-width viewport keeps the header subtitle on one line.
+            (etaf-playground-mount-example (buffer-name buffer) "research-shelf"
+                                           nil '(:viewport-width 160))
             (let ((runtime (etaf-runtime-for-buffer buffer)))
               (should (not (null runtime)))
               (etaf-dispatch-event runtime 'research-shelf-reload 'press)
@@ -84,12 +86,12 @@
                                               (research-shelf-page-previous . "Page 1 / 22")
                                               (research-shelf-theme-toggle . "Dark theme")
                                               (research-shelf-theme-toggle . "Light theme")))
-                                     (let ((generation (etaf-runtime-generation runtime)))
+                                     (let ((revision (etaf-runtime-revision runtime)))
                                        (etaf-dispatch-event runtime (car step) 'press)
-                                       (unless (and (> (etaf-runtime-generation runtime) generation)
+                                       (unless (and (> (etaf-runtime-revision runtime) revision)
                                                     (with-current-buffer buffer
                                                       (string-match-p (cdr step) (buffer-string))))
-                                         (error "Research Shelf did not publish %S" (car step)))))))
+                                         (error "Research Shelf did not update for %S" (car step)))))))
                              (when-let* ((runtime (etaf-runtime-for-buffer buffer)))
                                (etaf-unmount runtime))
                              (kill-buffer buffer)
