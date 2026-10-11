@@ -15,8 +15,12 @@
    :open (lambda (_context)
            (list :windows
                  (list (list :id "main" :title "Notes"
+                             ;; A desktop window is seamless: its resize strips
+                             ;; cover the frame's outermost body row and columns,
+                             ;; so the application keeps that margin clear.
                              :view (etaf-view
-                                    (text "A controlled ETAF Desktop window."))
+                                    (box :padding '((lh 0) (ch 2) (lh 1) (ch 2))
+                                         (text "A controlled ETAF Desktop window.")))
                              :x 24 :y 2 :width 360 :height 10
                              :min-width 160 :min-height 4))))
    :replace t)
@@ -26,8 +30,10 @@
    :open (lambda (_context)
            (list :windows
                  (list (list :id "main" :title "Signal"
+                             ;; Keep the seamless frame margin clear.
                              :view (etaf-view
-                                    (text "Move, resize, minimize and restore me."))
+                                    (box :padding '((lh 0) (ch 2) (lh 1) (ch 2))
+                                         (text "Move, resize, minimize and restore me.")))
                              :x 420 :y 8 :width 360 :height 8
                              :min-width 160 :min-height 4))))
    :replace t))

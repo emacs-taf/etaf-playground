@@ -52,8 +52,13 @@
   "Instance ID belonging to the Notes fixture app.")
 
 (defun etaf-desktop-gui--view (text)
-  "Return an ETAF View containing literal TEXT for the fixture." 
-  (etaf-view (expr (etaf-node 'text nil (list text)))))
+  "Return an ETAF View containing literal TEXT for the fixture.
+
+The desktop frame is seamless: its resize strips cover the outermost body row
+and columns, so the fixture keeps that margin cell clear of its content."
+  (etaf-view (box :width 'stretch :height 'stretch
+                  :padding '((lh 0) (ch 2) (lh 1) (ch 2))
+               (text (expr text)))))
 
 (defun etaf-desktop-gui--app-open (title text workspace)
   "Return an app callback producing one fixture window." 
