@@ -267,8 +267,9 @@ are excluded.  A centered modal leaves this margin visible on every row."
 
 (defun etaf-desktop-gui--settings-background-stable-p (context)
   "Require CONTEXT's desktop geometry to stay fixed and its paint to return.
-An open modal intentionally dims the shell.  Closing it must restore the
-original paint; opening it must not move the surface or stretch any row."
+An open modal dims the shell through the shared backdrop.  Closing it must
+restore the original paint; opening it must not move the surface or stretch
+any row."
   (let ((before (etaf-gui-verifier-context-get context 'settings-canvas-before))
         (after (etaf-desktop-gui--canvas-margin context)))
     (if (etaf-desktop-settings-open-p etaf-desktop-gui--desktop)
@@ -276,10 +277,10 @@ original paint; opening it must not move the surface or stretch any row."
              (equal (plist-get before :hscroll) (plist-get after :hscroll))
              (equal (mapcar #'car (plist-get before :rows))
                     (mapcar #'car (plist-get after :rows)))
-             (not (cl-some
-                   (lambda (entry)
-                     (etaf-desktop-gui--class-p (cdr entry) "etaf-modal-backdrop"))
-                   (etaf-desktop-gui--props-entries context))))
+             (cl-some
+              (lambda (entry)
+                (etaf-desktop-gui--class-p (cdr entry) "etaf-modal-backdrop"))
+              (etaf-desktop-gui--props-entries context)))
       (equal before after))))
 
 (defun etaf-desktop-gui--settings-geometry (context)
