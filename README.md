@@ -146,7 +146,7 @@ When `EBOX_NATIVE_REFLOW_MODULE_PATH` is explicitly set, it requires that exact
 compatible module. It does not start a server. Check the mounted Runtime,
 action assertions and the actual
 images. Screenshots alone do not prove a latency bound or absence of flicker.
-See the [ETAF GUI verification guide](https://gitea.gklazycat.heiyu.space/emacs-taf/etaf/src/branch/main/docs/manual.md#gui-verification-tools)
+See [how a change is verified](https://gitea.gklazycat.heiyu.space/emacs-taf/etaf-manual/src/branch/main/book/en/extending-the-framework.md#how-a-change-is-verified)
 for existing-server capture and recording details.
 
 The following commands are **legacy isolated-environment tools**, retained for

@@ -123,7 +123,7 @@ selector 查询和已显示的值；被视口裁出的数量在检查点元数�
 只有显式设置 `EBOX_NATIVE_REFLOW_MODULE_PATH` 时，才要求加载该路径下的兼容
 native 模块。适配器不启动 server。需检查 mounted Runtime、动作断言和实际截图；
 截图本身不能证明延迟上界或无闪烁。现有 server 的截图与录屏细节见
-[ETAF GUI 验证指南（英文）](https://gitea.gklazycat.heiyu.space/emacs-taf/etaf/src/branch/main/docs/manual.md#gui-verification-tools)。
+[改动怎样被验证](https://gitea.gklazycat.heiyu.space/emacs-taf/etaf-manual/src/branch/main/book/zh-CN/extending-the-framework.md#改动怎样被验证)。
 
 以下命令是保留的 **legacy 隔离环境工具**，只用于明确选择独立测试 Emacs 的
 场景，不是当前默认的 existing-server 流程：
